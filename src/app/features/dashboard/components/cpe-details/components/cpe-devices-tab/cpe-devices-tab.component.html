@@ -1,0 +1,195 @@
+<!--
+  Caminho do arquivo: frontend/src/app/.../cpe-devices-tab/cpe-devices-tab.component.html
+  Aba "Dispositivos Conectados": exibe Wi-Fi + Ethernet em tempo real.
+-->
+<div class="devices-tab-container">
+
+  <!-- Barra superior: título + ações + info de monitoramento -->
+  <div class="devices-header">
+    <div class="header-left">
+      <h3>Dispositivos Conectados</h3>
+      <span class="subtitle">
+        Wi-Fi: <strong>{{ activeWifiCount }}</strong> ativos
+        &nbsp;|&nbsp;
+        Ethernet: <strong>{{ activeEthernetCount }}</strong> ativos
+        &nbsp;|&nbsp;
+        Total: <strong>{{ devicesData?.totalDevices || 0 }}</strong>
+      </span>
+    </div>
+
+    <div class="header-right">
+      <!-- Badge de atualização em background (não bloqueia a tabela) -->
+      <div *ngIf="backgroundRefreshing" class="refresh-badge refresh-pulse" title="Atualizando dados da CPE em background...">
+        <span class="material-symbols-rounded">sync</span>
+        <span>Atualizando{{ refreshRetryCount > 0 ? ' (retry ' + refreshRetryCount + '/3)' : '' }}...</span>
+      </div>
+
+      <!-- Info de tempo de resposta da última atualização -->
+      <div *ngIf="lastRefreshAt && !backgroundRefreshing" class="refresh-badge refresh-ok" title="Tempo que a CPE levou para responder na última atualização">
+        <span class="material-symbols-rounded">speed</span>
+        <span>{{ lastRefreshAtText }} — {{ lastRefreshDurationText }}</span>
+      </div>
+
+      <!-- Badge de informação do monitoramento ao técnico -->
+      <div class="monitor-info" title="O monitoramento On-Demand é executado a cada 60 segundos enquanto você está nesta aba.">
+        <span class="material-symbols-rounded">schedule</span>
+        <span>Próx. atualização: {{ nextRefreshInSeconds }}s</span>
+        <span class="monitor-badge">On-Demand 60s</span>
+      </div>
+
+      <app-button
+        variant="secondary"
+        size="sm"
+        iconLeft="sync"
+        [loading]="refreshing"
+        [disabled]="refreshing"
+        (clicked)="refreshDevicesData()"
+        title="Lê os parâmetros diretamente da CPE (tempo real)"
+      >
+        Atualizar Agora
+      </app-button>
+    </div>
+  </div>
+
+  <!-- Feedback inline -->
+  <div *ngIf="feedbackMessage" class="feedback feedback-{{ feedbackType }}">
+    {{ feedbackMessage }}
+  </div>
+
+  <!-- Loading state -->
+  <div *ngIf="isLoading" class="loading-state">
+    <app-skeleton shape="text" width="200px"></app-skeleton>
+    <app-skeleton shape="table-row" height="40px" [count]="5"></app-skeleton>
+  </div>
+
+  <!-- TABELA DE DISPOSITIVOS WI-FI -->
+  <div *ngIf="!isLoading && devicesData?.wifiDevices?.length" class="device-section">
+    <h4 class="section-title">
+      <span class="material-symbols-rounded">wifi</span>
+      Dispositivos Wi-Fi
+      <span class="section-count">{{ devicesData?.wifiDevices?.length }}</span>
+    </h4>
+
+    <div class="table-wrapper">
+      <table class="devices-table">
+        <thead>
+          <tr>
+            <th>Dispositivo</th>
+            <th>Endereço IP</th>
+            <th>MAC</th>
+            <th>Banda</th>
+            <th>SSID</th>
+            <th>Sinal</th>
+            <th>Padrão</th>
+            <th>Status</th>
+            <th>QoE</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let host of devicesData?.wifiDevices">
+            <td class="cell-host">
+              <div class="host-name">{{ host.hostName }}</div>
+              <div *ngIf="host.clientType" class="host-client-type">{{ host.clientType }}</div>
+            </td>
+            <td>{{ host.ipAddress || '—' }}</td>
+            <td class="cell-mono">{{ host.macAddress }}</td>
+            <td>
+              <span class="band-badge" [class.band-24]="host.band === '2.4GHz'" [class.band-5]="host.band === '5GHz'">
+                {{ host.band }}
+              </span>
+            </td>
+            <td>{{ host.ssid || '—' }}</td>
+            <td>
+              <span class="signal-badge" [class.signal-good]="(host.signalStrengthDbm || 0) > -50" [class.signal-medium]="(host.signalStrengthDbm || 0) <= -50 && (host.signalStrengthDbm || 0) > -70" [class.signal-weak]="(host.signalStrengthDbm || 0) <= -70">
+                {{ host.signalStrengthDbm !== null ? host.signalStrengthDbm + ' dBm' : '—' }}
+              </span>
+            </td>
+            <td>{{ host.operatingStandard || '—' }}</td>
+            <td>
+              <span class="status-badge" [class.status-ativo]="host.status === 'ativo'" [class.status-ocioso]="host.status === 'ocioso'" [class.status-inativo]="host.status === 'inativo'">
+                {{ host.status === 'ativo' ? 'Ativo' : host.status === 'ocioso' ? 'Ocioso' : 'Inativo' }}
+              </span>
+            </td>
+            <td>
+              <span *ngIf="host.qoe !== null" class="qoe-badge" [class.qoe-excelente]="host.qoeLabel === 'Excelente'" [class.qoe-bom]="host.qoeLabel === 'Bom'" [class.qoe-regular]="host.qoeLabel === 'Regular'" [class.qoe-ruim]="host.qoeLabel === 'Ruim'">
+                {{ host.qoe }}
+              </span>
+              <span *ngIf="host.qoe === null" class="qoe-na">N/A</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Sem dispositivos Wi-Fi -->
+  <div *ngIf="!isLoading && devicesData && (!devicesData.wifiDevices || devicesData.wifiDevices.length === 0)" class="empty-state">
+    <span class="material-symbols-rounded">wifi_off</span>
+    <p>Nenhum dispositivo Wi-Fi conectado.</p>
+  </div>
+
+  <!-- TABELA DE DISPOSITIVOS ETHERNET (CABO) -->
+  <div *ngIf="!isLoading && devicesData?.ethernetDevices?.length" class="device-section">
+    <h4 class="section-title">
+      <span class="material-symbols-rounded">settings_ethernet</span>
+      Dispositivos Ethernet (Cabo)
+      <span class="section-count">{{ devicesData?.ethernetDevices?.length }}</span>
+    </h4>
+
+    <div class="table-wrapper">
+      <table class="devices-table">
+        <thead>
+          <tr>
+            <th>Dispositivo</th>
+            <th>Endereço IP</th>
+            <th>MAC</th>
+            <th>Porta</th>
+            <th>Tipo</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let dev of devicesData?.ethernetDevices">
+            <td class="cell-host">
+              <div class="host-name">{{ dev.hostName }}</div>
+              <div *ngIf="dev.clientType" class="host-client-type">{{ dev.clientType }}</div>
+            </td>
+            <td>{{ dev.ipAddress || '—' }}</td>
+            <td class="cell-mono">{{ dev.macAddress }}</td>
+            <td>
+              <span class="port-badge">{{ dev.portName || '—' }}</span>
+            </td>
+            <td>
+              <span class="conn-type-badge conn-eth">
+                <span class="material-symbols-rounded">cable</span>
+                Ethernet
+              </span>
+            </td>
+            <td>
+              <span class="status-badge" [class.status-ativo]="dev.active" [class.status-inativo]="!dev.active">
+                {{ dev.active ? 'Ativo' : 'Inativo' }}
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Sem dispositivos Ethernet -->
+  <div *ngIf="!isLoading && devicesData && (!devicesData.ethernetDevices || devicesData.ethernetDevices.length === 0)" class="empty-state">
+    <span class="material-symbols-rounded">settings_ethernet</span>
+    <p>Nenhum dispositivo conectado via cabo.</p>
+  </div>
+
+  <!-- Info de monitoramento -->
+  <div class="monitor-footer" *ngIf="!isLoading">
+    <span class="material-symbols-rounded">info</span>
+    <p>
+      O <strong>monitoramento On-Demand</strong> está ativo e executa automaticamente a cada <strong>60 segundos</strong>
+      enquanto você está nesta aba. Ao mudar para outra aba, o monitoramento é <strong>encerrado</strong> para economizar recursos.
+      Clique em <em>"Atualizar Agora"</em> para forçar uma leitura imediata da CPE.
+    </p>
+  </div>
+
+</div>

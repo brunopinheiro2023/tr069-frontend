@@ -1,0 +1,420 @@
+<!-- ── SEÇÃO DE TELEMETRIA (Sistema/CPU/Memória/Uptime) ────────────────────── -->
+<div class="telemetry-section" *ngIf="serialNumber">
+  <div class="telemetry-header">
+    <h3><span class="material-symbols-rounded">sensors</span> Telemetria do Sistema</h3>
+    <div class="telemetry-actions">
+      <span class="last-updated" [class.stale]="isStale">
+        {{ cacheLabel }}
+      </span>
+      <button class="monitor-btn" [disabled]="telemetryLoading" (click)="requestTelemetry()">
+        <span *ngIf="!telemetryLoading" class="material-symbols-rounded">play_circle</span>
+        <span *ngIf="telemetryLoading" class="material-symbols-rounded spin">sync</span>
+        {{ telemetryLoading ? 'Coletando...' : 'Monitorar Agora' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Cards de métricas -->
+  <div class="telemetry-cards grid-layout">
+    <div class="info-card telemetry-card">
+      <div class="card-icon cpu"><span class="material-symbols-rounded">speed</span></div>
+      <div class="card-body">
+        <span class="card-label">CPU</span>
+        <span class="card-value" [class.warn]="cpuValue !== null && cpuValue > 80">
+          {{ cpuValue !== null ? (cpuValue | number:'1.1-1') + '%' : '—' }}
+        </span>
+      </div>
+    </div>
+
+    <div class="info-card telemetry-card">
+      <div class="card-icon memory"><span class="material-symbols-rounded">memory_alt</span></div>
+      <div class="card-body">
+        <span class="card-label">Memória</span>
+        <span class="card-value" [class.warn]="memUsedPercent !== null && memUsedPercent > 85">
+          {{ memUsedPercent !== null ? memUsedPercent + '% usado' : '—' }}
+        </span>
+        <span class="card-sub" *ngIf="memFreeValue !== null && memTotalValue !== null">
+          {{ (memFreeValue / 1024 | number:'1.0-0') }} MB livre / {{ (memTotalValue / 1024 | number:'1.0-0') }} MB
+        </span>
+      </div>
+    </div>
+
+    <div class="info-card telemetry-card">
+      <div class="card-icon uptime"><span class="material-symbols-rounded">timer</span></div>
+      <div class="card-body">
+        <span class="card-label">Uptime</span>
+        <span class="card-value">
+          {{ uptimeHours !== null ? uptimeHours + 'h' : '—' }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Cards de Sinal Óptico (telemetria em tempo real) -->
+    <div class="info-card telemetry-card">
+      <div class="card-icon optical"><span class="material-symbols-rounded">settings_input_component</span></div>
+      <div class="card-body">
+        <span class="card-label">RX Óptico</span>
+        <span class="card-value" [class.text-success]="opticalRxValue !== null && opticalRxValue >= -27" [class.text-danger]="opticalRxValue !== null && opticalRxValue < -27">
+          {{ opticalRxValue !== null ? (opticalRxValue | number:'1.1-1') + ' dBm' : '—' }}
+        </span>
+      </div>
+    </div>
+
+    <div class="info-card telemetry-card">
+      <div class="card-icon optical"><span class="material-symbols-rounded">wifi_tethering</span></div>
+      <div class="card-body">
+        <span class="card-label">TX Óptico</span>
+        <span class="card-value">
+          {{ opticalTxValue !== null ? (opticalTxValue | number:'1.1-1') + ' dBm' : '—' }}
+        </span>
+      </div>
+    </div>
+
+    <div class="info-card telemetry-card">
+      <div class="card-icon temp"><span class="material-symbols-rounded">thermometer</span></div>
+      <div class="card-body">
+        <span class="card-label">Temperatura</span>
+        <span class="card-value">
+          {{ temperatureValue !== null ? (temperatureValue | number:'1.1-1') + ' °C' : '—' }}
+        </span>
+      </div>
+    </div>
+
+    <!-- GPON Status -->
+    <div class="info-card telemetry-card">
+      <div class="card-icon" [class.gpon-ok]="isGponConnected" [class.gpon-err]="gponStatus !== null && !isGponConnected">
+        <span class="material-symbols-rounded">fiber_manual_record</span>
+      </div>
+      <div class="card-body">
+        <span class="card-label">GPON</span>
+        <span class="card-value" [class.text-success]="isGponConnected" [class.text-danger]="gponStatus !== null && !isGponConnected">
+          {{ gponStatus !== null ? gponStatus : '—' }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Download / Upload -->
+    <div class="info-card telemetry-card">
+      <div class="card-icon network"><span class="material-symbols-rounded">download</span></div>
+      <div class="card-body">
+        <span class="card-label">Download</span>
+        <span class="card-value">{{ wanDownstreamRate !== null ? wanDownstreamRate + ' Kbps' : '—' }}</span>
+      </div>
+    </div>
+
+    <div class="info-card telemetry-card">
+      <div class="card-icon network-up"><span class="material-symbols-rounded">upload</span></div>
+      <div class="card-body">
+        <span class="card-label">Upload</span>
+        <span class="card-value">{{ wanUpstreamRate !== null ? wanUpstreamRate + ' Kbps' : '—' }}</span>
+      </div>
+    </div>
+
+    <!-- Corrente de Bias do Laser -->
+    <div class="info-card telemetry-card">
+      <div class="card-icon optical"><span class="material-symbols-rounded">bolt</span></div>
+      <div class="card-body">
+        <span class="card-label">Bias Laser</span>
+        <span class="card-value">{{ biasCurrentValue !== null ? (biasCurrentValue | number:'1.0-0') + ' µA' : '—' }}</span>
+      </div>
+    </div>
+
+    <!-- Estatísticas WAN: Bytes Recebidos -->
+    <div class="info-card telemetry-card">
+      <div class="card-icon network"><span class="material-symbols-rounded">download_done</span></div>
+      <div class="card-body">
+        <span class="card-label">Bytes Recebidos (total)</span>
+        <span class="card-value">{{ formatBytes(wanBytesReceived) }}</span>
+      </div>
+    </div>
+
+    <!-- Bytes Enviados -->
+    <div class="info-card telemetry-card">
+      <div class="card-icon network-up"><span class="material-symbols-rounded">upload_file</span></div>
+      <div class="card-body">
+        <span class="card-label">Bytes Enviados (total)</span>
+        <span class="card-value">{{ formatBytes(wanBytesSent) }}</span>
+      </div>
+    </div>
+
+    <!-- Pacotes Recebidos -->
+    <div class="info-card telemetry-card">
+      <div class="card-icon network"><span class="material-symbols-rounded">package_2</span></div>
+      <div class="card-body">
+        <span class="card-label">Pacotes Recebidos</span>
+        <span class="card-value">{{ wanPacketsReceived !== null ? (wanPacketsReceived | number:'1.0-0') : '—' }}</span>
+      </div>
+    </div>
+
+    <!-- Pacotes Enviados -->
+    <div class="info-card telemetry-card">
+      <div class="card-icon network-up"><span class="material-symbols-rounded">outbox</span></div>
+      <div class="card-body">
+        <span class="card-label">Pacotes Enviados</span>
+        <span class="card-value">{{ wanPacketsSent !== null ? (wanPacketsSent | number:'1.0-0') : '—' }}</span>
+      </div>
+    </div>
+
+    <!-- Erros Recebidos -->
+    <div class="info-card telemetry-card">
+      <div class="card-icon" [class.gpon-err]="wanErrorsReceived !== null && wanErrorsReceived > 0"><span class="material-symbols-rounded">error</span></div>
+      <div class="card-body">
+        <span class="card-label">Erros Recebidos</span>
+        <span class="card-value" [class.text-danger]="wanErrorsReceived !== null && wanErrorsReceived > 0">
+          {{ wanErrorsReceived !== null ? wanErrorsReceived : '—' }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Erros Enviados -->
+    <div class="info-card telemetry-card">
+      <div class="card-icon" [class.gpon-err]="wanErrorsSent !== null && wanErrorsSent > 0"><span class="material-symbols-rounded">report_problem</span></div>
+      <div class="card-body">
+        <span class="card-label">Erros Enviados</span>
+        <span class="card-value" [class.text-danger]="wanErrorsSent !== null && wanErrorsSent > 0">
+          {{ wanErrorsSent !== null ? wanErrorsSent : '—' }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Hosts na LAN -->
+    <div class="info-card telemetry-card">
+      <div class="card-icon"><span class="material-symbols-rounded">devices</span></div>
+      <div class="card-body">
+        <span class="card-label">Hosts na LAN</span>
+        <span class="card-value">{{ hostCount !== null ? hostCount : '—' }}</span>
+      </div>
+    </div>
+
+    <!-- Wi-Fi 2.4GHz Clientes -->
+    <div class="info-card telemetry-card">
+      <div class="card-icon"><span class="material-symbols-rounded">wifi</span></div>
+      <div class="card-body">
+        <span class="card-label">Wi-Fi 2.4GHz — Clientes</span>
+        <span class="card-value">{{ wifi2gClients !== null ? wifi2gClients : '—' }}</span>
+        <span class="card-sub" *ngIf="wifi2gChannel !== null && wifi2gTxPower !== null">
+          Canal {{ wifi2gChannel }} · TX {{ wifi2gTxPower }}%
+        </span>
+      </div>
+    </div>
+
+    <!-- Wi-Fi 5GHz Clientes -->
+    <div class="info-card telemetry-card">
+      <div class="card-icon"><span class="material-symbols-rounded">wifi_tethering</span></div>
+      <div class="card-body">
+        <span class="card-label">Wi-Fi 5GHz — Clientes</span>
+        <span class="card-value">{{ wifi5gClients !== null ? wifi5gClients : '—' }}</span>
+        <span class="card-sub" *ngIf="wifi5gChannel !== null && wifi5gTxPower !== null">
+          Canal {{ wifi5gChannel }} · TX {{ wifi5gTxPower }}%
+        </span>
+      </div>
+    </div>
+
+    <!-- Wi-Fi Total (todas as redes) -->
+    <div class="info-card telemetry-card">
+      <div class="card-icon"><span class="material-symbols-rounded">devices</span></div>
+      <div class="card-body">
+        <span class="card-label">Wi-Fi Total — Clientes</span>
+        <span class="card-value">{{ wifiTotalClients !== null ? wifiTotalClients : '—' }}</span>
+        <span class="card-sub">Todas as redes (Principal + Guest + IoT)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SEÇÃO DE ANÁLISE AVANÇADA ──────────────────────────────────────── -->
+  <div class="analysis-section" *ngIf="analysisData">
+    <div class="telemetry-header">
+      <h3><span class="material-symbols-rounded">analytics</span> Análise Avançada</h3>
+      <span class="health-badge" [class.health-good]="analysisHealth === 'good'" [class.health-warning]="analysisHealth === 'warning'" [class.health-critical]="analysisHealth === 'critical'">
+        {{ analysisHealth === 'good' ? 'Saudável' : analysisHealth === 'warning' ? 'Atenção' : analysisHealth === 'critical' ? 'Crítico' : 'Desconhecido' }}
+      </span>
+    </div>
+
+    <!-- Alertas agregados -->
+    <div class="analysis-alerts" *ngIf="analysisAlerts.length > 0">
+      <div class="alert-item" *ngFor="let alert of analysisAlerts" [class.alert-critical]="alert.severity === 'critical'" [class.alert-warning]="alert.severity === 'warning' || alert.severity === 'group_issue' || alert.severity === 'local_issue'">
+        <span class="material-symbols-rounded">{{ alert.severity === 'critical' ? 'error' : 'warning' }}</span>
+        <span>{{ alert.message }}</span>
+      </div>
+    </div>
+
+    <div class="telemetry-cards grid-layout analysis-cards">
+      <!-- Tendência Óptica (Análise 1) -->
+      <div class="info-card analysis-card" *ngIf="opticalTrend">
+        <div class="card-icon" [class.optical-degrading]="opticalTrend?.rxTrend?.direction === 'degrading'" [class.optical-stable]="opticalTrend?.rxTrend?.direction === 'stable' || !opticalTrend?.alert">
+          <span class="material-symbols-rounded">trending_down</span>
+        </div>
+        <div class="card-body">
+          <span class="card-label">Tendência Óptica (7 dias)</span>
+          <span class="card-value" [class.text-danger]="opticalTrend?.alert" [class.text-success]="!opticalTrend?.alert">
+            {{ opticalTrend?.rxTrend?.slopePerDay > 0 ? '+' : '' }}{{ opticalTrend?.rxTrend?.slopePerDay | number:'1.2-2' }} dBm/dia
+          </span>
+          <span class="card-sub">R² = {{ opticalTrend?.rxTrend?.r2 | number:'1.2-2' }} · {{ opticalTrend?.rxTrend?.direction === 'degrading' ? 'Degradando' : opticalTrend?.rxTrend?.direction === 'improving' ? 'Melhorando' : 'Estável' }}</span>
+        </div>
+      </div>
+
+      <!-- Estabilidade / Reboots (Análise 7) -->
+      <div class="info-card analysis-card" *ngIf="rebootStability">
+        <div class="card-icon" [class.stability-good]="rebootStability?.stability === 'excellent' || rebootStability?.stability === 'good'" [class.stability-bad]="rebootStability?.stability === 'fair' || rebootStability?.stability === 'poor'">
+          <span class="material-symbols-rounded">restart_alt</span>
+        </div>
+        <div class="card-body">
+          <span class="card-label">Estabilidade ({{ rebootStability?.days }} dias)</span>
+          <span class="card-value" [class.text-success]="rebootStability?.rebootCount === 0" [class.text-warning]="rebootStability?.rebootCount > 0">
+            {{ rebootStability?.rebootCount }} reboot(s)
+          </span>
+          <span class="card-sub" *ngIf="rebootStability?.uptimeHours !== null">Uptime: {{ rebootStability?.uptimeHours }}h · {{ rebootStability?.stability }}</span>
+        </div>
+      </div>
+
+      <!-- Anomalias de Tráfego (Análise 8) -->
+      <div class="info-card analysis-card" *ngIf="trafficAnomalies">
+        <div class="card-icon" [class.anomaly-alert]="trafficAnomalies?.alert">
+          <span class="material-symbols-rounded">network_ping</span>
+        </div>
+        <div class="card-body">
+          <span class="card-label">Anomalias de Tráfego (24h)</span>
+          <span class="card-value" [class.text-success]="!trafficAnomalies?.alert" [class.text-warning]="trafficAnomalies?.alert">
+            {{ trafficAnomalies?.anomalyCount || 0 }} pico(s)
+          </span>
+          <span class="card-sub" *ngIf="trafficAnomalies?.rxStats?.avgMbps !== null">
+            Média RX: {{ trafficAnomalies?.rxStats?.avgMbps | number:'1.1-1' }} Mbps
+          </span>
+        </div>
+      </div>
+
+      <!-- Comparação OLT (Análise 9) -->
+      <div class="info-card analysis-card" *ngIf="oltComparison && !oltComparison?.error">
+        <div class="card-icon" [class.olt-outlier]="oltComparison?.isOutlier" [class.olt-group-issue]="oltComparison?.isGroupProblem" [class.olt-normal]="!oltComparison?.alert">
+          <span class="material-symbols-rounded">hub</span>
+        </div>
+        <div class="card-body">
+          <span class="card-label">Comparação OLT ({{ oltComparison?.peerCount }} peers)</span>
+          <span class="card-value" [class.text-danger]="oltComparison?.alert" [class.text-success]="!oltComparison?.alert">
+            <span *ngIf="oltComparison?.diffFromAvg != null">
+              {{ oltComparison?.diffFromAvg > 0 ? '+' : '' }}{{ oltComparison?.diffFromAvg | number:'1.1-1' }} dBm
+            </span>
+            <span *ngIf="oltComparison?.diffFromAvg == null">—</span>
+          </span>
+          <span class="card-sub">
+            <span *ngIf="oltComparison?.peerAvgRx != null">Média grupo: {{ oltComparison?.peerAvgRx | number:'1.1-1' }} dBm · </span>
+            {{ oltComparison?.subnet }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Correlação Térmica (Análise 10) -->
+      <div class="info-card analysis-card" *ngIf="thermalCorrelation">
+        <div class="card-icon" [class.thermal-alert]="thermalCorrelation?.alert" [class.thermal-ok]="!thermalCorrelation?.alert">
+          <span class="material-symbols-rounded">thermostat</span>
+        </div>
+        <div class="card-body">
+          <span class="card-label">Correlação Térmica (7 dias)</span>
+          <span class="card-value" [class.text-danger]="thermalCorrelation?.alert" [class.text-success]="!thermalCorrelation?.alert">
+            {{ thermalCorrelation?.correlation !== null ? (thermalCorrelation?.correlation | number:'1.2-2') : '—' }}
+          </span>
+          <span class="card-sub">
+            <span *ngIf="thermalCorrelation?.tempStats?.avg != null">Temp média: {{ thermalCorrelation?.tempStats?.avg | number:'1.1-1' }}°C · </span>
+            {{ thermalCorrelation?.diagnosis === 'ventilation_issue' ? 'Ventilação' : thermalCorrelation?.diagnosis === 'overheating' ? 'Superaquecimento' : thermalCorrelation?.diagnosis === 'unknown' ? 'Dados insuficientes' : 'Normal' }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Latência / DNS -->
+      <div class="info-card analysis-card" *ngIf="latencyDns">
+        <div class="card-icon" [class.latency-alert]="latencyDns?.alert" [class.latency-ok]="!latencyDns?.alert">
+          <span class="material-symbols-rounded">speed</span>
+        </div>
+        <div class="card-body">
+          <span class="card-label">Latência / DNS</span>
+          <span class="card-value" [class.text-danger]="latencyDns?.alert" [class.text-success]="!latencyDns?.alert">
+            {{ latencyDns?.latency?.diagnostic?.avgMs !== null ? (latencyDns?.latency?.diagnostic?.avgMs + ' ms') : 'N/A' }}
+          </span>
+          <span class="card-sub">
+            <span *ngIf="latencyDns?.hasData">Qualidade: {{ latencyDns?.quality }} · IPPing</span>
+            <span *ngIf="!latencyDns?.hasData">IPPingDiagnostics indisponível nesta CPE</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Tráfego por Destino -->
+      <div class="info-card analysis-card" *ngIf="topDestinations">
+        <div class="card-icon">
+          <span class="material-symbols-rounded">travel_explore</span>
+        </div>
+        <div class="card-body">
+          <span class="card-label">Padrão de Uso (24h)</span>
+          <span class="card-value">{{ topDestinations?.usagePattern === 'streaming_evening' ? 'Streaming' : topDestinations?.usagePattern === 'gaming_late_night' ? 'Gaming' : topDestinations?.usagePattern === 'work_hours' ? 'Trabalho' : 'Misto' }}</span>
+          <span class="card-sub" *ngIf="topDestinations?.totalRxGb !== null">
+            {{ topDestinations?.totalRxGb | number:'1.1-1' }} GB ↓ · {{ topDestinations?.totalTxGb | number:'1.1-1' }} GB ↑
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gráfico de histórico CPU/Memória (últimas 6h) -->
+  <div class="info-card chart-card" *ngIf="rawHistory.length > 0">
+    <h3><span class="material-symbols-rounded">show_chart</span> CPU & Memória — últimas 6h</h3>
+    <div class="chart-wrap">
+      <canvas baseChart
+        [type]="'line'"
+        [labels]="chartLabels"
+        [datasets]="chartDatasets"
+        [options]="chartOptions"
+        [legend]="true">
+      </canvas>
+    </div>
+  </div>
+
+  <!-- Gráfico de histórico Óptico (últimas 6h) -->
+  <div class="info-card chart-card" *ngIf="rawHistory.length > 0">
+    <h3><span class="material-symbols-rounded">show_chart</span> Sinal Óptico — últimas 6h</h3>
+    <div class="chart-wrap">
+      <canvas baseChart
+        [type]="'line'"
+        [labels]="opticalChartLabels"
+        [datasets]="opticalChartDatasets"
+        [options]="opticalChartOptions"
+        [legend]="true">
+      </canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ── INFORMAÇÕES GERAIS (Dados estáticos da CPE) ─────────────────────── -->
+<div class="grid-layout">
+    <div class="info-card">
+        <h3><span class="material-symbols-rounded">public</span> Configuração WAN</h3>
+        <div class="info-row">
+            <span class="label">Endereço IPv4:</span>
+            <span class="value font-mono">{{ cpe?.wanIp || 'N/A' }}</span>
+        </div>
+    </div>
+
+    <div class="info-card">
+        <h3><span class="material-symbols-rounded">settings_input_component</span> Sinal Óptico (GPON/EPON)</h3>
+        <div class="info-row">
+            <span class="label">Potência de Recepção (Rx):</span>
+            <span class="value" [class.text-danger]="isRxCritical" [class.text-success]="isRxGood">
+                {{ rxDisplay }}
+            </span>
+        </div>
+        <div class="info-row">
+            <span class="label">Potência de Transmissão (Tx):</span>
+            <span class="value">{{ txDisplay }}</span>
+        </div>
+    </div>
+
+    <div class="info-card">
+        <h3><span class="material-symbols-rounded">memory</span> Identificação do Hardware</h3>
+        <div class="info-row">
+            <span class="label">Fabricante (OUI):</span>
+            <span class="value">{{ cpe?.manufacturer }} ({{ cpe?.oui }})</span>
+        </div>
+        <div class="info-row">
+            <span class="label">Versão de Firmware:</span>
+            <span class="value">{{ cpe?.softwareVersion || 'Desconhecida' }}</span>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,79 @@
+<div class="radio-tab">
+  <div class="section-header">
+    <h3>Configuração de Rádio</h3>
+    <p>Altere parâmetros de 2.4GHz e 5GHz diretamente no ACS.</p>
+  </div>
+
+  <div class="radio-grid">
+    <div class="radio-card">
+      <h4>2.4GHz</h4>
+      <label>
+        Ativar
+        <input type="checkbox" [(ngModel)]="radioForm.enable2g" />
+      </label>
+      <label>
+        Canal
+        <select class="select-field" [(ngModel)]="radioForm.channel2g">
+          <option value="">Selecionar canal</option>
+          <option *ngFor="let channel of channelOptions2g" [value]="channel">{{ channel }}</option>
+        </select>
+      </label>
+      <label>
+        Largura de Banda
+        <select class="select-field" [(ngModel)]="radioForm.bandwidth2g">
+          <option value="">Selecionar largura</option>
+          <option *ngFor="let bw of bandwidthOptions2g" [value]="bw">{{ bw }} MHz</option>
+        </select>
+      </label>
+      <label>
+        Potência (dBm)
+        <select class="select-field" [(ngModel)]="radioForm.power2g">
+          <option value="">Selecionar potência</option>
+          <option *ngFor="let power of powerOptions" [value]="power">{{ power }} dBm</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="radio-card">
+      <h4>5GHz</h4>
+      <label>
+        Ativar
+        <input type="checkbox" [(ngModel)]="radioForm.enable5g" />
+      </label>
+      <label>
+        Canal (sem DFS)
+        <select class="select-field" [(ngModel)]="radioForm.channel5g">
+          <option value="">Selecionar canal</option>
+          <option *ngFor="let channel of channelOptions5g" [value]="channel">{{ channel }}</option>
+        </select>
+      </label>
+      <label>
+        Largura de Banda
+        <select class="select-field" [(ngModel)]="radioForm.bandwidth5g">
+          <option value="">Selecionar largura</option>
+          <option *ngFor="let bw of bandwidthOptions5g" [value]="bw">{{ bw }} MHz</option>
+        </select>
+      </label>
+      <label>
+        Potência (dBm)
+        <select class="select-field" [(ngModel)]="radioForm.power5g">
+          <option value="">Selecionar potência</option>
+          <option *ngFor="let power of powerOptions" [value]="power">{{ power }} dBm</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <div class="actions-row">
+    <app-button
+      variant="primary"
+      size="md"
+      iconLeft="save"
+      [loading]="isSaving"
+      (clicked)="saveRadioConfig()"
+    >
+      Salvar Configurações de Rádio
+    </app-button>
+    <div class="feedback" *ngIf="feedbackMessage">{{ feedbackMessage }}</div>
+  </div>
+</div>

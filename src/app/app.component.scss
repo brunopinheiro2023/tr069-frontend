@@ -1,0 +1,101 @@
+// =============================================================================
+// CAMINHO DO ARQUIVO: frontend/src/app/app.component.scss
+// Layout Wrapper Responsivo (Sidebar + Header + Content)
+// =============================================================================
+
+.app-layout {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+// ---------------------------------------------------------------------------
+// SIDEBAR BACKDROP (mobile only)
+// ---------------------------------------------------------------------------
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: var(--bg-overlay);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--transition-base), visibility var(--transition-base);
+  z-index: var(--z-modal-backdrop);
+
+  &.active {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  // Em desktop o backdrop nunca aparece
+  @media (min-width: 1024px) {
+    display: none !important;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ÁREA PRINCIPAL DE CONTEÚDO
+// ---------------------------------------------------------------------------
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0; // Permite que o flex child encolha abaixo do conteúdo natural
+  overflow: hidden;
+}
+
+.content-area {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-4);
+
+  @media (min-width: 768px) {
+    padding: var(--space-6);
+  }
+
+  @media (min-width: 1280px) {
+    padding: var(--space-8);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// LOADING GLOBAL OVERLAY
+// ---------------------------------------------------------------------------
+.global-loading-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  background-color: var(--bg-overlay);
+  backdrop-filter: blur(4px);
+  z-index: var(--z-modal);
+  animation: fade-in 0.2s ease-out;
+}
+
+.global-loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--accent-color);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spinner-spin 0.75s linear infinite;
+}
+
+.global-loading-text {
+  color: var(--text-on-accent);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+}
+
+@keyframes spinner-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

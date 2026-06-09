@@ -1,0 +1,33 @@
+<div class="login-wrapper">
+    <div class="login-card">
+        <div class="login-header">
+            <div class="logo">
+                <span class="material-symbols-rounded">router</span>
+                Vmoas <span>ACS</span>
+            </div>
+            <h2>Acesso Restrito</h2>
+            <p>Insira suas credenciais para gerenciar a rede.</p>
+        </div>
+
+        <div *ngIf="errorMessage" class="alert-error">
+            <span class="material-symbols-rounded">error</span>
+            {{ errorMessage }}
+        </div>
+
+        <form (ngSubmit)="onSubmit()" #loginForm="ngForm" class="login-form">
+            <div class="form-group">
+                <label for="username">Usuário</label>
+                <input type="text" id="username" name="username" [(ngModel)]="username" required autocomplete="username" placeholder="ex: admin">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Senha</label>
+                <input type="password" id="password" name="password" [(ngModel)]="password" required autocomplete="current-password" placeholder="••••••••">
+            </div>
+
+            <button type="submit" class="btn-primary" [disabled]="isLoading">
+                {{ isLoading ? 'Autenticando...' : 'Entrar no Sistema' }}
+            </button>
+        </form>
+    </div>
+</div>

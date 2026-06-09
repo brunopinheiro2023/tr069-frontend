@@ -1,0 +1,153 @@
+// =============================================================================
+// CAMINHO DO ARQUIVO: frontend/src/styles/_variables.scss
+// =============================================================================
+// Design System — Tokens Semânticos de Cores, Tipografia, Espaçamento e Efeitos.
+// Este ficheiro exporta APENAS Custom Properties CSS (variáveis nativas),
+// garantindo troca de tema em tempo real sem recarregamento e compatibilidade
+// total com TailwindCSS darkMode: 'class'.
+// =============================================================================
+
+// ---------------------------------------------------------------------------
+// 1. TEMA CLARO (default no :root)
+// ---------------------------------------------------------------------------
+:root {
+  // --- Paleta de Fundo ---
+  --bg-body: #f4f7fe;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #ffffff;
+  --bg-overlay: rgba(0, 0, 0, 0.45);
+
+  // --- Paleta de Texto ---
+  --text-primary: #1b2559;
+  --text-secondary: #a3aed1;
+  --text-muted: #8f9bba;
+  --text-on-accent: #ffffff;
+
+  // --- Paleta de Acento / Primária ---
+  --accent-color: #4318ff;
+  --accent-hover: #3311db;
+  --accent-light: rgba(67, 24, 255, 0.12);
+  --accent-danger: #e31b53;
+  --accent-danger-hover: #c01644;
+  --accent-success: #05cd99;
+  --accent-success-hover: #04b386;
+  --accent-warning: #ffb547;
+  --accent-warning-hover: #e59f3d;
+
+  // --- Bordas e Divisores ---
+  --border-color: #e2e8f0;
+  --border-color-strong: #cbd5e1;
+
+  // --- Border Radius ---
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 999px;
+
+  // --- Sombras ---
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.1), 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 4px 6px rgba(16, 24, 40, 0.06), 0 2px 4px rgba(16, 24, 40, 0.04);
+  --shadow-lg: 0 10px 15px rgba(16, 24, 40, 0.06), 0 4px 6px rgba(16, 24, 40, 0.04);
+  --shadow-xl: 0 18px 40px rgba(112, 144, 176, 0.12);
+  --shadow-soft: 0px 18px 40px rgba(112, 144, 176, 0.12);
+
+  // --- Tipografia ---
+  --font-family-base: 'Inter', 'Plus Jakarta Sans', 'Roboto', system-ui, sans-serif;
+  --font-family-mono: 'Fira Code', 'JetBrains Mono', ui-monospace, monospace;
+
+  // Tamanhos de fonte (escala 1.25 — Major Third)
+  --text-xs: 0.75rem;   // 12px
+  --text-sm: 0.875rem;  // 14px
+  --text-base: 1rem;    // 16px
+  --text-lg: 1.125rem;  // 18px
+  --text-xl: 1.25rem;   // 20px
+  --text-2xl: 1.5rem;   // 24px
+  --text-3xl: 1.875rem; // 30px
+  --text-4xl: 2.25rem;  // 36px
+
+  // Pesos
+  --font-regular: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+
+  // Altura de linha
+  --leading-tight: 1.25;
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+
+  // --- Espaçamento (escala 4px) ---
+  --space-1: 0.25rem;  // 4px
+  --space-2: 0.5rem;   // 8px
+  --space-3: 0.75rem;  // 12px
+  --space-4: 1rem;     // 16px
+  --space-5: 1.25rem;  // 20px
+  --space-6: 1.5rem;   // 24px
+  --space-8: 2rem;     // 32px
+  --space-10: 2.5rem;  // 40px
+  --space-12: 3rem;    // 48px
+  --space-16: 4rem;    // 64px
+
+  // --- Transições ---
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+  --transition-slow: 350ms ease;
+  --transition-speed: 0.3s;
+
+  // --- Z-Index ---
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+
+  // --- Layout ---
+  --sidebar-width: 280px;
+  --sidebar-width-collapsed: 72px;
+  --header-height: 72px;
+  --content-max-width: 1600px;
+}
+
+// ---------------------------------------------------------------------------
+// 2. TEMA ESCURO (.dark — usado pelo Tailwind darkMode: 'class')
+//    Atenção: NÃO usamos [data-theme="dark"] aqui porque o Tailwind espera
+//    a classe .dark no <html> ou no container pai. O ThemeService do Angular
+//    adiciona/remove a classe .dark em document.documentElement.
+// ---------------------------------------------------------------------------
+.dark {
+  --bg-body: #0b1437;
+  --bg-surface: #111c44;
+  --bg-surface-elevated: #1b2541;
+  --bg-overlay: rgba(0, 0, 0, 0.65);
+
+  --text-primary: #ffffff;
+  --text-secondary: #8f9bba;
+  --text-muted: #5e6b8a;
+  --text-on-accent: #ffffff;
+
+  --accent-color: #7551ff;
+  --accent-hover: #8668ff;
+  --accent-light: rgba(117, 81, 255, 0.18);
+  --accent-danger: #ff4d6d;
+  --accent-danger-hover: #ff7a91;
+  --accent-success: #05cd99;
+  --accent-success-hover: #04b386;
+  --accent-warning: #ffb547;
+  --accent-warning-hover: #e59f3d;
+
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-color-strong: rgba(255, 255, 255, 0.15);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3), 0 4px 6px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 18px 40px rgba(0, 0, 0, 0.4);
+  --shadow-soft: 0px 18px 40px rgba(0, 0, 0, 0.25);
+}

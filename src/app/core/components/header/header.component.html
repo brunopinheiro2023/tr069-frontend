@@ -1,0 +1,35 @@
+<header class="header">
+  <!-- Botão hamburger: visível apenas em mobile (< 1024px) -->
+  <button
+    class="hamburger-btn"
+    (click)="onToggleSidebar()"
+    [attr.aria-expanded]="sidebarOpen"
+    aria-label="Alternar menu de navegação"
+    type="button"
+  >
+    <span class="material-symbols-rounded">menu</span>
+  </button>
+
+  <div class="header-title">
+    <h1>Visão Geral</h1>
+    <p>Monitoramento em tempo real do tráfego e saúde das CPEs.</p>
+  </div>
+
+  <div class="header-actions">
+    <button
+      class="theme-toggle-btn"
+      (click)="toggleTheme()"
+      [title]="isDarkMode ? 'Alternar para tema claro' : 'Alternar para tema escuro'"
+      type="button"
+    >
+      <span class="material-symbols-rounded">
+        {{ isDarkMode ? 'light_mode' : 'dark_mode' }}
+      </span>
+    </button>
+
+    <div class="user-profile">
+      <div class="avatar" aria-hidden="true">FB</div>
+      <span class="user-name">Francisco Bruno</span>
+    </div>
+  </div>
+</header>

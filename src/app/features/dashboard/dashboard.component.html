@@ -1,0 +1,152 @@
+<div class="dashboard-container">
+    <!-- Skeleton Loaders: estado de carregamento inicial (Pilar 5) -->
+    <div *ngIf="loading" class="skeleton-metrics">
+        <div class="metrics-grid">
+            <app-skeleton shape="card" height="90px" [count]="3"></app-skeleton>
+        </div>
+        <div class="skeleton-table" style="margin-top: 24px;">
+            <app-skeleton shape="text-lg" width="240px" style="margin-bottom: 12px"></app-skeleton>
+            <app-skeleton shape="table-row" [count]="6"></app-skeleton>
+        </div>
+    </div>
+
+    <!-- Conteúdo real: exibido apenas quando não está carregando -->
+    <div *ngIf="!loading" class="fade-in">
+        <div class="metrics-grid">
+            <div class="card">
+                <div class="card-icon"><span class="material-symbols-rounded">router</span></div>
+                <div class="card-info">
+                    <h3>CPEs Online</h3>
+                    <p>{{ cpesOnlineCount }}</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-icon warning"><span class="material-symbols-rounded">warning</span></div>
+                <div class="card-info">
+                    <h3>Sinal GPON Crítico</h3>
+                    <p>{{ criticalGponCount }}</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-icon info"><span class="material-symbols-rounded">speed</span></div>
+                <div class="card-info">
+                    <h3>Tarefas Pendentes</h3>
+                    <p>{{ pendingTasksCount }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-card table-card">
+            <div class="table-header">
+                <h2>Equipamentos Conectados <span class="total-count">({{ totalItems }})</span></h2>
+                <div class="table-filters">
+                    <div class="search-box">
+                        <span class="material-symbols-rounded search-icon">search</span>
+                        <input
+                            type="text"
+                            placeholder="Buscar por serial ou modelo..."
+                            [(ngModel)]="searchQuery"
+                            (ngModelChange)="onFilterChange()"
+                            class="search-input"
+                        />
+                    </div>
+                    <div class="status-filter">
+                        <button class="filter-btn" [class.active]="filterStatus === 'all'"
+                                (click)="onStatusFilterChange('all')">Todos</button>
+                        <button class="filter-btn online" [class.active]="filterStatus === 'online'"
+                                (click)="onStatusFilterChange('online')">Online</button>
+                        <button class="filter-btn offline" [class.active]="filterStatus === 'offline'"
+                                (click)="onStatusFilterChange('offline')">Offline</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+            <table class="vmoas-table">
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Serial Number</th>
+                        <th>Modelo</th>
+                        <th>IP WAN</th>
+                        <th>Wi-Fi 2.4G</th>
+                        <th>Sinal Óptico (Rx)</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr *ngFor="let cpe of cpes" (click)="goToDetails(cpe.serialNumber)" style="cursor: pointer;">
+                        <td>
+                            <span class="status-badge" [class.online]="cpe.isOnline" [class.offline]="!cpe.isOnline">
+                                {{ cpe.isOnline ? 'Online' : 'Offline' }}
+                            </span>
+                        </td>
+                        <td class="bold-text">{{ cpe.serialNumber }}</td>
+                        <td>{{ cpe.productClass || cpe.manufacturer }}</td>
+                        <td>{{ cpe.wanIp || 'Aguardando...' }}</td>
+                        <td>
+                            <span *ngIf="cpe.wifi2g?.ssid; else noWifi">
+                                {{ cpe.wifi2g?.ssid }}
+                                (Ch: {{ cpe.wifi2g?.channel }})
+                            </span>
+                            <ng-template #noWifi>
+                                <span class="text-muted">N/D</span>
+                            </ng-template>
+                        </td>
+                        <td>
+                            <span class="rx-power"
+                                  [class.critical]="cpe.opticalRx !== undefined && cpe.opticalRx < -27"
+                                  [class.good]="cpe.opticalRx !== undefined && cpe.opticalRx >= -27">
+                                {{ cpe.opticalRx !== undefined ? cpe.opticalRx + ' dBm' : 'N/D' }}
+                            </span>
+                        </td>
+                        <td>
+                            <button class="action-btn"
+                                    (click)="wakeUpDevice(cpe.serialNumber); $event.stopPropagation()"
+                                    title="Acordar CPE">
+                                <span class="material-symbols-rounded">bolt</span>
+                            </button>
+
+                            <button class="action-btn config"
+                                    (click)="openConfigModal(cpe); $event.stopPropagation()"
+                                    title="Configurar Wi-Fi">
+                                <span class="material-symbols-rounded">settings</span>
+                            </button>
+
+                            <button class="action-btn diagnostics"
+                                    (click)="goToDiagnostics(cpe.serialNumber); $event.stopPropagation()"
+                                    title="Diagnóstico Wi-Fi dedicado">
+                                <span class="material-symbols-rounded">analytics</span>
+                            </button>
+                        </td>
+                    </tr>
+                    <tr *ngIf="cpes.length === 0">
+                        <td colspan="7" class="empty-state">Nenhuma CPE encontrada ou registrada no ACS.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+        <!-- Paginador -->
+        @if (totalPages > 1) {
+            <div class="paginator">
+                <button class="page-btn" [disabled]="currentPage === 1" (click)="onPageChange(currentPage - 1)">
+                    <span class="material-symbols-rounded">chevron_left</span>
+                </button>
+                @for (page of pageNumbers; track page) {
+                    <button
+                        class="page-btn"
+                        [class.active]="page === currentPage"
+                        (click)="onPageChange(page)"
+                        [style.display]="(page === 1 || page === totalPages || (page >= currentPage - 2 && page <= currentPage + 2)) ? 'flex' : 'none'"
+                    >{{ page }}</button>
+                }
+                <button class="page-btn" [disabled]="currentPage === totalPages" (click)="onPageChange(currentPage + 1)">
+                    <span class="material-symbols-rounded">chevron_right</span>
+                </button>
+                <span class="page-info">{{ (currentPage - 1) * itemsPerPage + 1 }}–{{ pageEnd }} de {{ totalItems }}</span>
+            </div>
+        }
+    </div>
+</div>

@@ -1,0 +1,292 @@
+.dashboard-container {
+    padding: 0 40px 40px 40px;
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.card {
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    box-shadow: var(--shadow-soft);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: background-color var(--transition-speed) ease, box-shadow var(--transition-speed) ease;
+}
+
+.card-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background-color: rgba(67, 24, 255, 0.08);
+    color: var(--accent-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-info h3 {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.card-info p {
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.content-card {
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-md);
+    padding: 32px;
+    box-shadow: var(--shadow-soft);
+    min-height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: background-color var(--transition-speed) ease;
+}
+
+
+/* ... CSS anterior (metrics-grid, cards) ... */
+
+/* Modificadores de ícones dos cards */
+.card-icon.warning { background-color: rgba(255, 59, 48, 0.1); color: #FF3B30; }
+.card-icon.info { background-color: rgba(0, 122, 255, 0.1); color: #007AFF; }
+
+/* Estrutura da Tabela */
+.table-card {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 0;
+    overflow: hidden;
+}
+
+.table-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.table-header h2 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.total-count {
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: 15px;
+}
+
+.table-filters {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-icon {
+    position: absolute;
+    left: 10px;
+    color: var(--text-muted);
+    font-size: 18px;
+    pointer-events: none;
+}
+
+.search-input {
+    background: var(--bg-body);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px 8px 34px;
+    font-size: 13px;
+    color: var(--text-primary);
+    width: 240px;
+    transition: border-color 0.2s;
+
+    &:focus {
+        outline: none;
+        border-color: var(--accent-color);
+    }
+
+    &::placeholder {
+        color: var(--text-muted);
+    }
+}
+
+.status-filter {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-body);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+}
+
+.filter-btn {
+    background: none;
+    border: none;
+    border-radius: calc(var(--radius-sm) - 2px);
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &.active {
+        background: var(--bg-surface);
+        color: var(--text-primary);
+        box-shadow: var(--shadow-xs);
+    }
+
+    &.online.active { color: #28a745; }
+    &.offline.active { color: #FF3B30; }
+}
+
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.vmoas-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.vmoas-table th {
+    padding: 16px 24px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.vmoas-table td {
+    padding: 20px 24px;
+    font-size: 14px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+
+.vmoas-table tbody tr:hover {
+    background-color: rgba(67, 24, 255, 0.02);
+}
+
+.bold-text { font-weight: 600; }
+.text-muted { color: var(--text-secondary); }
+
+/* Badges de Status (Online/Offline) */
+.status-badge {
+    padding: 6px 12px;
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 700;
+}
+.status-badge.online { background-color: rgba(52, 199, 89, 0.15); color: #28a745; }
+.status-badge.offline { background-color: rgba(255, 59, 48, 0.1); color: #FF3B30; }
+
+/* Indicadores de Sinal Óptico */
+.rx-power { font-weight: 600; }
+.rx-power.good { color: #28a745; }
+.rx-power.critical { color: #FF3B30; }
+
+/* Botões de Ação na Tabela */
+.action-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.action-btn:hover { background-color: var(--bg-body); color: var(--accent-color); }
+.action-btn.config:hover { color: #007AFF; }
+
+.empty-state {
+    text-align: center;
+    padding: 40px !important;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+
+/* Paginador */
+.paginator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-color);
+}
+
+.page-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 8px;
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:hover:not(:disabled) {
+        border-color: var(--accent-color);
+        color: var(--accent-color);
+    }
+
+    &.active {
+        background: var(--accent-color);
+        border-color: var(--accent-color);
+        color: var(--text-on-accent);
+    }
+
+    &:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+
+    .material-symbols-rounded { font-size: 18px; }
+}
+
+.page-info {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-left: 8px;
+}

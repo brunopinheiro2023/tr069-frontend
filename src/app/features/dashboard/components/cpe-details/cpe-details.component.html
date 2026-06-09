@@ -1,0 +1,104 @@
+<div class="details-container">
+
+    <app-button
+        variant="ghost"
+        size="sm"
+        iconLeft="arrow_back"
+        (clicked)="goBack()"
+    >
+        Voltar para Dashboard
+    </app-button>
+
+    <!-- Estado de carregamento — Skeleton Loaders (Pilar 5) -->
+    <div *ngIf="isLoading" class="skeleton-layout">
+        <div class="skeleton-hero" style="display:flex; gap:16px; margin-top:16px; flex-wrap:wrap;">
+            <app-skeleton shape="text-lg" width="200px"></app-skeleton>
+            <app-skeleton shape="text" width="300px"></app-skeleton>
+        </div>
+        <div class="skeleton-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 24px;">
+            <app-skeleton shape="card" height="100px" [count]="4"></app-skeleton>
+        </div>
+        <div class="skeleton-tabs" style="margin-top: 24px;">
+            <app-skeleton shape="text" width="100%" height="40px"></app-skeleton>
+        </div>
+    </div>
+
+    <div *ngIf="!isLoading && error" class="error-state">{{ error }}</div>
+
+    <ng-container *ngIf="!isLoading && !error && cpe">
+        <div class="details-hero">
+            <div class="hero-info">
+                <span class="status-badge" [class.online]="cpe.isOnline" [class.offline]="!cpe.isOnline">
+                    {{ cpe.isOnline ? 'Online' : 'Offline' }}
+                </span>
+                <h2>{{ cpe.productClass || cpe.manufacturer }}</h2>
+                <p class="subtitle">SN: {{ cpe.serialNumber }} | Último Informe: {{ cpe.lastInform | date:'short' }}</p>
+            </div>
+            <div class="hero-actions">
+                <button class="action-btn-primary" (click)="wakeUp()">
+                    <span class="material-symbols-rounded">bolt</span> Forçar Atualização (Wake Up)
+                </button>
+                <button class="action-btn-secondary" (click)="goToDiagnostics()">
+                    <span class="material-symbols-rounded">analytics</span> Diagnóstico Wi-Fi Dedicado
+                </button>
+            </div>
+        </div>
+
+        <div class="summary-grid">
+            <div class="summary-card">
+                <span>Status da CPE</span>
+                <strong>{{ cpe.isOnline ? 'Online' : 'Offline' }}</strong>
+                <small>{{ cpe.wifi2g?.status || '2.4GHz' }} • {{ cpe.wifi5g?.status || '5GHz' }}</small>
+            </div>
+            <div class="summary-card">
+                <span>Firmware</span>
+                <strong>{{ cpe.softwareVersion || 'Desconhecido' }}</strong>
+                <small>{{ cpe.hardwareVersion ? ('HW ' + cpe.hardwareVersion) : 'Versão não disponível' }}</small>
+            </div>
+            <div class="summary-card">
+                <span>Endereço WAN</span>
+                <strong>{{ cpe.wanIp || 'Sem IP atribuído' }}</strong>
+                <small>{{ cpe.connectionRequestURL ? 'Connection Request pronto' : 'Connection Request não configurado' }}</small>
+            </div>
+            <div class="summary-card">
+                <span>Último Informe</span>
+                <strong>{{ cpe.lastInform | date:'short' }}</strong>
+                <small>{{ cpe.opticalRx !== undefined ? ('Rx ' + cpe.opticalRx + ' dBm') : 'Sinal óptico indisponível' }}</small>
+            </div>
+        </div>
+
+        <div class="tabs-nav">
+            <button class="tab-btn" [class.active]="activeTab === 'info'" (click)="setActiveTab('info')">
+                <span class="material-symbols-rounded">info</span> Informações Gerais
+            </button>
+            <button class="tab-btn" [class.active]="activeTab === 'wifi'" (click)="setActiveTab('wifi')">
+                <span class="material-symbols-rounded">wifi</span> Painel Wi-Fi Avançado
+            </button>
+            <button class="tab-btn" [class.active]="activeTab === 'radio'" (click)="setActiveTab('radio')">
+                <span class="material-symbols-rounded">settings_ethernet</span> Configuração de Rádio
+            </button>
+            <button class="tab-btn" [class.active]="activeTab === 'devices'" (click)="setActiveTab('devices')">
+                <span class="material-symbols-rounded">devices</span> Dispositivos Conectados
+            </button>
+            <button class="tab-btn" [class.active]="activeTab === 'diagnostics'" (click)="setActiveTab('diagnostics')">
+                <span class="material-symbols-rounded">analytics</span> Diagnóstico de Rede
+            </button>
+            <button class="tab-btn" [class.active]="activeTab === 'wifi-analysis'" (click)="setActiveTab('wifi-analysis')">
+                <span class="material-symbols-rounded">wifi_find</span> Análise Wi-Fi
+            </button>
+            <button class="tab-btn" [class.active]="activeTab === 'ai'" (click)="setActiveTab('ai')">
+                <span class="material-symbols-rounded">psychology</span> Análise IA
+            </button>
+        </div>
+
+        <div class="tab-content">
+            <app-cpe-info-tab *ngIf="activeTab === 'info'" [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-info-tab>
+            <app-cpe-wifi-tab *ngIf="activeTab === 'wifi'" [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-wifi-tab>
+            <app-cpe-radio-tab *ngIf="activeTab === 'radio'" [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-radio-tab>
+            <app-cpe-devices-tab *ngIf="activeTab === 'devices'" [serialNumber]="serialNumber"></app-cpe-devices-tab>
+            <app-cpe-diagnostics-tab-new *ngIf="activeTab === 'diagnostics'" [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-diagnostics-tab-new>
+            <app-cpe-wifi-analysis-tab *ngIf="activeTab === 'wifi-analysis'" [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-wifi-analysis-tab>
+            <app-cpe-ai-tab *ngIf="activeTab === 'ai'" [serialNumber]="serialNumber"></app-cpe-ai-tab>
+        </div>
+    </ng-container>
+</div>

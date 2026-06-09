@@ -1,0 +1,124 @@
+<div class="diagnostics-tab-new">
+  <!-- Cabeçalho -->
+  <div class="section-header">
+    <div>
+      <h3>Diagnóstico de Rede</h3>
+      <p>Testes de conectividade, throughput, DNS e análise de vizinhança Wi-Fi.</p>
+    </div>
+  </div>
+
+  <!-- Banner de acesso exclusivo bloqueado -->
+  <div *ngIf="readOnly" class="access-denied-banner">
+    <span class="material-symbols-rounded">lock</span>
+    <div class="access-denied-body">
+      <strong>Modo somente leitura</strong>
+      <p>Você não tem permissão para executar diagnósticos nesta CPE.</p>
+    </div>
+  </div>
+
+  <!-- Grid de diagnósticos -->
+  <div class="diagnostics-grid">
+
+    <!-- Seção: Teste de Velocidade -->
+    <div class="section-header" style="grid-column: 1 / -1;">
+      <h3>Teste de Velocidade</h3>
+      <p>Medição de throughput via TR-143 (Download/Upload)</p>
+    </div>
+
+    <div class="diagnostic-card-full">
+      <app-speed-test-card
+        [serialNumber]="serialNumber"
+        [readOnly]="readOnly"
+        [isSupported]="diagnosticCapabilities.ipDownloadSupported || diagnosticCapabilities.ipUploadSupported"
+        [isRunning]="diagnosticRunning.Download || diagnosticRunning.Upload"
+        [result]="speedTestResult"
+        [errorState]="speedTestError"
+        [history]="speedTestHistory"
+        [direction]="speedTestDirection"
+        [url]="speedTestUrl"
+        [connections]="speedTestConnections"
+        (directionChange)="speedTestDirection = $event"
+        (urlChange)="speedTestUrl = $event"
+        (connectionsChange)="speedTestConnections = $event"
+        (runSpeedTest)="onSpeedTestRun($event)">
+      </app-speed-test-card>
+    </div>
+
+    <!-- Seção: Diagnósticos de Conectividade -->
+    <div class="section-header" style="grid-column: 1 / -1;">
+      <h3>Diagnósticos de Conectividade</h3>
+      <p>Testes de latência e roteamento (Ping, TraceRoute)</p>
+    </div>
+
+    <div class="diagnostic-card">
+      <app-ping-diagnostic-card
+        [serialNumber]="serialNumber"
+        [readOnly]="readOnly"
+        [isSupported]="diagnosticCapabilities.ipPingSupported"
+        [isRunning]="diagnosticRunning.IPPing"
+        [result]="pingResult"
+        [history]="pingHistory"
+        [host]="pingHost"
+        (hostChange)="pingHost = $event"
+        (runPing)="onPingRun($event)">
+      </app-ping-diagnostic-card>
+    </div>
+
+    <div class="diagnostic-card">
+      <app-traceroute-diagnostic-card
+        [serialNumber]="serialNumber"
+        [readOnly]="readOnly"
+        [isSupported]="diagnosticCapabilities.ipTraceRouteSupported"
+        [isRunning]="diagnosticRunning.TraceRoute"
+        [result]="traceRouteResult"
+        [history]="traceRouteHistory"
+        [host]="traceRouteHost"
+        (hostChange)="traceRouteHost = $event"
+        (runTraceRoute)="onTraceRouteRun($event)">
+      </app-traceroute-diagnostic-card>
+    </div>
+
+    <!-- Seção: Diagnósticos de DNS -->
+    <div class="section-header" style="grid-column: 1 / -1;">
+      <h3>Diagnósticos de DNS</h3>
+      <p>Resolução de nomes e lookup de domínios</p>
+    </div>
+
+    <div class="diagnostic-card">
+      <app-dns-lookup-card
+        [serialNumber]="serialNumber"
+        [readOnly]="readOnly"
+        [isSupported]="true"
+        [isRunning]="diagnosticRunning.DNSLookup"
+        [result]="dnsLookupResult"
+        [history]="dnsLookupHistory"
+        [hostName]="dnsHostName"
+        (hostNameChange)="dnsHostName = $event"
+        (runDNSLookup)="onDNSLookupRun($event)">
+      </app-dns-lookup-card>
+    </div>
+
+    <!-- Seção: Outros Diagnósticos -->
+    <div class="section-header" style="grid-column: 1 / -1;">
+      <h3>Outros Diagnósticos</h3>
+      <p>UDP Echo e ferramentas de rede adicionais</p>
+    </div>
+
+    <div class="diagnostic-card">
+      <app-udp-echo-card
+        [serialNumber]="serialNumber"
+        [readOnly]="readOnly"
+        [isSupported]="diagnosticCapabilities.ipUdpEchoSupported"
+        [isRunning]="diagnosticRunning.UDPEcho"
+        [result]="udpEchoResult"
+        [history]="udpEchoHistory"
+        [udpPort]="udpPort"
+        [sourceIPAddress]="udpSourceIPAddress"
+        (udpPortChange)="udpPort = $event"
+        (sourceIPAddressChange)="udpSourceIPAddress = $event"
+        (runUDPEcho)="onUDPEchoRun($event)">
+      </app-udp-echo-card>
+    </div>
+
+  </div>
+</div>

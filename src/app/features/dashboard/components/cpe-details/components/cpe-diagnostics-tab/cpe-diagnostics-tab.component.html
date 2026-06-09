@@ -1,0 +1,450 @@
+<div class="diagnostics-tab">
+  <!-- Cabeçalho -->
+  <div class="section-header">
+    <div>
+      <h3>Diagnóstico de Rede</h3>
+      <p>Testes de conectividade, throughput, DNS e análise de vizinhança Wi-Fi.</p>
+    </div>
+    <span class="live-tag" *ngIf="report && !isAnalyzing">
+      <span class="live-dot"></span> Tempo real
+    </span>
+  </div>
+
+  <!-- Banner de acesso exclusivo bloqueado -->
+  <div *ngIf="cpeAccessDenied" class="access-denied-banner">
+    <span class="material-symbols-rounded">lock</span>
+    <div class="access-denied-body">
+      <strong>CPE em uso por outro técnico</strong>
+      <p>{{ cpeLockedBy }} abriu esta CPE {{ cpeLockedAt }}. Você está em modo <b>somente leitura</b> — aguarde a liberação.</p>
+    </div>
+  </div>
+
+  <!-- Feedback / Erros -->
+  <div *ngIf="feedbackMessage" class="feedback-message" [class.feedback-success]="feedbackType === 'success'" [class.feedback-error]="feedbackType === 'error'">
+    {{ feedbackMessage }}
+  </div>
+
+  <!-- Estado de carregamento — Skeleton Loaders (Pilar 5) -->
+  <div *ngIf="isAnalyzing && !report" class="skeleton-layout">
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+      <app-skeleton shape="card" height="140px" [count]="2"></app-skeleton>
+    </div>
+    <div style="margin-top: 16px; display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+      <app-skeleton shape="card" height="240px"></app-skeleton>
+      <app-skeleton shape="card" height="240px"></app-skeleton>
+    </div>
+  </div>
+
+  <!-- Relatório completo — mantém visível durante reload silencioso (isAnalyzing=true com report já existente) -->
+  <div *ngIf="report" class="report-grid">
+
+    <!-- ========================== VARREDURA DE REDES VIZINHAS (PRINCIPAL) ========================== -->
+    <div class="section-header" style="grid-column: 1 / -1;">
+      <h3>Varredura de Redes Vizinhas</h3>
+      <p>Análise de saturação de canais e recomendação de otimização Wi-Fi</p>
+    </div>
+
+    <!-- Card de Varredura de Vizinhança -->
+    <div class="report-card network-diag-card" style="grid-column: 1 / -1;">
+      <div class="diag-header">
+        <h4><span class="material-symbols-rounded">wifi_find</span> Redes Vizinhas Detectadas</h4>
+        <span class="diag-capability" *ngIf="report.neighboringWiFiResultCount !== undefined">
+          {{ report.neighboringWiFiResultCount }} redes
+        </span>
+      </div>
+
+      <!-- Gráficos de Saturação de Canais -->
+      <div class="saturation-charts-container">
+        <!-- Estado: Scan em andamento -->
+        <div *ngIf="neighborScanInProgress" class="scan-in-progress-message">
+          <span class="material-symbols-rounded">hourglass_empty</span>
+          Scan em andamento na CPE (pode levar até 30s). Os gráficos atualizarão automaticamente ao concluir.
+        </div>
+
+        <!-- Estado: Nenhum scan realizado ainda -->
+        <div *ngIf="!neighborScanInProgress && !report.channelSaturation" class="no-scan-message">
+          <span class="material-symbols-rounded">wifi_off</span>
+          Nenhum scan de vizinhança realizado. Clique em "Varrer Vizinhos" para analisar a saturação de canais Wi-Fi.
+        </div>
+
+        <!-- Estado: Scan completou sem redes detectadas -->
+        <div *ngIf="!neighborScanInProgress && report.channelSaturation && !report.channelSaturation.isRealData" class="no-networks-message">
+          <span class="material-symbols-rounded">signal_wifi_statusbar_null</span>
+          Nenhuma rede vizinha detectada no último scan (ou dados de demonstração estão sendo exibidos).
+        </div>
+
+        <!-- 2.4GHz -->
+        <app-wifi-saturation-chart
+          *ngIf="report.channelSaturation?.bands?.['2.4GHz']"
+          [saturationBand]="$any(report.channelSaturation).bands['2.4GHz']"
+          [currentChannel]="$any(report.bands)['2.4GHz']?.channelSuggestion?.currentChannel ?? null"
+          [bandLabel]="'2.4 GHz'"
+          [isApplying]="isApplying && applyingBand === '2.4GHz'"
+          (applyChannel)="applyChannelFromSaturation($event)">
+        </app-wifi-saturation-chart>
+
+        <!-- 5GHz -->
+        <app-wifi-saturation-chart
+          *ngIf="report.channelSaturation?.bands?.['5GHz']"
+          [saturationBand]="$any(report.channelSaturation).bands['5GHz']"
+          [currentChannel]="$any(report.bands)['5GHz']?.channelSuggestion?.currentChannel ?? null"
+          [bandLabel]="'5 GHz'"
+          [isApplying]="isApplying && applyingBand === '5GHz'"
+          (applyChannel)="applyChannelFromSaturation($event)">
+        </app-wifi-saturation-chart>
+      </div>
+
+      <!-- Ação de Varredura -->
+      <div class="diag-actions">
+        <app-button variant="primary" size="sm" iconLeft="radar"
+          [loading]="neighborScanInProgress"
+          [disabled]="readOnly || neighborScanInProgress"
+          (clicked)="requestNeighborScan()">
+          Varrer Vizinhos
+        </app-button>
+      </div>
+    </div>
+
+    <!-- ========================== TESTE DE VELOCIDADE ========================== -->
+    <div class="section-header" style="grid-column: 1 / -1;">
+      <h3>Teste de Velocidade</h3>
+      <p>Medição de throughput via TR-143 (Download/Upload)</p>
+    </div>
+
+    <!-- Card Teste de Velocidade (Download/Upload unificados) -->
+    <div class="report-card network-diag-card speed-test-card">
+      <div class="diag-header">
+        <h4><span class="material-symbols-rounded">speed</span> Teste de Velocidade TR-143</h4>
+        <span class="diag-capability" *ngIf="diagnosticCapabilities.ipDownloadSupported || diagnosticCapabilities.ipUploadSupported">Suportado</span>
+        <span class="diag-capability unsupported" *ngIf="!diagnosticCapabilities.ipDownloadSupported && !diagnosticCapabilities.ipUploadSupported">
+          <span class="material-symbols-rounded" style="font-size:0.9rem; vertical-align:middle;">info</span>
+          Capability não declarada
+        </span>
+      </div>
+
+      <!-- Aviso informativo quando capability não está declarada (mas ainda permite tentar) -->
+      <div class="speed-test-warning" *ngIf="!diagnosticCapabilities.ipDownloadSupported && !diagnosticCapabilities.ipUploadSupported">
+        <span class="material-symbols-rounded">warning</span>
+        <p>A CPE não declarou suporte a TR-143 no último Inform. O teste pode funcionar mesmo assim — experimente.</p>
+      </div>
+
+      <!-- Toggle Download/Upload -->
+      <div class="speed-test-toggle">
+        <button class="toggle-btn" [class.active]="speedTestDirection === 'download'"
+          (click)="speedTestDirection = 'download'; speedTestUrl = SPEED_TEST_URLS.download">
+          <span class="material-symbols-rounded">download</span> Download
+        </button>
+        <button class="toggle-btn" [class.active]="speedTestDirection === 'upload'"
+          (click)="speedTestDirection = 'upload'; speedTestUrl = SPEED_TEST_URLS.upload">
+          <span class="material-symbols-rounded">upload</span> Upload
+        </button>
+      </div>
+
+      <!-- Configuração -->
+      <div class="speed-test-config">
+        <div class="diag-input-row" style="grid-column: 1 / -1;">
+          <label class="diag-label">URL do servidor:</label>
+          <input class="diag-input" type="url"
+            [placeholder]="speedTestDirection === 'download' ? 'http://servidor/arquivo.bin' : 'http://servidor/upload'"
+            [value]="speedTestUrl"
+            (input)="onSpeedTestUrlChange($any($event.target).value)" />
+        </div>
+        <div class="diag-input-row">
+          <label class="diag-label">Conexões:</label>
+          <select class="diag-input" [value]="speedTestConnections" (change)="speedTestConnections = $any($event.target).value">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Resultado do último teste -->
+      <div class="speed-test-result" *ngIf="speedTestResult">
+        <div class="speed-test-gauge">
+          <div class="gauge-value">{{ speedTestResult.throughput.toFixed(1) }}</div>
+          <div class="gauge-unit">Mbps</div>
+        </div>
+        <div class="speed-test-details">
+          <div class="speed-detail">
+            <strong>{{ speedTestResult.duration.toFixed(1) }}s</strong>
+            <span>Duração</span>
+          </div>
+          <div class="speed-detail">
+            <strong>{{ formatBytes(speedTestResult.bytes) }}</strong>
+            <span>Transferidos</span>
+          </div>
+          <div class="speed-detail">
+            <strong>{{ speedTestDirection === 'download' ? 'Download' : 'Upload' }}</strong>
+            <span>Direção</span>
+          </div>
+        </div>
+        <div class="speed-test-status">
+          <span class="material-symbols-rounded">check_circle</span>
+          <span>Teste concluído com sucesso</span>
+        </div>
+      </div>
+
+      <!-- Estado em execução -->
+      <div class="speed-test-running" *ngIf="speedTestRunning">
+        <span class="material-symbols-rounded spin-icon">hourglass_empty</span>
+        <p>Teste de {{ speedTestDirection === 'download' ? 'Download' : 'Upload' }} em andamento — aguardando a CPE concluir...</p>
+      </div>
+
+      <!-- Botão de ação -->
+      <div class="diag-actions">
+        <app-button variant="primary" size="sm" iconLeft="play_arrow"
+          [loading]="speedTestRunning"
+          [disabled]="readOnly || speedTestRunning || !speedTestUrl"
+          (clicked)="runSpeedTest()">
+          Iniciar {{ speedTestDirection === 'download' ? 'Download' : 'Upload' }}
+        </app-button>
+      </div>
+
+      <!-- Overlay de loading durante execução -->
+      <div class="speed-test-overlay" *ngIf="speedTestRunning">
+        <div class="overlay-content">
+          <div class="spinner"></div>
+          <p>Executando teste de {{ speedTestDirection === 'download' ? 'Download' : 'Upload' }}...</p>
+          <span class="overlay-subtitle">Isso pode levar alguns segundos</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================== DIAGNÓSTICOS DE CONECTIVIDADE ========================== -->
+    <div class="section-header" style="grid-column: 1 / -1;">
+      <h3>Diagnósticos de Conectividade</h3>
+      <p>Testes de latência e roteamento (Ping, TraceRoute)</p>
+    </div>
+
+    <!-- Card IPPing -->
+    <div class="report-card network-diag-card">
+      <div class="diag-header">
+        <h4><span class="material-symbols-rounded">speed</span> Ping ICMP</h4>
+        <span class="diag-capability" *ngIf="diagnosticCapabilities.ipPingSupported">Suportado</span>
+        <span class="diag-capability unsupported" *ngIf="!diagnosticCapabilities.ipPingSupported">Não suportado</span>
+      </div>
+      <ng-container *ngIf="diagnosticCapabilities.ipPingSupported">
+        <div class="diag-input-row">
+          <input class="diag-input" type="text" placeholder="Host (ex: 8.8.8.8)"
+            [value]="diagnosticParams['IPPing']['Host']"
+            (input)="onDiagParamChange('IPPing','Host',$any($event.target).value)" />
+        </div>
+        <div class="diag-stats" *ngIf="report.pingAverageResponseTime !== undefined">
+          <div class="diag-stat">
+            <strong>{{ report.pingAverageResponseTime }} ms</strong>
+            <span>Tempo médio</span>
+          </div>
+          <div class="diag-stat">
+            <strong>{{ report.pingSuccessCount ?? 0 }}</strong>
+            <span>Sucessos</span>
+          </div>
+          <div class="diag-stat">
+            <strong [class.text-danger]="(report.pingFailureCount ?? 0) > 0">{{ report.pingFailureCount ?? 0 }}</strong>
+            <span>Falhas</span>
+          </div>
+        </div>
+        <div class="diag-details" *ngIf="report.pingMinResponseTime !== undefined">
+          <small>Mín: {{ report.pingMinResponseTime }} ms | Máx: {{ report.pingMaxResponseTime }} ms</small>
+        </div>
+        <div class="diag-details" *ngIf="report.pingDiagnosticsState">
+          <small class="diag-state" [class.state-complete]="report.pingDiagnosticsState === 'Complete'">
+            Estado: {{ report.pingDiagnosticsState }}
+          </small>
+        </div>
+        <div class="diag-actions">
+          <app-button variant="secondary" size="sm" iconLeft="play_arrow"
+            [loading]="diagnosticRunning['IPPing']"
+            [disabled]="readOnly || diagnosticRunning['IPPing']"
+            (clicked)="runDiagnostic('IPPing')">
+            Executar Ping
+          </app-button>
+        </div>
+      </ng-container>
+      <p class="diag-unsupported-msg" *ngIf="!diagnosticCapabilities.ipPingSupported">
+        CPE não reportou suporte a este diagnóstico no último Inform.
+      </p>
+    </div>
+
+    <!-- Card TraceRoute -->
+    <div class="report-card network-diag-card">
+      <div class="diag-header">
+        <h4><span class="material-symbols-rounded">route</span> TraceRoute</h4>
+        <span class="diag-capability" *ngIf="diagnosticCapabilities.ipTraceRouteSupported">Suportado</span>
+        <span class="diag-capability unsupported" *ngIf="!diagnosticCapabilities.ipTraceRouteSupported">Não suportado</span>
+      </div>
+      <ng-container *ngIf="diagnosticCapabilities.ipTraceRouteSupported">
+        <div class="diag-input-row">
+          <input class="diag-input" type="text" placeholder="Host (ex: 8.8.8.8)"
+            [value]="diagnosticParams['TraceRoute']['Host']"
+            (input)="onDiagParamChange('TraceRoute','Host',$any($event.target).value)" />
+        </div>
+        <div class="diag-stats" *ngIf="report.traceRouteHopCount !== undefined">
+          <div class="diag-stat">
+            <strong>{{ report.traceRouteHopCount }}</strong>
+            <span>Hops</span>
+          </div>
+          <div class="diag-stat">
+            <strong>{{ report.traceRouteResponseTime ?? 0 }} ms</strong>
+            <span>Tempo total</span>
+          </div>
+        </div>
+        <div class="diag-details" *ngIf="report.traceRouteDiagnosticsState">
+          <small class="diag-state" [class.state-complete]="report.traceRouteDiagnosticsState === 'Complete'">
+            Estado: {{ report.traceRouteDiagnosticsState }}
+          </small>
+        </div>
+        <div class="diag-actions">
+          <app-button variant="secondary" size="sm" iconLeft="play_arrow"
+            [loading]="diagnosticRunning['TraceRoute']"
+            [disabled]="readOnly || diagnosticRunning['TraceRoute']"
+            (clicked)="runDiagnostic('TraceRoute')">
+            Executar TraceRoute
+          </app-button>
+        </div>
+      </ng-container>
+      <p class="diag-unsupported-msg" *ngIf="!diagnosticCapabilities.ipTraceRouteSupported">
+        CPE não reportou suporte a este diagnóstico no último Inform.
+      </p>
+    </div>
+
+    <!-- ========================== DIAGNÓSTICOS DE DNS ========================== -->
+    <div class="section-header" style="grid-column: 1 / -1;">
+      <h3>Diagnósticos de DNS</h3>
+      <p>Resolução de nomes e lookup de domínios</p>
+    </div>
+
+    <!-- Card DNS Lookup -->
+    <div class="report-card network-diag-card">
+      <div class="diag-header">
+        <h4><span class="material-symbols-rounded">dns</span> DNS Lookup</h4>
+      </div>
+      <div class="diag-input-row">
+        <input class="diag-input" type="text" placeholder="Hostname (ex: google.com)"
+          [value]="diagnosticParams['DNSLookup']['HostName']"
+          (input)="onDiagParamChange('DNSLookup','HostName',$any($event.target).value)" />
+      </div>
+      <div class="diag-stats" *ngIf="report.dnsLookupSuccessCount !== undefined">
+        <div class="diag-stat">
+          <strong>{{ report.dnsLookupSuccessCount }}</strong>
+          <span>Sucessos</span>
+        </div>
+        <div class="diag-stat">
+          <strong>{{ report.dnsLookupResultCount ?? 0 }}</strong>
+          <span>Resultados</span>
+        </div>
+      </div>
+      <div class="diag-details" *ngIf="report.dnsDiagnosticsState">
+        <small class="diag-state" [class.state-complete]="report.dnsDiagnosticsState === 'Complete'">
+          Estado: {{ report.dnsDiagnosticsState }}
+        </small>
+      </div>
+      <div class="diag-actions">
+        <app-button variant="secondary" size="sm" iconLeft="play_arrow"
+          [loading]="diagnosticRunning['DNSLookup']"
+          [disabled]="readOnly || diagnosticRunning['DNSLookup']"
+          (clicked)="runDiagnostic('DNSLookup')">
+          Executar DNS
+        </app-button>
+      </div>
+    </div>
+
+    <!-- ========================== OUTROS DIAGNÓSTICOS ========================== -->
+    <div class="section-header" style="grid-column: 1 / -1;">
+      <h3>Outros Diagnósticos</h3>
+      <p>UDP Echo e ferramentas de rede adicionais</p>
+    </div>
+
+    <!-- Card UDPEcho -->
+    <div class="report-card network-diag-card">
+      <div class="diag-header">
+        <h4><span class="material-symbols-rounded">hub</span> UDP Echo</h4>
+        <span class="diag-capability" *ngIf="diagnosticCapabilities.ipUdpEchoSupported">Suportado</span>
+        <span class="diag-capability unsupported" *ngIf="!diagnosticCapabilities.ipUdpEchoSupported">Não suportado</span>
+      </div>
+      <ng-container *ngIf="diagnosticCapabilities.ipUdpEchoSupported">
+        <div class="diag-input-row">
+          <label class="diag-label">Porta UDP:</label>
+          <input class="diag-input" type="number" placeholder="7"
+            [value]="diagnosticParams['UDPEcho']['UDPPort']"
+            (input)="onDiagParamChange('UDPEcho','UDPPort',$any($event.target).value)" />
+        </div>
+        <div class="diag-input-row">
+          <label class="diag-label">IP de origem:</label>
+          <input class="diag-input" type="text" placeholder="Opcional"
+            [value]="diagnosticParams['UDPEcho']['SourceIPAddress']"
+            (input)="onDiagParamChange('UDPEcho','SourceIPAddress',$any($event.target).value)" />
+        </div>
+        <div class="diag-stats" *ngIf="report.udpechoPacketsReceived !== undefined">
+          <div class="diag-stat">
+            <strong>{{ report.udpechoPacketsReceived }}</strong>
+            <span>Pacotes recebidos</span>
+          </div>
+          <div class="diag-stat">
+            <strong>{{ report.udpechoPacketsResponded }}</strong>
+            <span>Pacotes respondidos</span>
+          </div>
+          <div class="diag-stat">
+            <strong>{{ formatBytes(report.udpechoBytesReceived || 0) }}</strong>
+            <span>Bytes recebidos</span>
+          </div>
+        </div>
+        <div class="diag-details" *ngIf="report.udpechoSourceIP">
+          <small>IP origem: {{ report.udpechoSourceIP }} | Porta: {{ report.udpechoUDPPort ?? 7 }}</small>
+        </div>
+        <div class="diag-actions">
+          <app-button variant="secondary" size="sm" iconLeft="play_arrow"
+            [loading]="diagnosticRunning['UDPEcho']"
+            [disabled]="readOnly || diagnosticRunning['UDPEcho']"
+            (clicked)="runDiagnostic('UDPEcho')">
+            Ativar UDP Echo
+          </app-button>
+        </div>
+      </ng-container>
+      <p class="diag-unsupported-msg" *ngIf="!diagnosticCapabilities.ipUdpEchoSupported">
+        CPE não reportou suporte a este diagnóstico no último Inform.
+      </p>
+    </div>
+
+    <!-- Card de Histórico de Diagnósticos -->
+    <div class="report-card history-card" style="grid-column: 1 / -1;">
+      <div class="history-header">
+        <h4><span class="material-symbols-rounded">history</span> Histórico de Diagnósticos</h4>
+        <div class="history-filters">
+          <select (change)="onHistoryTypeChange($event)" class="history-filter">
+            <option value="">Todos os tipos</option>
+            <option value="IPPing">Ping ICMP</option>
+            <option value="TraceRoute">TraceRoute</option>
+            <option value="Download">Download</option>
+            <option value="Upload">Upload</option>
+            <option value="DNSLookup">DNS Lookup</option>
+            <option value="UDPEcho">UDP Echo</option>
+            <option value="NeighboringWiFi">WiFi Vizinho</option>
+          </select>
+        </div>
+      </div>
+      <div *ngIf="loadingHistory" class="history-loading">
+        <span class="material-symbols-rounded spin-icon">hourglass_empty</span>
+        <p>Carregando histórico...</p>
+      </div>
+      <div *ngIf="!loadingHistory && diagnosticHistory.length === 0" class="history-empty">
+        <p>Nenhum diagnóstico executado ainda.</p>
+      </div>
+      <div *ngIf="!loadingHistory && diagnosticHistory.length > 0" class="history-list">
+        <div class="history-item" *ngFor="let item of diagnosticHistory">
+          <div class="history-item-header">
+            <span class="history-type">{{ item.diagnosticType }}</span>
+            <span class="history-time">{{ formatHistoryTime(item.timestamp) }}</span>
+          </div>
+          <div class="history-item-details">
+            <span class="history-state" [class]="'state-' + item.diagnosticsState.toLowerCase()">
+              {{ item.diagnosticsState }}
+            </span>
+            <span *ngIf="item.source" class="history-source">{{ item.source }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

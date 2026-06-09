@@ -1,0 +1,124 @@
+// =============================================================================
+// CAMINHO DO ARQUIVO: frontend/src/app/core/components/sidebar/sidebar.component.scss
+// Sidebar responsiva: fixa em desktop, off-canvas overlay em mobile.
+// =============================================================================
+
+.sidebar {
+  // Mobile: off-canvas overlay que desliza da esquerda
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-fixed);
+  width: var(--sidebar-width);
+  max-width: 85vw;
+  height: 100vh;
+  background-color: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
+  padding: var(--space-6) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform var(--transition-slow) ease,
+              background-color var(--transition-speed) ease,
+              border-color var(--transition-speed) ease;
+
+  // Quando aberta em mobile
+  &.sidebar--open {
+    transform: translateX(0);
+  }
+
+  // Desktop: fixa e sempre visível
+  @media (min-width: 1024px) {
+    position: relative;
+    transform: translateX(0);
+    z-index: auto;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CABEÇALHO (logo + fechar)
+// ---------------------------------------------------------------------------
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-10);
+}
+
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+
+  .material-symbols-rounded {
+    color: var(--accent-color);
+  }
+}
+
+.sidebar-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--transition-fast);
+
+  &:hover {
+    background-color: var(--accent-light);
+    color: var(--accent-color);
+  }
+
+  // Em desktop o botão fechar não é necessário
+  @media (min-width: 1024px) {
+    display: none;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// NAVEGAÇÃO
+// ---------------------------------------------------------------------------
+.nav-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-weight: var(--font-semibold);
+  font-size: var(--text-base);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  white-space: nowrap;
+
+  .material-symbols-rounded {
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background-color: var(--accent-light);
+    color: var(--accent-color);
+  }
+
+  // Classe aplicada automaticamente pelo Angular via routerLinkActive
+  &.active {
+    background-color: var(--accent-color);
+    color: var(--text-on-accent);
+  }
+}

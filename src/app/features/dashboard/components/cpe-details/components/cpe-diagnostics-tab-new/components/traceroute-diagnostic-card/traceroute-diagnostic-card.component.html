@@ -1,0 +1,57 @@
+<div class="traceroute-diagnostic-card">
+  <div class="diag-header">
+    <h4><span class="material-symbols-rounded">route</span> TraceRoute</h4>
+    <span class="diag-capability" *ngIf="isSupported">Suportado</span>
+    <span class="diag-capability unsupported" *ngIf="!isSupported">Não suportado</span>
+  </div>
+
+  <p class="diag-description">
+    Identifica o caminho dos pacotes da CPE até um host remoto, mostrando cada roteador intermediário. Útil para diagnosticar problemas de roteamento e identificar gargalos na rede.
+  </p>
+
+  <ng-container *ngIf="isSupported">
+    <div class="diag-input-row">
+      <input class="diag-input" type="text" placeholder="Host (ex: 8.8.8.8)"
+        [value]="host"
+        (input)="onHostChange($any($event.target).value)" />
+    </div>
+
+    <div class="diag-stats" *ngIf="result?.hopCount !== undefined">
+      <div class="diag-stat">
+        <strong>{{ result?.hopCount ?? 0 }}</strong>
+        <span>Hops</span>
+      </div>
+      <div class="diag-stat">
+        <strong>{{ result?.responseTime ?? 0 }} ms</strong>
+        <span>Tempo total</span>
+      </div>
+    </div>
+
+    <div class="diag-details" *ngIf="result?.diagnosticsState">
+      <small class="diag-state" [class.state-complete]="result?.diagnosticsState === 'Complete'">
+        Estado: {{ result?.diagnosticsState ?? 'N/A' }}
+      </small>
+    </div>
+
+    <div class="diag-actions">
+      <app-button variant="secondary" size="sm" iconLeft="play_arrow"
+        [loading]="isRunning"
+        [disabled]="readOnly || isRunning"
+        (clicked)="onRunTraceRoute()">
+        Executar TraceRoute
+      </app-button>
+    </div>
+
+    <!-- Gráfico de histórico -->
+    <div class="diag-history" *ngIf="history && history.length > 0">
+      <h5>Histórico de Hops</h5>
+      <div class="chart-container">
+        <canvas baseChart [data]="lineChartData" [options]="lineChartOptions" type="line"></canvas>
+      </div>
+    </div>
+  </ng-container>
+
+  <p class="diag-unsupported-msg" *ngIf="!isSupported">
+    CPE não reportou suporte a este diagnóstico no último Inform.
+  </p>
+</div>

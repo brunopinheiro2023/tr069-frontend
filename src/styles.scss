@@ -1,0 +1,227 @@
+// =============================================================================
+// CAMINHO DO ARQUIVO: frontend/src/styles.scss
+// =============================================================================
+// Ficheiro SCSS global do Angular. Importa o Design System modularizado
+// e as diretivas do TailwindCSS. Ordem é importante:
+// 1. Tokens / Variáveis   → 2. Mixins  → 3. Tailwind  → 4. Utilitários
+// =============================================================================
+
+// =============================================================================
+// 1. Design System — Tokens semânticos (Custom Properties CSS)
+// 2. Mixins reutilizáveis (responsividade, cards, scrollbar, focus)
+// =============================================================================
+// NOTA: @use deve preceder qualquer outra regra (Sass exige).
+@use 'styles/variables';
+@use 'styles/mixins';
+
+// =============================================================================
+// 3. TailwindCSS — camadas base, componentes e utilitários
+// =============================================================================
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+// =============================================================================
+// 4. RESET E BASE
+// =============================================================================
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-family-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background-color: var(--bg-body);
+  color: var(--text-primary);
+  transition: background-color var(--transition-speed) ease,
+              color var(--transition-speed) ease;
+  height: 100vh;
+  overflow: hidden; /* Scroll isolado na área de conteúdo */
+}
+
+// Scrollbar global estilizada (aplica em toda a aplicação)
+* {
+  @include mixins.custom-scrollbar(transparent, var(--text-secondary), 6px);
+}
+
+// =============================================================================
+// 5. UTILITÁRIOS GLOBAIS CUSTOMIZADOS (skeleton, spinner, fade, container)
+// Injetados diretamente porque @use não pode vir após @tailwind.
+// =============================================================================
+
+// ---------------------------------------------------------------------------
+// SKELETON LOADER
+// ---------------------------------------------------------------------------
+.skeleton {
+  background-color: var(--border-color);
+  border-radius: var(--radius-sm);
+  position: relative;
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.35) 50%,
+      transparent 100%
+    );
+    transform: translateX(-100%);
+    animation: skeleton-shimmer 1.6s infinite;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  100% { transform: translateX(100%); }
+}
+
+.skeleton-text {
+  height: 1em;
+  margin-bottom: 0.5em;
+  border-radius: var(--radius-xs);
+}
+
+.skeleton-text-lg {
+  height: 1.5em;
+  margin-bottom: 0.5em;
+  border-radius: var(--radius-xs);
+}
+
+.skeleton-circle {
+  border-radius: var(--radius-full);
+  aspect-ratio: 1 / 1;
+}
+
+.skeleton-rect {
+  border-radius: var(--radius-sm);
+  aspect-ratio: 16 / 9;
+}
+
+.skeleton-card {
+  border-radius: var(--radius-lg);
+  min-height: 120px;
+}
+
+.skeleton-table-row {
+  height: 48px;
+  border-radius: var(--radius-xs);
+  margin-bottom: var(--space-2);
+}
+
+// ---------------------------------------------------------------------------
+// SPINNER / LOADING INDICATOR
+// ---------------------------------------------------------------------------
+.spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spinner-spin 0.75s linear infinite;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+@keyframes spinner-spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner-lg {
+  width: 2em;
+  height: 2em;
+  border-width: 3px;
+}
+
+.spinner-sm {
+  width: 0.75em;
+  height: 0.75em;
+  border-width: 1.5px;
+}
+
+// ---------------------------------------------------------------------------
+// FADE TRANSITIONS
+// ---------------------------------------------------------------------------
+.fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-out {
+  animation: fade-out 0.2s ease-in both;
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+// ---------------------------------------------------------------------------
+// CONTAINER CENTRALIZADO
+// ---------------------------------------------------------------------------
+.container-main {
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
+
+  @media (min-width: 768px) {
+    padding-left: var(--space-6);
+    padding-right: var(--space-6);
+  }
+
+  @media (min-width: 1280px) {
+    padding-left: var(--space-8);
+    padding-right: var(--space-8);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// UTILITÁRIOS DE TEXTO
+// ---------------------------------------------------------------------------
+.text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+// ---------------------------------------------------------------------------
+// SELEÇÃO DE TEXTO
+// ---------------------------------------------------------------------------
+::selection {
+  background-color: var(--accent-light);
+  color: var(--accent-color);
+}

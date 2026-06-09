@@ -1,0 +1,445 @@
+================================================================================
+RESUMO TECNICO — UI/UX STANDARDIZATION + MELHORIAS DE QUALIDADE
+Projeto: TR-069 ACS Monitoramento (Frontend Angular + Backend Node.js)
+Data: 02/06/2026
+Autor: Sistema (sessao de pair-programming)
+================================================================================
+
+Este documento consolida toda a arquitetura, arquivos modificados e assinaturas
+de funcoes/componentes criados ou alterados nas sessoes de UI/UX e melhorias
+de qualidade do codigo.
+
+================================================================================
+SECAO 1: ESTRUTURA DO PROJETO
+================================================================================
+
+PROJETO FRONTEND (ATIVO)
+  Path: c:\Users\Bruno\Documents\angular\tr069
+  Stack: Angular 17.3 (standalone components), TailwindCSS, SCSS, RxJS, Chart.js,
+         ngx-toastr, socket.io-client
+  Port: 4200 (dev)
+
+PROJETO BACKEND (ATIVO)
+  Path: c:\Users\Bruno\Documents\nodejs\tr069-inova
+  Stack: Node.js, Express 5, MongoDB/Mongoose, Socket.IO, JWT, express-rate-limit
+  Port: 3000
+
+FRONTEND INATIVO (nao utilizado)
+  Path: c:\Users\Bruno\Documents\angular\tr069-inova
+
+================================================================================
+SECAO 2: DESIGN SYSTEM SCSS (Pilares 1-2)
+================================================================================
+
+ARQUIVOS CRIADOS:
+  1. src/styles/_variables.scss
+     - Tokens semanticos: cores, tipografia, espacamento, sombras, z-index, transicoes
+     - Suporte a light/dark via CSS Custom Properties (--bg-body, --text-primary, etc.)
+     - Tokens responsivos: --sidebar-width, --header-height, --content-max-width
+
+  2. src/styles/_mixins.scss
+     - responsive(breakpoint): media query padronizada
+     - card-style(): estilos de cartao com hover e transicao
+     - custom-scrollbar($track, $thumb, $width): scrollbar estilizada
+     - focus-ring(): anel de foco acessivel
+     - text-truncate(): ellipsis
+     - skeleton-shimmer(): animacao shimmer para loaders
+
+  3. src/styles.scss (REESCRITO)
+     - Ordem: @use variables, @use mixins, @tailwind layers, reset global,
+       utilitarios inline (skeleton, spinner, fade, container)
+     - NOTA: @use deve preceder @tailwind; utilitarios inline foram inseridos
+       diretamente no arquivo porque @use nao pode vir apos @tailwind
+
+CONFIGURACAO ANGULAR ATUALIZADA:
+  4. angular.json
+     - Todas as referencias de "styles.css" renomeadas para "styles.scss"
+     - Arquivos .css de componentes renomeados para .scss
+
+================================================================================
+SECAO 3: SERVICOS REATIVOS (Pilar 3)
+================================================================================
+
+ARQUIVO: src/app/core/services/theme.service.ts
+  - Gerencia tema light/dark com BehaviorSubject
+  - Aplica classe .dark no <html> (compativel com Tailwind darkMode: 'class')
+  - Persiste preferencia no localStorage
+
+  ASSINATURAS:
+    toggleTheme(): void
+    setTheme(theme: 'light' | 'dark'): void
+    getCurrentTheme(): 'light' | 'dark'
+    isDarkMode(): boolean
+    theme$: Observable<'light' | 'dark'>
+
+ARQUIVO: src/app/core/services/loading.service.ts
+  - Gerencia estados de loading global e keyed
+  - DEBOUNCE de 200ms no overlay global (evita flicker em requisicoes rapidas)
+
+  ASSINATURAS:
+    startGlobal(message?: string): void     // ativa overlay apos 200ms de debounce
+    stopGlobal(): void                      // cancela debounce e desliga overlay
+    start(key: string, message?: string): void
+    stop(key: string): void
+    isLoading$(key: string): Observable<boolean>
+    isLoading(key: string): boolean
+    resetAll(): void                        // limpa TODOS os estados + debounce timer
+
+================================================================================
+SECAO 4: COMPONENTES GLOBAIS STANDALONE (Pilares 4-5)
+================================================================================
+
+ARQUIVO: src/app/core/components/button/button.component.ts
+  - Botao global do Design System com spinner embutido
+  - Variantes: primary | secondary | danger | ghost
+  - Tamanhos: sm | md | lg
+  - Acessibilidade: aria-busy, disabled, type="button"
+  - Comentarios CSS usam /* */ (obrigatorio em styles inline do Angular)
+
+  ASSINATURAS (Input):
+    @Input() variant: 'primary' | 'secondary' | 'danger' | 'ghost' = 'primary'
+    @Input() size: 'sm' | 'md' | 'lg' = 'md'
+    @Input() type: 'button' | 'submit' | 'reset' = 'button'
+    @Input() disabled = false
+    @Input() loading = false
+    @Input() block = false
+    @Input() iconLeft?: string
+    @Input() iconRight?: string
+    @Input() hideLabelWhenLoading = false
+
+  ASSINATURA (Output):
+    @Output() clicked = new EventEmitter<MouseEvent>()
+    onClick(event: MouseEvent): void
+
+  EVENTO USADO PELOS PAIS:
+    (clicked)="handler()"  // em vez de (click) nativo
+
+ARQUIVO: src/app/core/components/skeleton/skeleton.component.ts
+  - Skeleton loader global com efeito shimmer
+  - Formas: text | text-lg | circle | rect | card | table-row
+  - Repeticao via @for com count
+
+  ASSINATURAS (Input):
+    @Input() shape: 'text' | 'text-lg' | 'circle' | 'rect' | 'card' | 'table-row' = 'text'
+    @Input() width: string = '100%'
+    @Input() height?: string
+    @Input() count = 1
+    @Input() inline = false
+
+  PROPRIEDADE COMPUTADA:
+    get repeats(): number[]
+
+================================================================================
+SECAO 5: LAYOUT RESPONSIVO (Pilar 6)
+================================================================================
+
+ARQUIVO: src/app/app.component.ts
+  - Layout wrapper raiz com sidebar + header + content
+  - Overlay global de loading bound ao LoadingService.global$
+  - Sidebar toggle em mobile
+
+  ASSINATURAS:
+    globalLoading$: Observable<boolean>
+    sidebarOpen: boolean
+    constructor(public router: Router, private loading: LoadingService)
+
+ARQUIVO: src/app/app.component.html
+  - Condicional: login nao exibe sidebar/header
+  - Estrutura: sidebar off-canvas (mobile) + backdrop + main-content + header
+  - Overlay global: @if (globalLoading$ | async)
+
+ARQUIVO: src/app/core/components/header/header.component.ts
+  - Botao hamburger mobile (< 1024px)
+  - Toggle de tema
+  - Perfil do tecnico
+
+  ASSINATURAS:
+    @Input() sidebarOpen = false
+    @Output() toggleSidebar = new EventEmitter<void>()
+    onToggleSidebar(): void
+    toggleTheme(): void
+    get isDarkMode(): boolean
+
+ARQUIVO: src/app/core/components/sidebar/sidebar.component.ts
+  - Off-canvas em mobile (translateX)
+  - Fixa em desktop
+  - Fecha automaticamente ao navegar em mobile
+
+  ASSINATURAS:
+    @Input() mobileOpen = false
+    @Output() closeSidebar = new EventEmitter<void>()
+    onNavClick(): void
+
+================================================================================
+SECAO 6: INTERCEPTOR HTTP DE LOADING GLOBAL
+================================================================================
+
+ARQUIVO: src/app/core/interceptors/loading.interceptor.ts
+  - Interceptor funcional (Angular 17+)
+  - Ativa loading global automaticamente para requisicoes HTTP
+  - IGNORA requisicoes de polling (cache-buster ?_t=) e header X-Skip-Loading
+  - Usa finalize() para garantir cleanup mesmo em erro
+
+  ASSINATURA:
+    export const loadingInterceptor: HttpInterceptorFn = (req, next) => Observable<any>
+
+  FUNCAO INTERNA:
+    shouldShowLoading(req: any): boolean
+      // Regras de exclusao:
+      // - req.headers.has('X-Skip-Loading') => false
+      // - url.includes('?_t=') || url.includes('&_t=') => false
+
+REGISTRO EM app.config.ts:
+  provideHttpClient(withInterceptors([authInterceptor, loadingInterceptor]))
+
+================================================================================
+SECAO 7: INTERCEPTOR DE AUTENTICACAO COM NOTIFICACOES
+================================================================================
+
+ARQUIVO: src/app/core/interceptors/auth.interceptor.ts
+  - Injeta token JWT no header Authorization
+  - Intercepta erros HTTP e notifica via ToastrService
+
+  ASSINATURA:
+    export const authInterceptor: HttpInterceptorFn = (req, next) => Observable<any>
+
+  COMPORTAMENTO POR STATUS HTTP:
+    401 -> toastr.error('Sessao expirada...') + logout + redirect /login
+    403 -> toastr.warning('Acesso Negado')
+    0   -> toastr.error('Servidor indisponivel')
+    500+ -> toastr.error('Erro interno do servidor')
+
+================================================================================
+SECAO 8: INTERFACES TIPADAS (Eliminacao de `any`)
+================================================================================
+
+ARQUIVO NOVO: src/app/core/models/index.ts
+  Interfaces espelhando o schema MongoDB (Cpe.js do backend):
+
+  export interface CpeParameter {
+    name: string;
+    value: string;
+    type?: string;
+    writable?: boolean;
+  }
+
+  export interface CpeWifiBand {
+    ssid?: string;
+    status?: string;
+    channel?: number;
+    enable?: boolean;
+  }
+
+  export interface CpePendingTask {
+    name: string;
+    intent?: string;
+    payload?: any;
+    issuedBy?: string;
+    issuedByName?: string;
+    status?: 'pending' | 'sent' | 'done' | 'failed';
+    createdAt?: string;
+  }
+
+  export interface CpeDevice {
+    _id?: string;
+    serialNumber: string;
+    oui: string;
+    manufacturer: string;
+    productClass?: string;
+    softwareVersion?: string;
+    hardwareVersion?: string;
+    connectionRequestURL?: string;
+    connectionRequestUsername?: string;
+    connectionRequestPassword?: string;
+    parameters?: CpeParameter[];
+    wanIp?: string;
+    isOnline?: boolean;
+    lastInform?: string;
+    opticalRx?: number;
+    opticalTx?: number;
+    wifi2g?: CpeWifiBand;
+    wifi5g?: CpeWifiBand;
+    pendingTasks?: CpePendingTask[];
+    createdAt?: string;
+    updatedAt?: string;
+  }
+
+  export interface PaginatedResponse<T> {
+    data: T[];
+    pagination: { total: number; totalPages: number; currentPage: number; limit: number };
+  }
+
+  export interface WifiDiagnosticsData { /* completo, ver arquivo */ }
+  export interface WifiBandDiagnostics { /* completo, ver arquivo */ }
+  export interface WifiClient { /* completo, ver arquivo */ }
+  export interface WifiAlert { /* completo, ver arquivo */ }
+  export interface WifiRecommendation { /* completo, ver arquivo */ }
+  export interface ChannelSaturationData { /* completo, ver arquivo */ }
+  export interface ToastNotification { id: number; message: string; type: 'success' | 'info' | 'error' }
+
+COMPONENTES REFATORADOS (cpe: any -> CpeDevice | null):
+  - cpe-info-tab.component.ts
+  - cpe-wifi-tab.component.ts
+  - cpe-radio-tab.component.ts
+  - cpe-diagnostics-tab.component.ts
+  - cpe-details.component.ts
+  - dashboard.component.ts (cpes: any[] -> CpeDevice[])
+
+ARQUIVO: src/app/core/services/cpe.service.ts
+  Metodos tipados:
+    getAllCpes(page, limit, filters?): Observable<PaginatedResponse<CpeDevice>>
+    getCpeDetails(serialNumber): Observable<CpeDevice>
+    getWifiDiagnostics(serialNumber): Observable<WifiDiagnosticsData>
+    wakeUpCpe(serialNumber): Observable<any>
+    queueConfig(serialNumber, parameters): Observable<any>
+    updateRadioConfig(serialNumber, parameters): Observable<any>
+    applyWifiCorrection(serialNumber, parameters): Observable<any>
+
+================================================================================
+SECAO 9: INTEGRACAO NOS TEMPLATES
+================================================================================
+
+WIFI-DIAGNOSTICS (src/app/features/wifi-diagnostics/)
+  - Skeleton loaders no estado de loading (header, cards, graficos, tabela)
+  - <app-button> substitui botoes nativos:
+      * Atualizar Agora (Tempo Real)  -> variant="primary", iconLeft="sync", [loading]="refreshing"
+      * Recarregar                     -> variant="secondary", iconLeft="refresh"
+      * Otimizar Canal                 -> variant="primary", iconLeft="auto_fix", [loading]="optimizationInProgress"
+      * Varredura Real                 -> variant="secondary", iconLeft="radar", [loading]="neighborScanInProgress"
+      * Tentar novamente (erro)        -> variant="secondary", iconLeft="refresh"
+
+DASHBOARD (src/app/features/dashboard/)
+  - Skeleton loaders durante carregamento inicial
+  - Estado loading boolean gerenciado no componente
+  - cpes: CpeDevice[] tipado
+  - Template usa optional chaining para propriedades opcionais (opticalRx, wifi2g)
+
+CPE-DETAILS (src/app/features/dashboard/components/cpe-details/)
+  - Skeleton loaders no estado de loading
+  - Botao "Voltar" -> <app-button variant="ghost">
+  - cpe: CpeDevice | null
+
+CPE-WIFI-TAB
+  - <app-button> para: Desativar Visitantes, Adicionar Visitante, Salvar Rede (x2), Excluir Rede
+  - Variantes: primary, secondary, danger
+  - [loading]="isApplyingWifi"
+
+CPE-RADIO-TAB
+  - <app-button> para: Salvar Configuracoes de Radio
+  - variant="primary", iconLeft="save", [loading]="isSaving"
+
+CPE-DIAGNOSTICS-TAB
+  - Skeleton loaders durante analise (cards + grafico)
+  - <app-button> para: Aplicar correcao, Reexecutar Analise
+
+================================================================================
+SECAO 10: RATE LIMITING NO BACKEND
+================================================================================
+
+ARQUIVO: backend/src/routes/apiRoutes.js
+
+Middleware criado:
+  const mutationRateLimit = rateLimit({
+    windowMs: 60 * 1000,  // 1 minuto
+    max: 10,              // 10 requisicoes por janela
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Muitas requisicoes. Aguarde um minuto...' },
+    keyGenerator: (req) => req.user?.username || req.ip
+  });
+
+Rotas protegidas (POST com mutationRateLimit):
+  POST /api/cpe/:serialNumber/wake
+  POST /api/cpe/:serialNumber/config
+  POST /api/cpe/:serialNumber/radio
+  POST /api/cpe/:serialNumber/wifi-diagnostics/apply
+  POST /api/cpe/:serialNumber/wifi-optimization
+  POST /api/cpe/:serialNumber/wifi-neighbor-scan
+  POST /api/cpe/:serialNumber/wifi-refresh
+
+Rotas de leitura (GET sem rate limit):
+  GET  /api/cpe
+  GET  /api/cpe/:serialNumber
+  GET  /api/cpe/:serialNumber/wifi-diagnostics
+
+Dependencia ja existente no package.json: express-rate-limit ^8.5.2
+
+================================================================================
+SECAO 11: CHECKLIST DE BUILD
+================================================================================
+
+FRONTEND:
+  Comando: npx ng build --configuration development
+  Resultado: Application bundle generation complete. [~38s]
+  Exit code: 0 (zero warnings, zero errors)
+  Output: dist/tr069/
+
+BACKEND:
+  Comando: node -c src/routes/apiRoutes.js
+  Resultado: Syntax OK (exit code 0)
+
+CACHE LIMPO: Remove-Item -Recurse -Force .angular (quando renomear styles)
+
+================================================================================
+SECAO 12: ARQUIVOS MODIFICADOS/CRIADOS — LISTA COMPLETA
+================================================================================
+
+FRONTEND (c:\Users\Bruno\Documents\angular\tr069):
+  [NOVO]  src/styles/_variables.scss
+  [NOVO]  src/styles/_mixins.scss
+  [NOVO]  src/styles/_utilities.scss
+  [NOVO]  src/app/core/services/theme.service.ts
+  [NOVO]  src/app/core/services/loading.service.ts
+  [NOVO]  src/app/core/components/button/button.component.ts
+  [NOVO]  src/app/core/components/skeleton/skeleton.component.ts
+  [NOVO]  src/app/core/interceptors/loading.interceptor.ts
+  [NOVO]  src/app/core/models/index.ts
+  [EDIT]  src/styles.scss
+  [EDIT]  src/app/app.component.ts
+  [EDIT]  src/app/app.component.html
+  [EDIT]  src/app/app.component.scss
+  [EDIT]  src/app/app.config.ts
+  [EDIT]  src/app/core/interceptors/auth.interceptor.ts
+  [EDIT]  src/app/core/components/header/header.component.ts
+  [EDIT]  src/app/core/components/header/header.component.html
+  [EDIT]  src/app/core/components/header/header.component.scss
+  [EDIT]  src/app/core/components/sidebar/sidebar.component.ts
+  [EDIT]  src/app/core/components/sidebar/sidebar.component.html
+  [EDIT]  src/app/core/components/sidebar/sidebar.component.scss
+  [EDIT]  src/app/core/services/cpe.service.ts
+  [EDIT]  src/app/features/dashboard/dashboard.component.ts
+  [EDIT]  src/app/features/dashboard/dashboard.component.html
+  [EDIT]  src/app/features/wifi-diagnostics/wifi-diagnostics.component.ts
+  [EDIT]  src/app/features/wifi-diagnostics/wifi-diagnostics.component.html
+  [EDIT]  src/app/features/dashboard/components/cpe-details/cpe-details.component.ts
+  [EDIT]  src/app/features/dashboard/components/cpe-details/cpe-details.component.html
+  [EDIT]  src/app/features/dashboard/components/cpe-details/components/cpe-info-tab/cpe-info-tab.component.ts
+  [EDIT]  src/app/features/dashboard/components/cpe-details/components/cpe-info-tab/cpe-info-tab.component.html
+  [EDIT]  src/app/features/dashboard/components/cpe-details/components/cpe-wifi-tab/cpe-wifi-tab.component.ts
+  [EDIT]  src/app/features/dashboard/components/cpe-details/components/cpe-wifi-tab/cpe-wifi-tab.component.html
+  [EDIT]  src/app/features/dashboard/components/cpe-details/components/cpe-radio-tab/cpe-radio-tab.component.ts
+  [EDIT]  src/app/features/dashboard/components/cpe-details/components/cpe-radio-tab/cpe-radio-tab.component.html
+  [EDIT]  src/app/features/dashboard/components/cpe-details/components/cpe-diagnostics-tab/cpe-diagnostics-tab.component.ts
+  [EDIT]  src/app/features/dashboard/components/cpe-details/components/cpe-diagnostics-tab/cpe-diagnostics-tab.component.html
+  [EDIT]  angular.json
+
+BACKEND (c:\Users\Bruno\Documents\nodejs\tr069-inova):
+  [EDIT]  src/routes/apiRoutes.js (rate limiting adicionado)
+
+================================================================================
+SECAO 13: PENDENTES PARA PROXIMA SESSAO
+================================================================================
+
+1. Criar testes unitarios para ThemeService, LoadingService, AuthService
+2. Implementar cache hibrido (sessionStorage) no CpeService para persistir
+   dados entre F5s
+3. Adicionar virtual scroll na tabela do dashboard (se lista crescer > 50 itens)
+4. Adicionar Service Worker / PWA basico para suporte offline
+5. Melhorar skeletons nos componentes filhos restantes
+6. Criar componente de paginacao global
+7. Implementar dark mode automatico via prefers-color-scheme do sistema
+8. Adicionar animacoes de entrada (fade-in stagger) nos cards do dashboard
+
+================================================================================
+FIM DO RESUMO TECNICO
+================================================================================

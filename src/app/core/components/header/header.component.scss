@@ -1,0 +1,143 @@
+.header {
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background-color: transparent;
+  min-height: var(--header-height);
+
+  @media (min-width: 768px) {
+    padding: var(--space-5) var(--space-6);
+  }
+
+  @media (min-width: 1280px) {
+    padding: var(--space-5) var(--space-8);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// HAMBURGER (mobile only)
+// ---------------------------------------------------------------------------
+.hamburger-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--transition-fast);
+
+  &:hover {
+    background-color: var(--accent-light);
+  }
+
+  // Em desktop não exibe o hamburger
+  @media (min-width: 1024px) {
+    display: none;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// TÍTULO
+// ---------------------------------------------------------------------------
+.header-title {
+  flex: 1;
+  min-width: 0; // Permite truncar se necessário
+
+  h1 {
+    font-size: var(--text-xl);
+    font-weight: var(--font-bold);
+    letter-spacing: -0.5px;
+    line-height: var(--leading-tight);
+
+    @media (min-width: 768px) {
+      font-size: var(--text-2xl);
+    }
+  }
+
+  p {
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    margin-top: var(--space-1);
+    display: none;
+
+    @media (min-width: 768px) {
+      display: block;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AÇÕES (tema + perfil)
+// ---------------------------------------------------------------------------
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background-color: var(--bg-surface);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-soft);
+  transition: background-color var(--transition-speed) ease;
+
+  @media (min-width: 768px) {
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-4);
+  }
+}
+
+.theme-toggle-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  border-radius: 50%;
+  transition: all var(--transition-fast);
+
+  &:hover {
+    background-color: var(--bg-body);
+    color: var(--accent-color);
+  }
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+}
+
+.user-name {
+  display: none;
+
+  @media (min-width: 768px) {
+    display: inline;
+  }
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--accent-color);
+  color: var(--text-on-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-bold);
+  font-size: var(--text-sm);
+
+  @media (min-width: 768px) {
+    width: 40px;
+    height: 40px;
+  }
+}

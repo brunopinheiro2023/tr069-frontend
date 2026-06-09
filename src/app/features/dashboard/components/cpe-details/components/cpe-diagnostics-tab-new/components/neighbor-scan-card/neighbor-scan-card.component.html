@@ -1,0 +1,333 @@
+<div class="neighbor-scan-card">
+  <!-- Header -->
+  <div class="card-header">
+    <div class="header-left">
+      <div class="header-title">
+        <span class="material-symbols-rounded">wifi_find</span>
+        <h4>Análise Wi-Fi - Redes Vizinhas</h4>
+      </div>
+      <div class="header-stats" *ngIf="result">
+        <span class="stat-badge" [class.warning]="hasCongestion">
+          <span class="material-symbols-rounded">router</span>
+          {{ neighborCount }} redes vizinhas
+        </span>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="capability-badge" [class.unsupported]="!isSupported">
+        {{ isSupported ? 'Suportado' : 'Não suportado' }}
+      </span>
+      <span class="timestamp" *ngIf="lastScanTimestamp">
+        <span class="material-symbols-rounded">schedule</span>
+        Última análise: {{ formatTimestamp(lastScanTimestamp) }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Estado: Scan em andamento -->
+  <div *ngIf="isRunning" class="scan-progress">
+    <div class="progress-content">
+      <div class="spinner">
+        <span class="material-symbols-rounded">hourglass_empty</span>
+      </div>
+      <div class="progress-text">
+        <strong>Scan em andamento</strong>
+        <span>A CPE está analisando as redes vizinhas (pode levar até 30s)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado: Nenhum scan realizado -->
+  <div *ngIf="!isRunning && !result" class="no-data">
+    <span class="material-symbols-rounded">wifi_off</span>
+    <div>
+      <strong>Nenhum scan realizado</strong>
+      <span>Clique em "Varrer Vizinhos" para analisar a saturação de canais Wi-Fi</span>
+    </div>
+  </div>
+
+  <!-- Estado: Scan completou sem dados reais -->
+  <div *ngIf="!isRunning && result && !hasRealData" class="demo-data">
+    <span class="material-symbols-rounded">info</span>
+    <div>
+      <strong>Dados de demonstração</strong>
+      <span>Acione a varredura para obter dados reais da sua rede</span>
+    </div>
+  </div>
+
+  <!-- Dados de saturação e análise -->
+  <div *ngIf="!isRunning && result && hasSaturationData" class="saturation-content">
+    
+    <!-- Painel de Status para o Técnico -->
+    <div class="status-dashboard">
+      <div class="status-item" [class.status-ok]="!hasCongestion" [class.status-warning]="hasCongestion">
+        <span class="material-symbols-rounded">speed</span>
+        <div>
+          <strong>{{ hasCongestion ? 'Congestionamento Detectado' : 'Rede Otimizada' }}</strong>
+          <span>{{ hasCongestion ? 'Recomenda-se ajuste de canal' : 'Nenhuma ação necessária' }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resumo de otimização de canal -->
+    <div class="optimization-summary">
+      <div class="summary-header">
+        <span class="material-symbols-rounded">tune</span>
+        <h5>Recomendações de Canal</h5>
+      </div>
+      <div class="summary-content">
+        <div class="recommendation-item">
+          <span class="recommendation-label">2.4 GHz:</span>
+          <span class="recommendation-text">{{ getChannelRecommendation('2.4GHz') }}</span>
+        </div>
+        <div class="recommendation-item">
+          <span class="recommendation-label">5 GHz:</span>
+          <span class="recommendation-text">{{ getChannelRecommendation('5GHz') }}</span>
+        </div>
+        <div class="recommendation-note">
+          <span class="material-symbols-rounded">lightbulb</span>
+          <span>Canais não sobrepostos (2.4GHz): 1, 6, 11 | (5GHz): 36, 44, 52, 60, 149, 157</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Qualidade dos Rádios — abaixo das recomendações de canal -->
+    <div class="radio-quality-section" *ngIf="hasRadioQualityData">
+      <div class="section-header">
+        <span class="material-symbols-rounded">settings_input_antenna</span>
+        <h5>Qualidade dos Rádios</h5>
+        <span class="section-note">Dados coletados diretamente da CPE</span>
+      </div>
+
+      <div class="radio-quality-grid">
+        <!-- 2.4 GHz -->
+        <div class="radio-quality-card" *ngIf="result?.bands?.['2.4GHz']?.radio">
+          <div class="rq-card-header">
+            <span class="material-symbols-rounded">wifi</span>
+            <strong>2.4 GHz</strong>
+            <span class="rq-channel" *ngIf="radioQuality2g.channel">CH {{ radioQuality2g.channel }}</span>
+          </div>
+
+          <div class="rq-metrics">
+            <div class="rq-metric">
+              <span class="rq-label">Largura de banda</span>
+              <span class="rq-value bw-badge">{{ radioQuality2g.bandwidth || 'N/D' }}</span>
+            </div>
+            <div class="rq-metric" *ngIf="radioQuality2g.snr !== null">
+              <span class="rq-label">SNR <small>(sinal/ruído)</small></span>
+              <div class="rq-value-with-badge">
+                <span class="rq-value">{{ radioQuality2g.snr }} dB</span>
+                <span class="quality-badge" [class]="'q-' + getSnrQuality(radioQuality2g.snr)">{{ getSnrLabel(radioQuality2g.snr) }}</span>
+              </div>
+            </div>
+            <div class="rq-metric" *ngIf="radioQuality2g.noise !== null">
+              <span class="rq-label">Ruído de fundo</span>
+              <span class="rq-value">{{ radioQuality2g.noise }} dBm</span>
+            </div>
+            <div class="rq-metric" *ngIf="radioQuality2g.utilization !== null">
+              <span class="rq-label">Utilização do canal</span>
+              <div class="rq-value-with-badge">
+                <span class="rq-value">{{ radioQuality2g.utilization }}%</span>
+                <span class="quality-badge" [class]="'q-' + getUtilizationQuality(radioQuality2g.utilization)">{{ getUtilizationLabel(radioQuality2g.utilization) }}</span>
+              </div>
+            </div>
+            <div class="rq-metric" *ngIf="radioQuality2g.txPower !== null">
+              <span class="rq-label">Potência Tx</span>
+              <span class="rq-value">{{ radioQuality2g.txPower }}%</span>
+            </div>
+          </div>
+
+          <div class="rq-bw-suggestion" *ngIf="radioQuality2g.bandwidthSuggestionReason">
+            <div class="bw-suggestion-header">
+              <span class="material-symbols-rounded" [class.has-action]="radioQuality2g.bandwidthSuggestion">{{ radioQuality2g.bandwidthSuggestion ? 'warning' : 'info' }}</span>
+              <strong *ngIf="radioQuality2g.bandwidthSuggestion">Ação recomendada: {{ radioQuality2g.bandwidthSuggestion }}</strong>
+              <strong *ngIf="!radioQuality2g.bandwidthSuggestion">Largura de banda</strong>
+            </div>
+            <p>{{ radioQuality2g.bandwidthSuggestionReason }}</p>
+          </div>
+        </div>
+
+        <!-- 5 GHz -->
+        <div class="radio-quality-card" *ngIf="result?.bands?.['5GHz']?.radio">
+          <div class="rq-card-header">
+            <span class="material-symbols-rounded">wifi</span>
+            <strong>5 GHz</strong>
+            <span class="rq-channel" *ngIf="radioQuality5g.channel">CH {{ radioQuality5g.channel }}</span>
+          </div>
+
+          <div class="rq-metrics">
+            <div class="rq-metric">
+              <span class="rq-label">Largura de banda</span>
+              <span class="rq-value bw-badge">{{ radioQuality5g.bandwidth || 'N/D' }}</span>
+            </div>
+            <div class="rq-metric" *ngIf="radioQuality5g.snr !== null">
+              <span class="rq-label">SNR <small>(sinal/ruído)</small></span>
+              <div class="rq-value-with-badge">
+                <span class="rq-value">{{ radioQuality5g.snr }} dB</span>
+                <span class="quality-badge" [class]="'q-' + getSnrQuality(radioQuality5g.snr)">{{ getSnrLabel(radioQuality5g.snr) }}</span>
+              </div>
+            </div>
+            <div class="rq-metric" *ngIf="radioQuality5g.noise !== null">
+              <span class="rq-label">Ruído de fundo</span>
+              <span class="rq-value">{{ radioQuality5g.noise }} dBm</span>
+            </div>
+            <div class="rq-metric" *ngIf="radioQuality5g.utilization !== null">
+              <span class="rq-label">Utilização do canal</span>
+              <div class="rq-value-with-badge">
+                <span class="rq-value">{{ radioQuality5g.utilization }}%</span>
+                <span class="quality-badge" [class]="'q-' + getUtilizationQuality(radioQuality5g.utilization)">{{ getUtilizationLabel(radioQuality5g.utilization) }}</span>
+              </div>
+            </div>
+            <div class="rq-metric" *ngIf="radioQuality5g.txPower !== null">
+              <span class="rq-label">Potência Tx</span>
+              <span class="rq-value">{{ radioQuality5g.txPower }}%</span>
+            </div>
+          </div>
+
+          <div class="rq-bw-suggestion" *ngIf="radioQuality5g.bandwidthSuggestionReason">
+            <div class="bw-suggestion-header">
+              <span class="material-symbols-rounded" [class.has-action]="radioQuality5g.bandwidthSuggestion">{{ radioQuality5g.bandwidthSuggestion ? 'warning' : 'info' }}</span>
+              <strong *ngIf="radioQuality5g.bandwidthSuggestion">Ação recomendada: {{ radioQuality5g.bandwidthSuggestion }}</strong>
+              <strong *ngIf="!radioQuality5g.bandwidthSuggestion">Largura de banda</strong>
+            </div>
+            <p>{{ radioQuality5g.bandwidthSuggestionReason }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legenda do Gráfico -->
+    <div class="chart-legend">
+      <div class="legend-title">
+        <span class="material-symbols-rounded">bar_chart</span>
+        <span>Legenda do Gráfico de Saturação</span>
+      </div>
+      <div class="legend-items">
+        <div class="legend-item">
+          <div class="legend-color" style="background: #22c55e;"></div>
+          <span>Baixa interferência (score ≤ 1.0)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: #f59e0b;"></div>
+          <span>Interferência média (score 1.0–3.0)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: #ef4444;"></div>
+          <span>Alta interferência (score &gt; 3.0)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-marker"></div>
+          <span>Canal não sobreposto (recomendado)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gráficos de saturação por banda -->
+    <div class="saturation-bands">
+      <!-- 2.4 GHz -->
+      <div class="saturation-band">
+        <div class="band-header">
+          <h5>2.4 GHz <small>- Canais 1 a 13 (20MHz)</small></h5>
+        </div>
+        <div class="band-note">
+          Canais não sobrepostos (evitam interferência): 1, 6, 11
+        </div>
+        <div class="channel-grid">
+          <div *ngFor="let channel of channels2g"
+               class="channel-bar"
+               [class.non-overlapping]="isNonOverlappingChannel(channel.channel, '2.4GHz')"
+               [class.channel-current]="channel.channel === suggestion2g?.currentChannel"
+               [title]="'CH' + channel.channel + ' | ' + channel.neighborCount + ' redes | Score: ' + (channel.interferenceScore | number:'1.2-2') + ' | Ruído: ' + channel.noiseLevel + ' dBm'">
+            <div class="channel-info">
+              <span class="channel-num">CH {{ channel.channel }}</span>
+              <span class="channel-count">{{ channel.neighborCount }} redes</span>
+            </div>
+            <div class="channel-progress">
+              <div class="progress-bar"
+                   [style.width.%]="getCongestionWidth(channel.interferenceScore || channel.neighborCount, 5)"
+                   [style.background-color]="getCongestionColor(getCongestionLevel(channel.interferenceScore || channel.neighborCount))">
+                <span class="progress-label">{{ getCongestionLabel(channel.interferenceScore || channel.neighborCount) }}</span>
+              </div>
+            </div>
+            <div class="channel-score">
+              <span class="score-label">Score interferência:</span>
+              <span class="score-value" [style.color]="getCongestionColor(getCongestionLevel(channel.interferenceScore || 0))">{{ (channel.interferenceScore | number:'1.2-2') || '0.00' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5 GHz -->
+      <div class="saturation-band">
+        <div class="band-header">
+          <h5>5 GHz <small>- Canais DFS (40/80MHz)</small></h5>
+        </div>
+        <div class="band-note">
+          Canais não sobrepostos (DFS): 36, 44, 52, 60, 149, 157
+        </div>
+        <div class="channel-grid">
+          <div *ngFor="let channel of channels5g"
+               class="channel-bar"
+               [class.non-overlapping]="isNonOverlappingChannel(channel.channel, '5GHz')"
+               [class.channel-current]="channel.channel === suggestion5g?.currentChannel"
+               [title]="'CH' + channel.channel + ' | ' + channel.neighborCount + ' redes | Score: ' + (channel.interferenceScore | number:'1.2-2') + ' | Ruído: ' + channel.noiseLevel + ' dBm'">
+            <div class="channel-info">
+              <span class="channel-num">CH {{ channel.channel }}</span>
+              <span class="channel-count">{{ channel.neighborCount }} redes</span>
+            </div>
+            <div class="channel-progress">
+              <div class="progress-bar"
+                   [style.width.%]="getCongestionWidth(channel.interferenceScore || channel.neighborCount, 5)"
+                   [style.background-color]="getCongestionColor(getCongestionLevel(channel.interferenceScore || channel.neighborCount))">
+                <span class="progress-label">{{ getCongestionLabel(channel.interferenceScore || channel.neighborCount) }}</span>
+              </div>
+            </div>
+            <div class="channel-score">
+              <span class="score-label">Score interferência:</span>
+              <span class="score-value" [style.color]="getCongestionColor(getCongestionLevel(channel.interferenceScore || 0))">{{ (channel.interferenceScore | number:'1.2-2') || '0.00' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Histórico de Análises -->
+  <div *ngIf="history && history.length > 0" class="history-section">
+    <div class="history-header">
+      <span class="material-symbols-rounded">history</span>
+      <h5>Histórico de Análises</h5>
+    </div>
+    <div class="history-list">
+      <div *ngFor="let item of history | slice:0:5" class="history-item">
+        <div class="history-date">
+          <strong>{{ formatTimestamp(item.timestamp || '') }}</strong>
+        </div>
+        <div class="history-details">
+          <span class="history-detail">
+            <span class="material-symbols-rounded">router</span>
+            {{ item.neighboringWiFiResultCount || 0 }} redes
+          </span>
+          <span class="history-detail">
+            <span class="material-symbols-rounded" [class.status-ok]="!item.summary?.hasCongestion" [class.status-warning]="item.summary?.hasCongestion">
+              {{ item.summary?.hasCongestion ? 'warning' : 'check_circle' }}</span>
+            {{ item.summary?.hasCongestion ? 'Congestionado' : 'Otimizado' }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ações -->
+  <div class="card-actions">
+    <app-button 
+      variant="primary" 
+      size="sm" 
+      iconLeft="radar"
+      [loading]="isRunning"
+      [disabled]="readOnly || !isSupported || isRunning"
+      (clicked)="onRunScan()">
+      Nova Análise
+    </app-button>
+  </div>
+</div>

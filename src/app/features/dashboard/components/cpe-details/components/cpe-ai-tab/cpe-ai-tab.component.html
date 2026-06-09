@@ -1,0 +1,91 @@
+<div class="ai-tab">
+  <!-- Estado de loading -->
+  @if (loading) {
+    <div class="ai-loading">
+      <div class="ai-spinner"></div>
+      <p>Analisando dados da CPE com motor heurístico...</p>
+    </div>
+  }
+
+  <!-- Erro -->
+  @if (!loading && error) {
+    <div class="ai-error">
+      <span class="material-symbols-rounded icon">error</span>
+      <p>{{ error }}</p>
+      <button class="retry-btn" (click)="loadPrediction()">Tentar novamente</button>
+    </div>
+  }
+
+  <!-- Resultado -->
+  @if (!loading && prediction) {
+    <div class="prediction-card">
+      <!-- Header com score principal -->
+      <div class="prediction-header">
+        <div class="score-circle" [class]="riskBadgeClass">
+          <span class="score-value">{{ prediction.prediction.score }}</span>
+          <span class="score-label">/ 100</span>
+        </div>
+        <div class="prediction-meta">
+          <h3>Análise de Risco de Falha</h3>
+          <div class="risk-badge" [class]="riskBadgeClass">
+            {{ prediction.prediction.riskLabel }}
+          </div>
+          <p class="prediction-sub">
+            Probabilidade estimada: <strong>{{ prediction.prediction.failureProbability }}%</strong>
+          </p>
+          <p class="prediction-sub">
+            Tempo estimado para falha: <strong>{{ prediction.prediction.estimatedTimeToFailure }}</strong>
+          </p>
+          <p class="prediction-timestamp">
+            Analisado em {{ prediction.analyzedAt | date:'dd/MM/yyyy HH:mm' }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Fatores individualizados -->
+      <div class="factors-section">
+        <h4>Fatores de Risco</h4>
+        <div class="factors-list">
+          @for (key of factorKeys(); track key) {
+            <div class="factor-row" [class]="factorStatus(key)">
+              <div class="factor-info">
+                <span class="factor-name">{{ factorLabel(key) }}</span>
+                <span class="factor-message">{{ factorMessage(key) }}</span>
+              </div>
+              <div class="factor-bar">
+                <div class="factor-bar-track">
+                  <div class="factor-bar-fill" [style.width.%]="factorScore(key)" [style.background-color]="barColor(factorScore(key))"></div>
+                </div>
+                <span class="factor-score">{{ factorScore(key) }}</span>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Causas prováveis -->
+      @if (prediction.insights.causes.length) {
+        <div class="insights-section causes">
+          <h4><span class="material-symbols-rounded">psychology</span> Causas Prováveis</h4>
+          <ul>
+            @for (cause of prediction.insights.causes; track cause) {
+              <li>{{ cause }}</li>
+            }
+          </ul>
+        </div>
+      }
+
+      <!-- Ações sugeridas -->
+      @if (prediction.insights.actions.length) {
+        <div class="insights-section actions">
+          <h4><span class="material-symbols-rounded">build</span> Ações Sugeridas</h4>
+          <ul>
+            @for (action of prediction.insights.actions; track action) {
+              <li>{{ action }}</li>
+            }
+          </ul>
+        </div>
+      }
+    </div>
+  }
+</div>

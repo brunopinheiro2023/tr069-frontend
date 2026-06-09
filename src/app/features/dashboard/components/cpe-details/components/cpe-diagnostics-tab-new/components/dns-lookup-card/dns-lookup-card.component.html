@@ -1,0 +1,49 @@
+<div class="dns-lookup-card">
+  <div class="diag-header">
+    <h4><span class="material-symbols-rounded">dns</span> DNS Lookup</h4>
+  </div>
+
+  <p class="diag-description">
+    Resolve nomes de domínio para endereços IP. Útil para verificar se o servidor DNS configurado na CPE está funcionando corretamente e diagnosticar problemas de resolução de nomes.
+  </p>
+
+  <div class="diag-input-row">
+    <input class="diag-input" type="text" placeholder="Hostname (ex: google.com)"
+      [value]="hostName"
+      (input)="onHostNameChange($any($event.target).value)" />
+  </div>
+
+  <div class="diag-stats" *ngIf="result?.successCount !== undefined">
+    <div class="diag-stat">
+      <strong>{{ result?.successCount ?? 0 }}</strong>
+      <span>Sucessos</span>
+    </div>
+    <div class="diag-stat">
+      <strong>{{ result?.resultCount ?? 0 }}</strong>
+      <span>Resultados</span>
+    </div>
+  </div>
+
+  <div class="diag-details" *ngIf="result?.diagnosticsState">
+    <small class="diag-state" [class.state-complete]="result?.diagnosticsState === 'Complete'">
+      Estado: {{ result?.diagnosticsState ?? 'N/A' }}
+    </small>
+  </div>
+
+  <div class="diag-actions">
+    <app-button variant="secondary" size="sm" iconLeft="play_arrow"
+      [loading]="isRunning"
+      [disabled]="readOnly || isRunning"
+      (clicked)="onRunDNSLookup()">
+      Executar DNS
+    </app-button>
+  </div>
+
+  <!-- Gráfico de histórico -->
+  <div class="diag-history" *ngIf="history && history.length > 0">
+    <h5>Histórico de Sucessos</h5>
+    <div class="chart-container">
+      <canvas baseChart [data]="lineChartData" [options]="lineChartOptions" type="line"></canvas>
+    </div>
+  </div>
+</div>

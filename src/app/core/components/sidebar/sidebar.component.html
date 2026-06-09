@@ -1,0 +1,39 @@
+<aside class="sidebar" [class.sidebar--open]="mobileOpen">
+  <!-- Cabeçalho com logo e botão fechar (mobile only) -->
+  <div class="sidebar-header">
+    <div class="sidebar-logo">
+      <span class="material-symbols-rounded">router</span>
+      <span class="logo-text">Vmoas <strong>ACS</strong></span>
+    </div>
+
+    <button
+      class="sidebar-close-btn"
+      (click)="onNavClick()"
+      aria-label="Fechar menu de navegação"
+      type="button"
+    >
+      <span class="material-symbols-rounded">close</span>
+    </button>
+  </div>
+
+  <ul class="nav-list">
+    <li
+      class="nav-item"
+      routerLink="/dashboard"
+      routerLinkActive="active"
+      (click)="onNavClick()"
+    >
+      <span class="material-symbols-rounded">dashboard</span>
+      <span class="nav-label">Dashboard</span>
+    </li>
+    <li
+      class="nav-item"
+      routerLink="/devices"
+      routerLinkActive="active"
+      (click)="onNavClick()"
+    >
+      <span class="material-symbols-rounded">devices</span>
+      <span class="nav-label">Equipamentos (CPEs)</span>
+    </li>
+  </ul>
+</aside>

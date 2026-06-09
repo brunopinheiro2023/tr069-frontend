@@ -1,0 +1,119 @@
+<div class="speed-test-card">
+  <div class="diag-header">
+    <h4><span class="material-symbols-rounded">speed</span> Teste de Velocidade TR-143</h4>
+    <span class="diag-capability" *ngIf="isSupported">Suportado</span>
+    <span class="diag-capability unsupported" *ngIf="!isSupported">
+      <span class="material-symbols-rounded" style="font-size:0.9rem; vertical-align:middle;">info</span>
+      Capability não declarada
+    </span>
+  </div>
+
+  <p class="diag-description">
+    Mede a velocidade real de download/upload da CPE usando o padrão TR-143. Útil para verificar se a conexão está entregando a velocidade contratada pelo provedor.
+  </p>
+
+  <!-- Aviso informativo quando capability não está declarada -->
+  <div class="speed-test-warning" *ngIf="!isSupported">
+    <span class="material-symbols-rounded">warning</span>
+    <p>A CPE não declarou suporte a TR-143 no último Inform. O teste pode funcionar mesmo assim — experimente.</p>
+  </div>
+
+  <!-- Toggle Download/Upload -->
+  <div class="speed-test-toggle">
+    <button class="toggle-btn" [class.active]="direction === 'download'"
+      (click)="onDirectionChange('download')">
+      <span class="material-symbols-rounded">download</span> Download
+    </button>
+    <button class="toggle-btn" [class.active]="direction === 'upload'"
+      (click)="onDirectionChange('upload')">
+      <span class="material-symbols-rounded">upload</span> Upload
+    </button>
+  </div>
+
+  <!-- Configuração -->
+  <div class="speed-test-config">
+    <div class="diag-input-row" style="grid-column: 1 / -1;">
+      <label class="diag-label">URL do servidor:</label>
+      <input class="diag-input" type="url"
+        [placeholder]="SPEED_TEST_PLACEHOLDERS[direction]"
+        [value]="url"
+        (input)="onUrlChange($any($event.target).value)" />
+    </div>
+    <div class="diag-input-row">
+      <label class="diag-label">Conexões:</label>
+      <select class="diag-input" [value]="connections" (change)="onConnectionsChange($any($event.target).value)">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Mensagem de erro do diagnóstico -->
+  <div class="speed-test-error" *ngIf="errorState && !isRunning">
+    <span class="material-symbols-rounded">error_outline</span>
+    <div>
+      <strong>Falha no teste</strong>
+      <p>{{ errorState }}</p>
+    </div>
+  </div>
+
+  <!-- Resultado do último teste -->
+  <div class="speed-test-result" *ngIf="result && !isRunning">
+    <div class="speed-test-gauge">
+      <div class="gauge-value">{{ result.throughput?.toFixed(1) ?? 0 }}</div>
+      <div class="gauge-unit">Mbps</div>
+    </div>
+    <div class="speed-test-details">
+      <div class="speed-detail">
+        <strong>{{ (result.duration || 0).toFixed(1) }}s</strong>
+        <span>Duração</span>
+      </div>
+      <div class="speed-detail">
+        <strong>{{ formatBytes(result.bytes || 0) }}</strong>
+        <span>Transferidos</span>
+      </div>
+      <div class="speed-detail">
+        <strong>{{ direction === 'download' ? 'Download' : 'Upload' }}</strong>
+        <span>Direção</span>
+      </div>
+    </div>
+    <div class="speed-test-status" *ngIf="result?.diagnosticsState === 'Complete'">
+      <span class="material-symbols-rounded">check_circle</span>
+      <span>Teste concluído com sucesso</span>
+    </div>
+  </div>
+
+  <!-- Estado em execução -->
+  <div class="speed-test-running" *ngIf="isRunning">
+    <span class="material-symbols-rounded spin-icon">hourglass_empty</span>
+    <p>Teste de {{ direction === 'download' ? 'Download' : 'Upload' }} em andamento — aguardando a CPE concluir...</p>
+  </div>
+
+  <!-- Botão de ação -->
+  <div class="diag-actions">
+    <app-button variant="primary" size="sm" iconLeft="play_arrow"
+      [loading]="isRunning"
+      [disabled]="readOnly || isRunning || !url"
+      (clicked)="onRunSpeedTest()">
+      Iniciar {{ direction === 'download' ? 'Download' : 'Upload' }}
+    </app-button>
+  </div>
+
+  <!-- Gráfico de histórico -->
+  <div class="diag-history" *ngIf="history && history.length > 0">
+    <h5>Histórico de Throughput</h5>
+    <div class="chart-container">
+      <canvas baseChart [data]="lineChartData" [options]="lineChartOptions" type="line"></canvas>
+    </div>
+  </div>
+
+  <!-- Overlay de loading durante execução -->
+  <div class="speed-test-overlay" *ngIf="isRunning">
+    <div class="overlay-content">
+      <div class="spinner"></div>
+      <p>Executando teste de {{ direction === 'download' ? 'Download' : 'Upload' }}...</p>
+      <span class="overlay-subtitle">Isso pode levar alguns segundos</span>
+    </div>
+  </div>
+</div>

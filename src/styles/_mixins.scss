@@ -1,0 +1,107 @@
+// =============================================================================
+// CAMINHO DO ARQUIVO: frontend/src/styles/_mixins.scss
+// =============================================================================
+// Mixins reutilizáveis para responsividade, cards, scrollbars e acessibilidade.
+// Todos os mixins utilizam as Custom Properties definidas em _variables.scss.
+// =============================================================================
+
+// ---------------------------------------------------------------------------
+// 1. RESPONSIVIDADE — Breakpoints Mobile First
+// ---------------------------------------------------------------------------
+// Uso: @include respond-to('md') { … }
+// ---------------------------------------------------------------------------
+@mixin respond-to($breakpoint) {
+  @if $breakpoint == 'sm' {
+    @media (min-width: 640px) { @content; }
+  } @else if $breakpoint == 'md' {
+    @media (min-width: 768px) { @content; }
+  } @else if $breakpoint == 'lg' {
+    @media (min-width: 1024px) { @content; }
+  } @else if $breakpoint == 'xl' {
+    @media (min-width: 1280px) { @content; }
+  } @else if $breakpoint == '2xl' {
+    @media (min-width: 1536px) { @content; }
+  } @else if $breakpoint == 'ultrawide' {
+    // Monitores ultrawide do NOC
+    @media (min-width: 1920px) { @content; }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 2. CARD PADRONIZADO
+// ---------------------------------------------------------------------------
+@mixin card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding: var(--space-6);
+  transition: background-color var(--transition-speed) ease,
+              border-color var(--transition-speed) ease,
+              box-shadow var(--transition-speed) ease;
+
+  // Em telas pequenas, reduz padding para otimizar espaço
+  @include respond-to('md') {
+    padding: var(--space-6);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3. SCROLLBAR ESTILIZADA (Webkit)
+// ---------------------------------------------------------------------------
+@mixin custom-scrollbar($track: transparent, $thumb: var(--text-secondary), $width: 6px) {
+  &::-webkit-scrollbar {
+    width: $width;
+    height: $width;
+  }
+  &::-webkit-scrollbar-track {
+    background: $track;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: $thumb;
+    border-radius: var(--radius-full);
+    opacity: 0.5;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    opacity: 0.8;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 4. FOCUS VISÍVEL (Acessibilidade — WCAG 2.1 AA)
+// ---------------------------------------------------------------------------
+@mixin focus-ring($color: var(--accent-color)) {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba($color, 0.4);
+  // Fallback se o browser não suportar rgba com CSS var:
+  // A cor do anel usa o token de acento diretamente.
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+// ---------------------------------------------------------------------------
+// 5. TRUNCATE (ellipsis em texto longo)
+// ---------------------------------------------------------------------------
+@mixin truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// ---------------------------------------------------------------------------
+// 6. SKELETON SHIMMER
+// ---------------------------------------------------------------------------
+@mixin skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--bg-surface) 0%,
+    var(--border-color) 50%,
+    var(--bg-surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite linear;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

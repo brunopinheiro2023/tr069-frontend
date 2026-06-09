@@ -1,0 +1,326 @@
+<!-- Caminho: .../wifi-saturation-chart/wifi-saturation-chart.component.html -->
+
+<!-- Card container do gráfico de saturação de canais -->
+<div class="saturation-chart-card">
+
+  <!-- Cabeçalho com título e badge de dados demo -->
+  <div class="chart-header">
+    <span class="chart-title">
+      <span class="material-symbols-rounded">signal_cellular_alt</span>
+      Saturação de Canais — {{ bandLabel }}
+    </span>
+
+    <!-- Badge de aviso quando dados são simulados (sem varredura real) -->
+    <span *ngIf="isDemo" class="badge badge-demo" title="Execute 'Varredura de Vizinhança' para obter dados reais">
+      <span class="material-symbols-rounded">science</span> Demo
+    </span>
+    <span *ngIf="!isDemo" class="badge badge-real">
+      <span class="material-symbols-rounded">sensors</span> Dados Reais
+    </span>
+  </div>
+
+  <!-- Estado vazio: sem dados de banda -->
+  <div *ngIf="!saturationBand || bars.length === 0" class="chart-empty">
+    <span class="material-symbols-rounded">wifi_off</span>
+    <p>Sem dados de saturação para {{ bandLabel }}. Execute a varredura de vizinhança.</p>
+  </div>
+
+  <!-- Gráfico SVG de barras -->
+  <ng-container *ngIf="bars.length > 0">
+    <svg
+      [attr.width]="SVG_WIDTH"
+      [attr.height]="SVG_HEIGHT + 20"
+      [attr.viewBox]="'0 0 ' + SVG_WIDTH + ' ' + (SVG_HEIGHT + 20)"
+      class="saturation-svg"
+      [attr.aria-label]="'Gráfico de saturação de canais ' + bandLabel"
+      role="img">
+
+      <!-- Linhas de grade horizontais (0%, 50%, 100%) -->
+      <line x1="0" [attr.y1]="SVG_HEIGHT - 20" [attr.x2]="SVG_WIDTH" [attr.y2]="SVG_HEIGHT - 20"
+            class="grid-line" stroke-dasharray="4,4" />
+      <line x1="0" [attr.y1]="(SVG_HEIGHT - 20) / 2" [attr.x2]="SVG_WIDTH" [attr.y2]="(SVG_HEIGHT - 20) / 2"
+            class="grid-line" stroke-dasharray="4,4" />
+
+      <!-- Barras individuais por canal -->
+      <g *ngFor="let bar of bars">
+
+        <!-- Barra principal -->
+        <rect
+          [attr.x]="bar.x"
+          [attr.y]="getBarY(bar.heightPercent)"
+          [attr.width]="bar.barWidth"
+          [attr.height]="getBarHeightPx(bar.heightPercent)"
+          [class]="'saturation-bar ' + bar.cssClass"
+          rx="2">
+          <!-- Tooltip nativo via title -->
+          <title>Canal {{ bar.channel }}: {{ bar.neighborCount }} rede(s) vizinha(s) — {{ bar.congestionLevel }}</title>
+        </rect>
+
+        <!-- Label do canal (eixo X) -->
+        <text
+          [attr.x]="bar.x + bar.barWidth / 2"
+          [attr.y]="SVG_HEIGHT + 12"
+          class="channel-label"
+          text-anchor="middle"
+          [class.channel-label-current]="currentChannel === bar.channel">
+          {{ bar.channel }}
+        </text>
+
+        <!-- Indicador do canal atual (seta ▲ abaixo do label) -->
+        <text
+          *ngIf="currentChannel === bar.channel"
+          [attr.x]="bar.x + bar.barWidth / 2"
+          [attr.y]="SVG_HEIGHT + 22"
+          class="current-indicator"
+          text-anchor="middle">▲</text>
+
+        <!-- Count label acima da barra (só para barras com ≥ 2 vizinhos) -->
+        <text
+          *ngIf="bar.neighborCount >= 2"
+          [attr.x]="bar.x + bar.barWidth / 2"
+          [attr.y]="getBarY(bar.heightPercent) - 3"
+          class="count-label"
+          text-anchor="middle">
+          {{ bar.neighborCount }}
+        </text>
+
+      </g>
+    </svg>
+
+    <!-- Legenda de cores -->
+    <div class="chart-legend">
+      <span class="legend-item">
+        <span class="legend-dot dot-low"></span> Baixo (0–2 redes)
+      </span>
+      <span class="legend-item">
+        <span class="legend-dot dot-medium"></span> Médio (3–5 redes)
+      </span>
+      <span class="legend-item">
+        <span class="legend-dot dot-high"></span> Alto (&gt;5 redes)
+      </span>
+      <span class="legend-item" *ngIf="currentChannel">
+        <span class="legend-dot dot-current"></span> Canal atual ({{ currentChannel }})
+      </span>
+    </div>
+
+    <!-- Aviso de dados demo -->
+    <p *ngIf="isDemo" class="demo-notice">
+      <span class="material-symbols-rounded">info</span>
+      Dados simulados. Use "Varredura de Vizinhança" para obter medições reais do ambiente.
+    </p>
+
+    <!-- Painel de sugestão de canal com aplicação automática -->
+    <div *ngIf="saturationBand?.suggestion as sug" class="channel-suggestion"
+         [class.suggestion-ok]="!sug.shouldChange"
+         [class.suggestion-warn]="sug.shouldChange">
+      <div class="sug-body">
+        <span class="material-symbols-rounded sug-icon">
+          {{ sug.shouldChange ? 'swap_horiz' : 'check_circle' }}
+        </span>
+        <div class="sug-text">
+          <strong>{{ sug.shouldChange ? 'Troca de canal recomendada' : 'Canal adequado' }}</strong>
+          <p>{{ sug.reason }}</p>
+          <small>
+            Score atual: <b>{{ sug.currentScore }}</b> &nbsp;|&nbsp;
+            Melhor canal disponível: <b>{{ sug.bestChannel }}</b> (score {{ sug.bestScore }})
+          </small>
+        </div>
+      </div>
+      <button *ngIf="sug.shouldChange"
+              class="apply-btn"
+              [disabled]="isApplying"
+              (click)="onApplyChannel(sug)">
+        <span class="material-symbols-rounded">{{ isApplying ? 'hourglass_empty' : 'tune' }}</span>
+        {{ isApplying ? 'Aplicando...' : 'Aplicar Canal ' + sug.bestChannel }}
+      </button>
+    </div>
+  </ng-container>
+
+</div>
+
+<!-- ============================================================ -->
+<!-- ESTILOS SCOPED (inline para componente standalone sem .scss) -->
+<!-- ============================================================ -->
+<style>
+  .saturation-chart-card {
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: var(--radius-lg, 12px);
+    padding: 1rem 1.25rem;
+    overflow: hidden;
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .chart-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary, #1e293b);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 1;
+  }
+
+  .chart-title .material-symbols-rounded {
+    font-size: 1.1rem;
+    color: var(--color-primary, #3b82f6);
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+  }
+  .badge .material-symbols-rounded { font-size: 0.85rem; }
+  .badge-demo  { background: #fef3c7; color: #92400e; }
+  .badge-real  { background: #dcfce7; color: #166534; }
+
+  /* Estado vazio */
+  .chart-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 2rem 0;
+    color: var(--text-secondary, #64748b);
+    font-size: 0.85rem;
+    text-align: center;
+  }
+  .chart-empty .material-symbols-rounded { font-size: 2rem; opacity: 0.4; }
+
+  /* SVG */
+  .saturation-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 600px;
+  }
+
+  /* Barras */
+  .saturation-bar { transition: opacity 0.2s; cursor: default; }
+  .saturation-bar:hover { opacity: 0.75; }
+  .bar-low     { fill: var(--color-success, #22c55e); }
+  .bar-medium  { fill: var(--color-warning, #f59e0b); }
+  .bar-high    { fill: var(--color-danger,  #ef4444); }
+  .bar-current { fill: var(--color-primary, #3b82f6); }
+
+  /* Linhas de grade */
+  .grid-line { stroke: var(--border-color, #e2e8f0); stroke-width: 1; }
+
+  /* Labels */
+  .channel-label {
+    font-size: 9px;
+    fill: var(--text-secondary, #64748b);
+    font-family: inherit;
+  }
+  .channel-label-current {
+    fill: var(--color-primary, #3b82f6);
+    font-weight: 700;
+  }
+  .current-indicator {
+    font-size: 7px;
+    fill: var(--color-primary, #3b82f6);
+  }
+  .count-label {
+    font-size: 8px;
+    fill: var(--text-secondary, #64748b);
+    font-family: inherit;
+  }
+
+  /* Legenda */
+  .chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary, #64748b);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+  .dot-low     { background: var(--color-success, #22c55e); }
+  .dot-medium  { background: var(--color-warning, #f59e0b); }
+  .dot-high    { background: var(--color-danger,  #ef4444); }
+  .dot-current { background: var(--color-primary, #3b82f6); }
+
+  /* Aviso demo */
+  .demo-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: #92400e;
+    background: #fef3c7;
+    border-radius: var(--radius-md, 8px);
+    padding: 0.4rem 0.75rem;
+  }
+  .demo-notice .material-symbols-rounded { font-size: 0.9rem; }
+
+  /* Painel de sugestão de canal */
+  .channel-suggestion {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    padding: 0.6rem 0.85rem;
+    border-radius: var(--radius-md, 8px);
+    font-size: 0.78rem;
+    flex-wrap: wrap;
+  }
+  .suggestion-ok   { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+  .suggestion-warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+
+  .sug-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    flex: 1;
+    min-width: 0;
+  }
+  .sug-icon { font-size: 1.25rem; margin-top: 0.05rem; flex-shrink: 0; }
+  .sug-text { display: flex; flex-direction: column; gap: 0.15rem; }
+  .sug-text strong { font-size: 0.8rem; }
+  .sug-text p   { margin: 0; line-height: 1.4; }
+  .sug-text small { opacity: 0.8; }
+
+  .apply-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.85rem;
+    background: var(--color-primary, #3b82f6);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm, 6px);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+  }
+  .apply-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .apply-btn:hover:not(:disabled) { opacity: 0.88; }
+  .apply-btn .material-symbols-rounded { font-size: 1rem; }
+</style>

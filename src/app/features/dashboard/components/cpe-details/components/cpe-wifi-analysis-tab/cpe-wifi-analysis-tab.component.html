@@ -1,0 +1,92 @@
+<div class="wifi-analysis-tab">
+  <!-- Loading inicial -->
+  <div *ngIf="isLoading" class="loading-container">
+    <div class="loading-content">
+      <div class="spinner">
+        <span class="material-symbols-rounded">hourglass_empty</span>
+      </div>
+      <strong>Carregando análise Wi-Fi...</strong>
+      <span>Aguarde enquanto coletamos os dados da CPE</span>
+    </div>
+  </div>
+
+  <!-- Conteúdo principal -->
+  <div *ngIf="!isLoading">
+    <!-- Header da aba -->
+    <div class="tab-header">
+      <div class="header-title">
+        <span class="material-symbols-rounded">wifi_find</span>
+        <h3>Análise Wi-Fi</h3>
+      </div>
+      <p class="header-description">
+        Análise completa do ambiente Wi-Fi: configuração atual, varredura de redes vizinhas, saturação de canais e recomendações de otimização.
+      </p>
+    </div>
+
+    <!-- Cards de Configuração WiFi Atual -->
+    <div class="config-section" *ngIf="hasValidWifiData">
+      <div class="section-header">
+        <span class="material-symbols-rounded">settings_input_antenna</span>
+        <h4>Configuração WiFi Atual</h4>
+      </div>
+      <div class="config-grid">
+        <!-- 2.4 GHz -->
+        <div class="config-card">
+          <div class="config-card-header">
+            <span class="material-symbols-rounded">wifi</span>
+            <h5>2.4 GHz</h5>
+          </div>
+          <div class="config-details">
+            <div class="config-item">
+              <span class="config-label">Canal:</span>
+              <span class="config-value">{{ wifi2gChannel }}</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Largura:</span>
+              <span class="config-value">{{ wifi2gBandwidth }}</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Potência:</span>
+              <span class="config-value">{{ wifi2gPower }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5 GHz -->
+        <div class="config-card">
+          <div class="config-card-header">
+            <span class="material-symbols-rounded">wifi</span>
+            <h5>5 GHz</h5>
+          </div>
+          <div class="config-details">
+            <div class="config-item">
+              <span class="config-label">Canal:</span>
+              <span class="config-value">{{ wifi5gChannel }}</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Largura:</span>
+              <span class="config-value">{{ wifi5gBandwidth }}</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Potência:</span>
+              <span class="config-value">{{ wifi5gPower }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card de Varredura de Redes Vizinhas -->
+    <div class="analysis-section">
+      <app-neighbor-scan-card
+        [serialNumber]="serialNumber"
+        [readOnly]="false"
+        [isSupported]="true"
+        [isRunning]="neighborScanInProgress"
+        [result]="neighborScanData"
+        [history]="neighborScanHistory"
+        (runScan)="triggerNeighborScan()">
+      </app-neighbor-scan-card>
+    </div>
+  </div>
+</div>
