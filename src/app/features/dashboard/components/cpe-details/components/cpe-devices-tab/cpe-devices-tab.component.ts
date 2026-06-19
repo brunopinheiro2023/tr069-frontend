@@ -36,6 +36,11 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
   isLoading: boolean = false;
   refreshing: boolean = false;
 
+  // Paginação
+  currentPage: number = 1;
+  itemsPerPage: number = 50;
+  totalPages: number = 1;
+
   /** Indica que há uma atualização em andamento em background (não bloqueia a tabela). */
   backgroundRefreshing: boolean = false;
 
@@ -106,9 +111,10 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
     this.isLoading = true;
     this.clearFeedback();
 
-    this.cpeService.getConnectedDevices(this.serialNumber).subscribe({
+    this.cpeService.getConnectedDevices(this.serialNumber, this.currentPage, this.itemsPerPage).subscribe({
       next: (data) => {
         this.devicesData = data;
+        this.totalPages = (data as any).pagination?.pages || 1;
         this.isLoading = false;
       },
       error: () => {
@@ -116,6 +122,26 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
         this.isLoading = false;
       }
     });
+  }
+
+  changePage(page: number): void {
+    if (page < 1 || page > this.totalPages) return;
+    this.currentPage = page;
+    this.loadConnectedDevices();
+  }
+
+  nextPage(): void {
+    if (this.currentPage < this.totalPages) {
+      this.currentPage++;
+      this.loadConnectedDevices();
+    }
+  }
+
+  prevPage(): void {
+    if (this.currentPage > 1) {
+      this.currentPage--;
+      this.loadConnectedDevices();
+    }
   }
 
   /**
@@ -153,7 +179,8 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
     // Cancela failsafe anterior se houver
     if (this.refreshFailsafeTimeout) { clearTimeout(this.refreshFailsafeTimeout); }
 
-    this.cpeService.getWifiDiagnostics(this.serialNumber, true).subscribe({
+    // refreshWifiHosts é mais leve — não computa insights/congestionamento que esta aba não usa
+    this.cpeService.refreshWifiHosts(this.serialNumber).subscribe({
       next: (res: any) => {
         if (attempt === 0) {
           this.setFeedback('Atualização solicitada. Aguardando a CPE responder...', 'info');
@@ -220,7 +247,8 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
     this.stopHostsAutoRefresh();
     this.hostsRefreshInterval = setInterval(() => {
       if (!this.serialNumber || this.refreshing) return;
-      this.cpeService.getWifiDiagnostics(this.serialNumber, true).subscribe({
+      // refreshWifiHosts é mais leve — não computa insights/congestionamento que esta aba não usa
+      this.cpeService.refreshWifiHosts(this.serialNumber).subscribe({
         error: () => { /* ignora 409 e erros de rede sem exibir feedback */ }
       });
       // Reseta contador regressivo

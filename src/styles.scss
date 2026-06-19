@@ -24,12 +24,6 @@
 // =============================================================================
 // 4. RESET E BASE
 // =============================================================================
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
 html {
   font-family: var(--font-family-base);
   -webkit-font-smoothing: antialiased;
@@ -46,8 +40,8 @@ body {
   overflow: hidden; /* Scroll isolado na área de conteúdo */
 }
 
-// Scrollbar global estilizada (aplica em toda a aplicação)
-* {
+// Scrollbar global estilizada (Otimização: evitando seletor universal '*')
+html, body {
   @include mixins.custom-scrollbar(transparent, var(--text-secondary), 6px);
 }
 

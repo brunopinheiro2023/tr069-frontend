@@ -28,8 +28,17 @@
     </button>
 
     <div class="user-profile">
-      <div class="avatar" aria-hidden="true">FB</div>
-      <span class="user-name">Francisco Bruno</span>
+      <div class="avatar" aria-hidden="true">{{ userInitials }}</div>
+      <span class="user-name">{{ username }}</span>
     </div>
+
+    <button
+      class="logout-btn"
+      (click)="logout()"
+      title="Sair do sistema"
+      type="button"
+    >
+      <span class="material-symbols-rounded">logout</span>
+    </button>
   </div>
 </header>

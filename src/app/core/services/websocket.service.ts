@@ -1,200 +1,145 @@
 import { Injectable, NgZone } from '@angular/core'; // IMPORTAR NgZone
 import { io, Socket } from 'socket.io-client';
-import { Observable, Subject } from 'rxjs';
+import { Observable, share } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { Router } from '@angular/router';
 
 @Injectable({
   providedIn: 'root'
 })
 export class WebSocketService {
   private socket: Socket;
+  private sessionId: string; // Identidade resiliente para tolerar reconexões
 
-  private cpeUpdatedSubject = new Subject<any>();
-  private cpeOnlineSubject = new Subject<any>();
-  private configSuccessSubject = new Subject<any>();
-  private wifiDiagnosticsSubject = new Subject<any>();
-  private wifiDataRefreshedSubject = new Subject<{ serialNumber: string; timestamp: string }>();
-  private neighborScanCompletedSubject = new Subject<{ serialNumber: string; timestamp: string }>();
-  private cpeAccessDeniedSubject = new Subject<{ serialNumber: string; lockedBy: string; lockedAt: string; lockedMinutes: number }>();
-  private cpeAccessGrantedSubject = new Subject<{ serialNumber: string }>();
-  private cpeValueChangeSubject = new Subject<{ serialNumber: string; changeType: string; changedParams: Array<{ name: string; value: string }>; timestamp: string }>();
-  private telemetryUpdateSubject = new Subject<{ serialNumber: string; data: any; timestamp: string }>();
-  private uploadTestStartedSubject = new Subject<{ deviceId: string; direction: string; url: string; timestamp: string }>();
-  private uploadTestCompletedSubject = new Subject<{ deviceId: string; direction: string; results?: any; timestamp: string }>();
-  private uploadTestErrorSubject = new Subject<{ deviceId: string; direction: string; error: string; results?: any; timestamp: string }>();
-  private downloadTestStartedSubject = new Subject<{ deviceId: string; direction: string; url: string; timestamp: string }>();
-  private downloadTestCompletedSubject = new Subject<{ deviceId: string; direction: string; results?: any; timestamp: string }>();
-  private downloadTestErrorSubject = new Subject<{ deviceId: string; direction: string; error: string; results?: any; timestamp: string }>();
-  private diagnosticsCompleteSubject = new Subject<{ serialNumber: string; timestamp: string }>();
-  // Map para observables dinâmicos registrados via on() genérico
-  private dynamicSubjects = new Map<string, Subject<any>>();
+  // Map para gerenciar Observables e evitar memory leaks reaproveitando conexões
+  private observablesMap = new Map<string, Observable<any>>();
 
   // INJETA O NgZone NO CONSTRUTOR
-  constructor(private zone: NgZone) {
-    // SEGURANÇA: envia token JWT fresco a cada (re)conexão
+  constructor(private zone: NgZone, private router: Router) {
+    // Gera sessionId único por instância (aba do navegador) usando fallback matemático
+    // Funciona em HTTP sem TLS (Web Crypto API bloqueada fora de HTTPS)
+    this.sessionId = this.generateSessionId();
+
+    // SEGURANÇA: envia token JWT fresco e sessionId estático a cada (re)conexão
     this.socket = io(environment.wsUrl, {
       auth: (cb) => {
         const token = localStorage.getItem('jwt_token');
-        cb({ token: token || '' });
+        const username = localStorage.getItem('username') || 'unknown';
+        cb({ token: token || '', sessionId: this.sessionId, username });
       }
     });
 
     this.socket.on('connect', () => {
       console.log('Conectado ao WebSocket do Servidor ACS.');
+      // Reemite heartbeat imediatamente na reconexão para evitar perder lock
+      this.reemitHeartbeatOnReconnect();
     });
 
-    // Envolve as chamadas do socket dentro de this.zone.run()
-    this.socket.on('cpe_updated', (data: any) => {
-      this.zone.run(() => {
-        this.cpeUpdatedSubject.next(data);
-      });
+    // Monitora falhas de autenticação em tempo real
+    this.socket.on('connect_error', (err) => {
+      if (err.message === 'INVALID_TOKEN' || err.message === 'UNAUTHENTICATED' || err.message === 'TOKEN_EXPIRED') {
+        console.error('Sessão WebSocket bloqueada: Token JWT expirado ou ausente.');
+        // Limpa tokens e redireciona para login
+        localStorage.removeItem('jwt_token');
+        localStorage.removeItem('username');
+        this.zone.run(() => {
+          this.router.navigate(['/login']);
+        });
+      }
     });
 
-    this.socket.on('cpe_online', (data: any) => {
-      this.zone.run(() => {
-        this.cpeOnlineSubject.next(data);
-      });
-    });
-
-    this.socket.on('config_success', (data: any) => {
-      this.zone.run(() => {
-        this.configSuccessSubject.next(data);
-      });
-    });
-
-    // Diagnóstico Wi-Fi avançado emitido pelo backend (tempo real)
-    this.socket.on('wifi_diagnostics_update', (data: any) => {
-      this.zone.run(() => {
-        this.wifiDiagnosticsSubject.next(data);
-      });
-    });
-
-    // Conclusão da leitura Wi-Fi sob demanda (dados frescos disponíveis)
-    this.socket.on('wifi_data_refreshed', (data: { serialNumber: string; timestamp: string }) => {
-      this.zone.run(() => {
-        this.wifiDataRefreshedSubject.next(data);
-      });
-    });
-
-    this.socket.on('neighbor_scan_completed', (data: { serialNumber: string; timestamp: string }) => {
-      this.zone.run(() => {
-        this.neighborScanCompletedSubject.next(data);
-      });
-    });
-
-    this.socket.on('cpe_access_denied', (data: any) => {
-      this.zone.run(() => this.cpeAccessDeniedSubject.next(data));
-    });
-
-    this.socket.on('cpe_access_granted', (data: any) => {
-      this.zone.run(() => this.cpeAccessGrantedSubject.next(data));
-    });
-
-    this.socket.on('cpe_value_change', (data: any) => {
-      this.zone.run(() => this.cpeValueChangeSubject.next(data));
-    });
-
-    this.socket.on('telemetry_update', (data: any) => {
-      this.zone.run(() => this.telemetryUpdateSubject.next(data));
-    });
-
-    // Eventos de teste de velocidade TR-143
-    this.socket.on('upload_test_started', (data: { deviceId: string; direction: string; url: string; timestamp: string }) => {
-      this.zone.run(() => this.uploadTestStartedSubject.next(data));
-    });
-
-    this.socket.on('upload_test_completed', (data: { deviceId: string; direction: string; timestamp: string }) => {
-      this.zone.run(() => this.uploadTestCompletedSubject.next(data));
-    });
-
-    this.socket.on('upload_test_error', (data: { deviceId: string; direction: string; error: string; timestamp: string }) => {
-      this.zone.run(() => this.uploadTestErrorSubject.next(data));
-    });
-
-    this.socket.on('download_test_started', (data: { deviceId: string; direction: string; url: string; timestamp: string }) => {
-      this.zone.run(() => this.downloadTestStartedSubject.next(data));
-    });
-
-    this.socket.on('download_test_completed', (data: { deviceId: string; direction: string; results?: any; timestamp: string }) => {
-      console.log('[WebSocketService] download_test_completed recebido do servidor:', data);
-      this.zone.run(() => this.downloadTestCompletedSubject.next(data));
-    });
-
-    this.socket.on('download_test_error', (data: { deviceId: string; direction: string; error: string; timestamp: string }) => {
-      this.zone.run(() => this.downloadTestErrorSubject.next(data));
-    });
-
-    this.socket.on('diagnostics_complete', (data: { serialNumber: string; timestamp: string }) => {
-      this.zone.run(() => this.diagnosticsCompleteSubject.next(data));
+    // Listener global para erros de middleware (RBAC, expiração)
+    this.socket.on('error', (err) => {
+      if (err === 'TOKEN_EXPIRED' || err === 'INVALID_TOKEN') {
+        console.error('Sessão expirada pelo middleware WebSocket.');
+        localStorage.removeItem('jwt_token');
+        localStorage.removeItem('username');
+        this.zone.run(() => {
+          this.router.navigate(['/login']);
+        });
+      }
     });
   }
 
-  onCpeUpdated(): Observable<any> { return this.cpeUpdatedSubject.asObservable(); }
-  onCpeOnline(): Observable<any> { return this.cpeOnlineSubject.asObservable(); }
-  onConfigSuccess(): Observable<any> { return this.configSuccessSubject.asObservable(); }
-  onWifiDiagnosticsUpdate(): Observable<any> { return this.wifiDiagnosticsSubject.asObservable(); }
-  onWifiDataRefreshed(): Observable<{ serialNumber: string; timestamp: string }> {
-    return this.wifiDataRefreshedSubject.asObservable();
-  }
-  onNeighborScanCompleted(): Observable<{ serialNumber: string; timestamp: string }> {
-    return this.neighborScanCompletedSubject.asObservable();
-  }
-  onCpeAccessDenied(): Observable<{ serialNumber: string; lockedBy: string; lockedAt: string; lockedMinutes: number }> {
-    return this.cpeAccessDeniedSubject.asObservable();
-  }
-  onCpeAccessGranted(): Observable<{ serialNumber: string }> {
-    return this.cpeAccessGrantedSubject.asObservable();
-  }
-  onCpeValueChange(): Observable<{ serialNumber: string; changeType: string; changedParams: Array<{ name: string; value: string }>; timestamp: string }> {
-    return this.cpeValueChangeSubject.asObservable();
-  }
-  onTelemetryUpdate(): Observable<{ serialNumber: string; data: any; timestamp: string }> {
-    return this.telemetryUpdateSubject.asObservable();
+  /** Reemite heartbeat para todas as CPEs ativas na reconexão */
+  private reemitHeartbeatOnReconnect(): void {
+    // Implementação futura: rastrear CPEs ativas e reemitir heartbeat
+    // Por enquanto, log para debug
+    console.log('Reconexão detectada - heartbeat será reemitido pelo intervalo RxJS.');
   }
 
-  onUploadTestStarted(): Observable<{ deviceId: string; direction: string; url: string; timestamp: string }> {
-    return this.uploadTestStartedSubject.asObservable();
+  /** Gera sessionId UUID v4 com fallback matemático (funciona em HTTP sem TLS) */
+  private generateSessionId(): string {
+    return 'xxxx-4xxx-yxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+    });
   }
 
-  onUploadTestCompleted(): Observable<{ deviceId: string; direction: string; results?: any; timestamp: string }> {
-    return this.uploadTestCompletedSubject.asObservable();
-  }
-
-  onUploadTestError(): Observable<{ deviceId: string; direction: string; error: string; results?: any; timestamp: string }> {
-    return this.uploadTestErrorSubject.asObservable();
-  }
-
-  onDownloadTestStarted(): Observable<{ deviceId: string; direction: string; url: string; timestamp: string }> {
-    return this.downloadTestStartedSubject.asObservable();
-  }
-
-  onDownloadTestCompleted(): Observable<{ deviceId: string; direction: string; results?: any; timestamp: string }> {
-    return this.downloadTestCompletedSubject.asObservable();
-  }
-
-  onDownloadTestError(): Observable<{ deviceId: string; direction: string; error: string; results?: any; timestamp: string }> {
-    return this.downloadTestErrorSubject.asObservable();
-  }
-
-  onDiagnosticsComplete(): Observable<{ serialNumber: string; timestamp: string }> {
-    return this.diagnosticsCompleteSubject.asObservable();
-  }
+  // Delega o repasse para o método genérico 'on'
+  onCpeUpdated(): Observable<any> { return this.on('cpe_updated'); }
+  onCpeOnline(): Observable<any> { return this.on('cpe_online'); }
+  onCpeBatchUpdate(): Observable<{ eventName: string; items: any[]; count: number }> { return this.on('cpe_batch_update'); }
+  onConfigSuccess(): Observable<any> { return this.on('config_success'); }
+  onWifiDiagnosticsUpdate(): Observable<any> { return this.on('wifi_diagnostics_update'); }
+  onWifiDataRefreshed(): Observable<{ serialNumber: string; timestamp: string }> { return this.on('wifi_data_refreshed'); }
+  onNeighborScanCompleted(): Observable<{ serialNumber: string; timestamp: string }> { return this.on('neighbor_scan_completed'); }
+  onCpeAccessDenied(): Observable<{ serialNumber: string; lockedBy: string; lockedAt: string; lockedMinutes: number }> { return this.on('cpe_access_denied'); }
+  onCpeAccessGranted(): Observable<{ serialNumber: string; isDriver: boolean }> { return this.on('cpe_access_granted'); }
+  onPresenceConflict(): Observable<{ serialNumber: string; driver: string; message: string }> { return this.on('presence_conflict'); }
+  onDriverPromoted(): Observable<{ serialNumber: string; newDriver: string }> { return this.on('driver_promoted'); }
+  onDriverAcquired(): Observable<{ serialNumber: string; username: string }> { return this.on('driver_acquired'); }
+  onViewOnly(): Observable<{ serialNumber: string; driver: string; message: string }> { return this.on('view_only'); }
+  onForceViewOnly(): Observable<{ serialNumber: string; message: string }> { return this.on('force_view_only'); }
+  onDriverReleased(): Observable<{ serialNumber: string }> { return this.on('driver_released'); }
+  onViewersUpdated(): Observable<{ serialNumber: string; viewers: string[] }> { return this.on('viewers_updated'); }
+  onCpeLocked(): Observable<{ serialNumber: string; source: string }> { return this.on('cpe_locked'); }
+  onCpeUnlocked(): Observable<{ serialNumber: string }> { return this.on('cpe_unlocked'); }
+  onCpeValueChange(): Observable<{ serialNumber: string; changeType: string; changedParams: Array<{ name: string; value: string }>; timestamp: string }> { return this.on('cpe_value_change'); }
+  onTelemetryStarted(): Observable<{ serialNumber: string; requestedBy: string; message: string }> { return this.on('telemetry_started'); }
+  onTelemetryUpdate(): Observable<{ serialNumber: string; data: any; timestamp: string }> { return this.on('telemetry_update'); }
+  onTelemetryProgress(): Observable<{ serialNumber: string; completedChunks: number; totalChunks: number; percent: number; partial?: boolean; faultCode?: number }> { return this.on('telemetry_progress'); }
+  onTelemetryComplete(): Observable<{ serialNumber: string; timestamp: string; totalChunks: number; source?: string; partial?: boolean }> { return this.on('telemetry_complete'); }
+  onTelemetryAlert(): Observable<{ serialNumber: string; metric: string; severity: 'warning' | 'critical'; value: number; message: string; timestamp: string }> { return this.on('telemetry_alert'); }
+  onTelemetryAlertResolved(): Observable<{ serialNumber: string; metric: string; timestamp: string }> { return this.on('telemetry_alert_resolved'); }
+  onTelemetryAlertBatch(): Observable<{ alerts: Array<{ serialNumber: string; metric: string; severity: string; value: number; message: string; timestamp: string }>; count: number; timestamp: string }> { return this.on('telemetry_alert_batch'); }
+  onUploadTestStarted(): Observable<{ deviceId: string; direction: string; url: string; timestamp: string }> { return this.on('upload_test_started'); }
+  onUploadTestCompleted(): Observable<{ deviceId: string; direction: string; results?: any; timestamp: string }> { return this.on('upload_test_completed'); }
+  onUploadTestError(): Observable<{ deviceId: string; direction: string; error: string; results?: any; timestamp: string }> { return this.on('upload_test_error'); }
+  onDownloadTestStarted(): Observable<{ deviceId: string; direction: string; url: string; timestamp: string }> { return this.on('download_test_started'); }
+  onDownloadTestCompleted(): Observable<{ deviceId: string; direction: string; results?: any; timestamp: string }> { return this.on('download_test_completed'); }
+  onDownloadTestError(): Observable<{ deviceId: string; direction: string; error: string; results?: any; timestamp: string }> { return this.on('download_test_error'); }
+  onDiagnosticsComplete(): Observable<{ serialNumber: string; timestamp: string }> { return this.on('diagnostics_complete'); }
 
   /**
-   * Método genérico para escutar eventos WebSocket por nome.
-   * Registra o listener no socket e retorna um Observable tipado.
-   * Reutiliza o Subject se já foi registrado anteriormente.
+   * Método genérico para escutar eventos WebSocket usando Observables Reativos nativos.
+   * Previne memory leaks garantindo a criação segura e a desmontagem limpa dos listeners.
    * @param eventName - Nome do evento Socket.IO
    */
-  on(eventName: string): Observable<any> {
-    if (!this.dynamicSubjects.has(eventName)) {
-      const subject = new Subject<any>();
-      this.dynamicSubjects.set(eventName, subject);
-      this.socket.on(eventName, (data: any) => {
-        this.zone.run(() => subject.next(data));
-      });
+  on<T = any>(eventName: string): Observable<T> {
+    if (!this.observablesMap.has(eventName)) {
+      const observable = new Observable<T>((subscriber) => {
+        const listener = (data: T) => {
+          // REINTEGRAÇÃO DA ZONA: Garante que os eventos disparem o Change Detection.
+          // Componentes (como CpeInfoTab) não utilizam markForCheck() manualmente.
+          // Isso reativa a renderização instantânea dos dados e dos flash-updates na UI.
+          this.zone.run(() => subscriber.next(data));
+        };
+
+        // Aciona a escuta apenas no 1º subscriber
+        this.socket.on(eventName, listener);
+
+        // Função de Teardown (Executa automaticamente no unsubscribe)
+        // Desvincula evento do Socket.io liberando recursos
+        return () => {
+          this.socket.off(eventName, listener);
+          this.observablesMap.delete(eventName);
+        };
+      }).pipe(share()); // Compartilha a mesma conexão para todos os componentes locais
+
+      this.observablesMap.set(eventName, observable);
     }
-    return this.dynamicSubjects.get(eventName)!.asObservable();
+    return this.observablesMap.get(eventName) as Observable<T>;
   }
 
   /**
@@ -242,6 +187,15 @@ export class WebSocketService {
    */
   unsubscribeFromCpe(serialNumber: string): void {
     this.socket.emit('unsubscribe_cpe', { serialNumber });
+  }
+
+  /**
+   * Emite heartbeat para renovar TTL do Driver no Redis.
+   * @param serialNumber - Número de série da CPE
+   */
+  emitDriverKeepalive(serialNumber: string): void {
+    // sessionId e username são extraídos no middleware backend (socket.data)
+    this.socket.emit('driver_keepalive', { serialNumber });
   }
 
   disconnect() {

@@ -120,6 +120,19 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Paginação -->
+    <div *ngIf="totalPages > 1" class="pagination-controls">
+      <button class="pagination-btn" [disabled]="currentPage === 1" (click)="prevPage()">
+        <span class="material-symbols-rounded">chevron_left</span>
+        Anterior
+      </button>
+      <span class="pagination-info">Página {{ currentPage }} de {{ totalPages }}</span>
+      <button class="pagination-btn" [disabled]="currentPage === totalPages" (click)="nextPage()">
+        Próximo
+        <span class="material-symbols-rounded">chevron_right</span>
+      </button>
+    </div>
   </div>
 
   <!-- Sem dispositivos Wi-Fi -->

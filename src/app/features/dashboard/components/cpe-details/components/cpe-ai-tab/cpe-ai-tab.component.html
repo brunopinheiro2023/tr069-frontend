@@ -56,7 +56,14 @@
                 <div class="factor-bar-track">
                   <div class="factor-bar-fill" [style.width.%]="factorScore(key)" [style.background-color]="barColor(factorScore(key))"></div>
                 </div>
-                <span class="factor-score">{{ factorScore(key) }}</span>
+                <div class="factor-score-wrapper">
+                  @if (factorDelta(key) !== null) {
+                    <span class="factor-delta" [class]="deltaDirection(key)">
+                      {{ deltaDirection(key) === 'up' ? '▲' : '▼' }}{{ absDelta(key) }}
+                    </span>
+                  }
+                  <span class="factor-score">{{ factorScore(key) }}</span>
+                </div>
               </div>
             </div>
           }

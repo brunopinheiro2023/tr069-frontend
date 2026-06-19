@@ -12,8 +12,10 @@
 // erro, evitando que a tela fique bloqueada indefinidamente.
 // =============================================================================
 
-import { HttpInterceptorFn } from '@angular/common/http';
-import { inject } from '@angular/core';
+import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+import { inject, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
+import { throwError } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import { LoadingService } from '../services/loading.service';
 
@@ -50,6 +52,19 @@ function shouldShowLoading(req: any): boolean {
  * @returns Observable da resposta HTTP com finalize para garantir cleanup
  */
 export const loadingInterceptor: HttpInterceptorFn = (req, next) => {
+  const platformId = inject(PLATFORM_ID);
+
+  // OTIMIZAÇÃO (Fail-Fast): Se estiver no browser e offline, aborta a requisição instantaneamente.
+  // Evita o bloqueio da UI com loading e envia um erro 0 (capturado e exibido pelo auth.interceptor).
+  if (isPlatformBrowser(platformId) && !navigator.onLine) {
+    return throwError(() => new HttpErrorResponse({
+      error: 'Conexão de rede indisponível. Requisição abortada antecipadamente.',
+      status: 0,
+      statusText: 'Offline',
+      url: req.url
+    }));
+  }
+
   // Injeta o LoadingService via função inject() (Angular 14+)
   const loading = inject(LoadingService);
 

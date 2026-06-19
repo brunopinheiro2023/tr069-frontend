@@ -7,12 +7,15 @@
 // indisponível.
 // =============================================================================
 
-import { HttpInterceptorFn } from '@angular/common/http';
+import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { AuthService } from '../services/auth.service';
 import { Router } from '@angular/router';
-import { catchError, throwError } from 'rxjs';
+import { BehaviorSubject, catchError, filter, switchMap, take, throwError } from 'rxjs';
 import { ToastrService } from 'ngx-toastr';
+
+let isRefreshing = false;
+let refreshTokenSubject = new BehaviorSubject<string | null>(null);
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
@@ -32,14 +35,47 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   // Passa a requisição adiante e intercepta erros de resposta
   return next(req).pipe(
-    catchError((error) => {
+    catchError((error: HttpErrorResponse) => {
+
+      // Lógica de Renovação de Token (Refresh Token) invisível
+      if (error.status === 401 && !req.url.includes('/auth/login') && !req.url.includes('/auth/refresh')) {
+        if (!isRefreshing) {
+          isRefreshing = true;
+          refreshTokenSubject.next(null);
+
+          return authService.refreshToken().pipe(
+            switchMap((response: any) => {
+              isRefreshing = false;
+              const newToken = response.token;
+              authService.setToken(newToken);
+              refreshTokenSubject.next(newToken);
+
+              // Refaz a requisição original com o novo token
+              const retryReq = req.clone({ setHeaders: { Authorization: `Bearer ${newToken}` } });
+              return next(retryReq);
+            }),
+            catchError((refreshError) => {
+              isRefreshing = false;
+              // Libera requests em fila com null para que não fiquem travados
+              refreshTokenSubject.next(null);
+              toastr.error('Sessão expirada. Faça login novamente.', 'Autenticação');
+              authService.logout();
+              router.navigate(['/login']);
+              return throwError(() => refreshError);
+            })
+          );
+        } else {
+          // Se já estiver renovando, aguarda o novo token na fila (Subject) e tenta novamente
+          return refreshTokenSubject.pipe(
+            filter(token => token !== null),
+            take(1),
+            switchMap(token => next(req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })))
+          );
+        }
+      }
+
       try {
-        if (error.status === 401) {
-          // Sessão expirada ou token inválido
-          toastr.error('Sessão expirada. Faça login novamente.', 'Autenticação');
-          authService.logout();
-          router.navigate(['/login']);
-        } else if (error.status === 403) {
+        if (error.status === 403) {
           // Token válido mas sem permissão para o recurso
           toastr.warning('Você não tem permissão para esta ação.', 'Acesso Negado');
         } else if (error.status === 0) {

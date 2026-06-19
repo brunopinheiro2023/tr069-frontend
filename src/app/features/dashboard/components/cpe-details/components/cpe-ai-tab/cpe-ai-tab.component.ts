@@ -66,14 +66,41 @@ export class CpeAiTabComponent implements OnChanges {
   /** Label amigável para o fator (i18n simplificado). */
   factorLabel(key: string): string {
     const labels: Record<string, string> = {
-      gponSignal:    'Sinal GPON',
-      connectivity:  'Conectividade',
-      memoryHealth:  'Memória Livre',
-      cpuHealth:     'Carga de CPU',
-      hostStability: 'Dispositivos Conectados',
-      wifiNoise:     'Ruído Wi-Fi',
+      gponSignal:      'Sinal GPON',
+      connectivity:    'Conectividade',
+      memoryHealth:    'Memória Livre',
+      cpuHealth:       'Carga de CPU',
+      hostStability:   'Dispositivos Conectados',
+      wifiNoise:       'Ruído Wi-Fi',
+      opticalTrend:    'Tendência Óptica',
+      memoryLeakTrend: 'Vazamento de Memória',
+      laserHealth:     'Saúde do Laser',
     };
     return labels[key] || key;
+  }
+
+  /** Delta de score desde a última verificação. */
+  factorDelta(key: string): number | null {
+    if (!this.prediction?.previousFactors) return null;
+    const current = this.prediction.factors?.[key as keyof CpePrediction['factors']] as CpePredictionFactor | undefined;
+    const previous = this.prediction.previousFactors[key as keyof CpePrediction['previousFactors']] as CpePredictionFactor | undefined;
+    if (!current || !previous) return null;
+    if (current.score === null || previous.score === null) return null;
+    const delta = current.score - previous.score;
+    return Math.abs(delta) >= 5 ? delta : null; // só mostra mudanças relevantes
+  }
+
+  /** Valor absoluto do delta para exibição. */
+  absDelta(key: string): number {
+    const delta = this.factorDelta(key);
+    return delta !== null ? Math.abs(delta) : 0;
+  }
+
+  /** Indica se o delta é positivo (piorou) ou negativo (melhorou). */
+  deltaDirection(key: string): 'up' | 'down' | null {
+    const delta = this.factorDelta(key);
+    if (delta === null) return null;
+    return delta > 0 ? 'up' : 'down';
   }
 
   /** Score de um fator, ou 0 se indisponível. */
@@ -83,7 +110,7 @@ export class CpeAiTabComponent implements OnChanges {
   }
 
   /** Status de um fator para estilo. */
-  factorStatus(key: string): 'good' | 'warning' | 'critical' {
+  factorStatus(key: string): 'good' | 'warning' | 'critical' | 'unavailable' {
     const factor = this.prediction?.factors?.[key as keyof CpePrediction['factors']] as CpePredictionFactor | undefined;
     return factor?.status ?? 'good';
   }

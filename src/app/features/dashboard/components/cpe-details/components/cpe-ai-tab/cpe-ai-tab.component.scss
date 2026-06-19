@@ -189,6 +189,28 @@
     border-radius: 3px;
     transition: width 0.4s ease;
   }
+  .factor-score-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .factor-delta {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    min-width: 24px;
+    text-align: center;
+
+    &.up {
+      background: rgba(227, 27, 83, 0.12);
+      color: var(--accent-danger);
+    }
+    &.down {
+      background: rgba(5, 205, 153, 0.12);
+      color: var(--accent-success);
+    }
+  }
   .factor-score {
     font-size: 12px;
     font-weight: 600;

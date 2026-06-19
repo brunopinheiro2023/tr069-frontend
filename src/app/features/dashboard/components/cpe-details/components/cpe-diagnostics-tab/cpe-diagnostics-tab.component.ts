@@ -46,6 +46,11 @@ export class CpeDiagnosticsTabComponent implements OnInit, OnChanges, OnDestroy 
     IPPing: false, TraceRoute: false, Download: false, Upload: false, DNSLookup: false, UDPEcho: false,
   };
 
+  /** ID do último diagnóstico de cada tipo (para cancelamento). */
+  lastDiagnosticId: Record<string, string> = {
+    IPPing: '', TraceRoute: '', Download: '', Upload: '', DNSLookup: '', UDPEcho: '',
+  };
+
   /** Parâmetros de entrada preenchidos pelo técnico para cada tipo de diagnóstico. */
   diagnosticParams: Record<string, Record<string, string>> = {
     IPPing:     { Host: '8.8.8.8', NumberOfRepetitions: '4', Timeout: '5000', DataBlockSize: '32' },
@@ -109,16 +114,11 @@ export class CpeDiagnosticsTabComponent implements OnInit, OnChanges, OnDestroy 
   /** Modo somente leitura quando acesso é negado. */
   readOnly = false;
 
-  private wsSub!: Subscription;
-  private wsNeighborSub!: Subscription;
-  private wsLockSub!: Subscription;
-  private wsUploadTestStartedSub!: Subscription;
-  private wsUploadTestCompletedSub!: Subscription;
-  private wsUploadTestErrorSub!: Subscription;
-  private wsDownloadTestStartedSub!: Subscription;
-  private wsDownloadTestCompletedSub!: Subscription;
-  private wsDownloadTestErrorSub!: Subscription;
-  private wsDiagnosticsCompleteSub!: Subscription;
+  /** Armazena os IDs dos timeouts para limpeza e prevenção de memory leak */
+  private diagnosticTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+
+  /** Agrupa todas as subscrições de WebSocket para destruição em massa */
+  private wsSubscriptions = new Subscription();
 
   constructor(
     private cpeService: CpeService,
@@ -148,6 +148,7 @@ export class CpeDiagnosticsTabComponent implements OnInit, OnChanges, OnDestroy 
       this.listenRealtimeDiagnostics();
       this.listenNeighborScanCompleted();
       this.listenCpeLock();
+      this.listenSpeedTestEvents(); // Correção: Garante que os testes de velocidade funcionem ao trocar de CPE
       this.wsService.subscribeToCpe(this.serialNumber);
     }
   }
@@ -156,6 +157,8 @@ export class CpeDiagnosticsTabComponent implements OnInit, OnChanges, OnDestroy 
     this.wsService.unsubscribeFromCpe(this.serialNumber);
     this.unsubscribeWs();
     clearTimeout(this.neighborScanFailsafe);
+    this.diagnosticTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+    this.diagnosticTimeouts.clear();
   }
 
   /**
@@ -169,39 +172,15 @@ export class CpeDiagnosticsTabComponent implements OnInit, OnChanges, OnDestroy 
    * Carrega diagnóstico via HTTP (primeira carga ou fallback).
    * Em seguida solicita atualização via WebSocket para receber dados em tempo real.
    */
-  loadDiagnostics(forceRefresh = false): void {
+  loadDiagnostics(): void {
     if (!this.serialNumber) return;
 
     this.isAnalyzing = true;
     this.clearFeedback();
 
-    this.cpeService.getWifiDiagnostics(this.serialNumber, forceRefresh).subscribe({
-      next: (data) => {
-        this.processReportData(data);
-        this.isAnalyzing = false;
-        // Solicita via WebSocket para futuras atualizações push
-        this.wsService.requestWifiDiagnostics(this.serialNumber);
-      },
-      error: (err) => {
-        // Em caso de erro, define um report vazio para permitir renderização dos cards
-        this.report = {
-          serialNumber: this.serialNumber,
-          bands: {
-            '2.4GHz': { radio: {}, channelSuggestion: null, associatedDeviceCount: 0 },
-            '5GHz': { radio: {}, channelSuggestion: null, associatedDeviceCount: 0 },
-          },
-          ipPingSupported: false,
-          ipTraceRouteSupported: false,
-          ipDownloadSupported: false,
-          ipUploadSupported: false,
-          ipUdpEchoSupported: false,
-          neighboringWiFiResultCount: 0,
-          channelSaturation: null,
-        };
-        this.isAnalyzing = false;
-        this.setFeedback('Falha ao analisar a rede Wi-Fi. Alguns diagnósticos podem estar indisponíveis.', 'error');
-      }
-    });
+    // O backend executa o diagnóstico imediatamente e também cria
+    // um intervalo para enviar atualizações via WebSocket a cada 15s.
+    this.wsService.requestWifiDiagnostics(this.serialNumber);
   }
 
   /**
@@ -352,14 +331,42 @@ export class CpeDiagnosticsTabComponent implements OnInit, OnChanges, OnDestroy 
 
   private listenRealtimeDiagnostics(): void {
     if (!this.serialNumber) return;
-    this.wsSub = this.wsService.onWifiDiagnosticsUpdate().subscribe({
-      next: (data: WifiDiagnosticsData) => {
-        // Só processa se for da CPE atual
-        if (data.serialNumber === this.serialNumber) {
-          this.processReportData(data);
+
+    this.wsSubscriptions.add(
+      this.wsService.onWifiDiagnosticsUpdate().subscribe({
+        next: (data: WifiDiagnosticsData) => {
+          // Só processa se for da CPE atual
+          if (data.serialNumber === this.serialNumber) {
+            this.processReportData(data);
+            this.isAnalyzing = false;
+          }
         }
-      }
-    });
+      })
+    );
+
+    this.wsSubscriptions.add(
+      this.wsService.on('wifi_error').subscribe({
+        next: (evt: any) => {
+          if (evt.serialNumber === this.serialNumber) {
+            // Em caso de erro, define um report vazio se ainda não houver
+            if (!this.report) {
+              this.report = {
+                serialNumber: this.serialNumber,
+                bands: {
+                  '2.4GHz': { radio: {}, channelSuggestion: null, associatedDeviceCount: 0 },
+                  '5GHz': { radio: {}, channelSuggestion: null, associatedDeviceCount: 0 },
+                },
+                ipPingSupported: false, ipTraceRouteSupported: false, ipDownloadSupported: false,
+                ipUploadSupported: false, ipUdpEchoSupported: false, neighboringWiFiResultCount: 0,
+                channelSaturation: null,
+              } as any;
+            }
+            this.isAnalyzing = false;
+            this.setFeedback(evt.error || 'Falha ao analisar a rede Wi-Fi.', 'error');
+          }
+        }
+      })
+    );
   }
 
   /**
@@ -369,27 +376,30 @@ export class CpeDiagnosticsTabComponent implements OnInit, OnChanges, OnDestroy 
    */
   private listenNeighborScanCompleted(): void {
     if (!this.serialNumber) return;
-    this.wsNeighborSub = this.wsService.on('neighbor_scan_completed').subscribe({
-      next: (evt: any) => {
-        if (evt.serialNumber !== this.serialNumber) return;
 
-        clearTimeout(this.neighborScanFailsafe);
-        this.neighborScanInProgress = false;
+    this.wsSubscriptions.add(
+      this.wsService.on('neighbor_scan_completed').subscribe({
+        next: (evt: any) => {
+          if (evt.serialNumber !== this.serialNumber) return;
 
-        if (evt.isRealData && evt.resultCount > 0) {
-          this.setFeedback(
-            `Varredura concluída: ${evt.resultCount} redes vizinhas detectadas. Gráficos atualizados.`,
-            'success'
-          );
-        } else if (evt.reason === 'timeout') {
-          this.setFeedback('Scan expirou após 2 retentativas. A CPE pode não ter concluído a varredura.', 'error');
-        } else {
-          this.setFeedback('Varredura concluída, mas sem redes vizinhas detectadas (dados de demonstração mantidos).', 'error');
+          clearTimeout(this.neighborScanFailsafe);
+          this.neighborScanInProgress = false;
+
+          if (evt.isRealData && evt.resultCount > 0) {
+            this.setFeedback(
+              `Varredura concluída: ${evt.resultCount} redes vizinhas detectadas. Gráficos atualizados.`,
+              'success'
+            );
+          } else if (evt.reason === 'timeout') {
+            this.setFeedback('Scan expirou após 2 retentativas. A CPE pode não ter concluído a varredura.', 'error');
+          } else {
+            this.setFeedback('Varredura concluída, mas sem redes vizinhas detectadas (dados de demonstração mantidos).', 'error');
+          }
+
+          this.loadDiagnostics(); // recarrega para pegar resultados reais do scan
         }
-
-        this.loadDiagnostics(true); // force=true: bypass cache para pegar resultados reais do scan
-      }
-    });
+      })
+    );
   }
 
   /**
@@ -398,10 +408,7 @@ export class CpeDiagnosticsTabComponent implements OnInit, OnChanges, OnDestroy 
    * cpe_access_granted → remove banner + libera edição.
    */
   private listenCpeLock(): void {
-    if (this.wsLockSub) this.wsLockSub.unsubscribe();
-    this.wsLockSub = new Subscription();
-
-    this.wsLockSub.add(
+    this.wsSubscriptions.add(
       this.wsService.onCpeAccessDenied().subscribe(evt => {
         if (evt.serialNumber !== this.serialNumber) return;
         this.cpeAccessDenied = true;
@@ -413,7 +420,7 @@ export class CpeDiagnosticsTabComponent implements OnInit, OnChanges, OnDestroy 
       })
     );
 
-    this.wsLockSub.add(
+    this.wsSubscriptions.add(
       this.wsService.onCpeAccessGranted().subscribe(evt => {
         if (evt.serialNumber !== this.serialNumber) return;
         this.cpeAccessDenied = false;
@@ -439,12 +446,23 @@ export class CpeDiagnosticsTabComponent implements OnInit, OnChanges, OnDestroy 
           res?.message || `${type} acionado. Aguardando CPE concluir o teste...`,
           'success'
         );
+        // Armazena o ID do diagnóstico para cancelamento
+        if (res?.diagnosticId) {
+          this.lastDiagnosticId[type] = res.diagnosticId;
+        }
         // Failsafe: libera o botão após 90s se não vier confirmação
-        setTimeout(() => { this.diagnosticRunning[type] = false; }, 90000);
+        const tId = setTimeout(() => {
+          this.diagnosticRunning[type] = false;
+        }, 90000);
+        this.diagnosticTimeouts.set(type, tId);
         // Recarrega histórico imediatamente para mostrar 'Requested'
         this.loadDiagnosticHistory();
       },
       error: (err) => {
+        if (this.diagnosticTimeouts.has(type)) {
+          clearTimeout(this.diagnosticTimeouts.get(type)!);
+          this.diagnosticTimeouts.delete(type);
+        }
         this.diagnosticRunning[type] = false;
         if (err.status === 409) {
           this.setFeedback('Já existe um diagnóstico em andamento para esta CPE.', 'error');
@@ -463,23 +481,35 @@ export class CpeDiagnosticsTabComponent implements OnInit, OnChanges, OnDestroy 
     this.diagnosticParams[type][field] = value;
   }
 
-  private unsubscribeWs(): void {
-    [this.wsSub, this.wsNeighborSub, this.wsLockSub,
-     this.wsUploadTestStartedSub, this.wsUploadTestCompletedSub, this.wsUploadTestErrorSub,
-     this.wsDownloadTestStartedSub, this.wsDownloadTestCompletedSub, this.wsDownloadTestErrorSub,
-     this.wsDiagnosticsCompleteSub].forEach(sub => {
-      if (sub) sub.unsubscribe();
+  /**
+   * Cancela um diagnóstico em andamento (ainda não enviado à CPE).
+   */
+  cancelDiagnostic(type: string, diagnosticId: string): void {
+    if (!this.serialNumber || !diagnosticId) return;
+
+    this.cpeService.cancelDiagnostic(this.serialNumber, diagnosticId).subscribe({
+      next: () => {
+        this.diagnosticRunning[type] = false;
+        if (this.diagnosticTimeouts.has(type)) {
+          clearTimeout(this.diagnosticTimeouts.get(type)!);
+          this.diagnosticTimeouts.delete(type);
+        }
+        this.setFeedback(`${type} cancelado.`, 'success');
+        this.loadDiagnosticHistory();
+      },
+      error: (err) => {
+        this.setFeedback(err?.error?.error || 'Erro ao cancelar diagnóstico.', 'error');
+      }
     });
-    this.wsSub = undefined as any;
-    this.wsNeighborSub = undefined as any;
-    this.wsLockSub = undefined as any;
-    this.wsUploadTestStartedSub = undefined as any;
-    this.wsUploadTestCompletedSub = undefined as any;
-    this.wsUploadTestErrorSub = undefined as any;
-    this.wsDownloadTestStartedSub = undefined as any;
-    this.wsDownloadTestCompletedSub = undefined as any;
-    this.wsDownloadTestErrorSub = undefined as any;
-    this.wsDiagnosticsCompleteSub = undefined as any;
+  }
+
+  private unsubscribeWs(): void {
+    // Destrói ativamente todos os ouvintes criados
+    this.wsSubscriptions.unsubscribe();
+
+    // Instancia uma nova Subscription vazia caso o componente
+    // permaneça vivo (ex: acionado via ngOnChanges)
+    this.wsSubscriptions = new Subscription();
   }
 
   // ---------------------------------------------------------------------------
@@ -591,64 +621,78 @@ export class CpeDiagnosticsTabComponent implements OnInit, OnChanges, OnDestroy 
    */
   private listenSpeedTestEvents(): void {
     // Upload iniciado
-    this.wsUploadTestStartedSub = this.wsService.onUploadTestStarted().subscribe((data) => {
-      if (data.deviceId === this.serialNumber) {
-        this.speedTestRunning = true;
-        this.setFeedback('Teste de Upload iniciado. Aguardando CPE concluir...', 'success');
-      }
-    });
+    this.wsSubscriptions.add(
+      this.wsService.onUploadTestStarted().subscribe((data) => {
+        if (data.deviceId === this.serialNumber) {
+          this.speedTestRunning = true;
+          this.setFeedback('Teste de Upload iniciado. Aguardando CPE concluir...', 'success');
+        }
+      })
+    );
 
     // Upload concluído
-    this.wsUploadTestCompletedSub = this.wsService.onUploadTestCompleted().subscribe((data) => {
-      if (data.deviceId === this.serialNumber) {
-        this.speedTestRunning = false;
-        this.loadDiagnosticHistory('Upload');
-        this.setFeedback('Teste de Upload concluído.', 'success');
-      }
-    });
+    this.wsSubscriptions.add(
+      this.wsService.onUploadTestCompleted().subscribe((data) => {
+        if (data.deviceId === this.serialNumber) {
+          this.speedTestRunning = false;
+          this.loadDiagnosticHistory('Upload');
+          this.setFeedback('Teste de Upload concluído.', 'success');
+        }
+      })
+    );
 
     // Upload com erro
-    this.wsUploadTestErrorSub = this.wsService.onUploadTestError().subscribe((data) => {
-      if (data.deviceId === this.serialNumber) {
-        this.speedTestRunning = false;
-        this.loadDiagnosticHistory('Upload');
-        this.setFeedback(`Erro no teste de Upload: ${this.translateSpeedTestError(data.error)}`, 'error');
-      }
-    });
+    this.wsSubscriptions.add(
+      this.wsService.onUploadTestError().subscribe((data) => {
+        if (data.deviceId === this.serialNumber) {
+          this.speedTestRunning = false;
+          this.loadDiagnosticHistory('Upload');
+          this.setFeedback(`Erro no teste de Upload: ${this.translateSpeedTestError(data.error)}`, 'error');
+        }
+      })
+    );
 
     // Download iniciado
-    this.wsDownloadTestStartedSub = this.wsService.onDownloadTestStarted().subscribe((data) => {
-      if (data.deviceId === this.serialNumber) {
-        this.speedTestRunning = true;
-        this.setFeedback('Teste de Download iniciado. Aguardando CPE concluir...', 'success');
-      }
-    });
+    this.wsSubscriptions.add(
+      this.wsService.onDownloadTestStarted().subscribe((data) => {
+        if (data.deviceId === this.serialNumber) {
+          this.speedTestRunning = true;
+          this.setFeedback('Teste de Download iniciado. Aguardando CPE concluir...', 'success');
+        }
+      })
+    );
 
     // Download concluído
-    this.wsDownloadTestCompletedSub = this.wsService.onDownloadTestCompleted().subscribe((data) => {
-      if (data.deviceId === this.serialNumber) {
-        this.speedTestRunning = false;
-        this.loadDiagnosticHistory('Download');
-        this.setFeedback('Teste de Download concluído.', 'success');
-      }
-    });
+    this.wsSubscriptions.add(
+      this.wsService.onDownloadTestCompleted().subscribe((data) => {
+        if (data.deviceId === this.serialNumber) {
+          this.speedTestRunning = false;
+          this.loadDiagnosticHistory('Download');
+          this.setFeedback('Teste de Download concluído.', 'success');
+        }
+      })
+    );
 
     // Download com erro
-    this.wsDownloadTestErrorSub = this.wsService.onDownloadTestError().subscribe((data) => {
-      if (data.deviceId === this.serialNumber) {
-        this.speedTestRunning = false;
-        this.loadDiagnosticHistory('Download');
-        this.setFeedback(`Erro no teste de Download: ${this.translateSpeedTestError(data.error)}`, 'error');
-      }
-    });
+    this.wsSubscriptions.add(
+      this.wsService.onDownloadTestError().subscribe((data) => {
+        if (data.deviceId === this.serialNumber) {
+          this.speedTestRunning = false;
+          this.loadDiagnosticHistory('Download');
+          this.setFeedback(`Erro no teste de Download: ${this.translateSpeedTestError(data.error)}`, 'error');
+        }
+      })
+    );
 
     // Diagnóstico completo (genérico)
-    this.wsDiagnosticsCompleteSub = this.wsService.onDiagnosticsComplete().subscribe((data) => {
-      if (data.serialNumber === this.serialNumber) {
-        this.speedTestRunning = false;
-        this.loadDiagnosticHistory();
-      }
-    });
+    this.wsSubscriptions.add(
+      this.wsService.onDiagnosticsComplete().subscribe((data) => {
+        if (data.serialNumber === this.serialNumber) {
+          this.speedTestRunning = false;
+          this.loadDiagnosticHistory();
+        }
+      })
+    );
   }
 
   /**

@@ -1,13 +1,31 @@
-import { Component, Input, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { CpeService } from '../../../../../../core/services/cpe.service';
+import { DiagnosticParserService } from '../../../../../../core/services/diagnostic-parser.service';
 import { WebSocketService } from '../../../../../../core/services/websocket.service';
+import {
+  CpeDevice,
+  DiagnosticResult,
+  DNSLookupResult,
+  PingResult,
+  SpeedTestResult,
+  TraceRouteResult,
+  UDPEchoResult
+} from '../../../../../../core/models';
 import { PingDiagnosticCardComponent } from './components/ping-diagnostic-card/ping-diagnostic-card.component';
 import { TraceRouteDiagnosticCardComponent } from './components/traceroute-diagnostic-card/traceroute-diagnostic-card.component';
 import { SpeedTestCardComponent } from './components/speed-test-card/speed-test-card.component';
 import { DNSLookupCardComponent } from './components/dns-lookup-card/dns-lookup-card.component';
 import { UDPEchoCardComponent } from './components/udp-echo-card/udp-echo-card.component';
+
+/** Interface para o resultado em tempo real do teste de velocidade via WebSocket. */
+interface LiveSpeedTestResult {
+  throughput?: number;
+  duration?: number;
+  bytes: number;
+  diagnosticsState: string;
+}
 
 /**
  * Componente pai da aba de Diagnósticos de Rede.
@@ -29,7 +47,7 @@ import { UDPEchoCardComponent } from './components/udp-echo-card/udp-echo-card.c
   styleUrls: ['./cpe-diagnostics-tab-new.component.scss']
 })
 export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
-  @Input() cpe: any = null;
+  @Input() cpe: CpeDevice | null = null;
   @Input() serialNumber: string = '';
   @Input() readOnly: boolean = false;
 
@@ -53,19 +71,19 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
   };
 
   // Resultados de cada diagnóstico
-  pingResult: any = null;
-  traceRouteResult: any = null;
-  speedTestResult: any = null;
+  pingResult: PingResult | null = null;
+  traceRouteResult: TraceRouteResult | null = null;
+  speedTestResult: LiveSpeedTestResult | null = null;
   speedTestError: string | null = null;
-  dnsLookupResult: any = null;
-  udpEchoResult: any = null;
+  dnsLookupResult: DNSLookupResult | null = null;
+  udpEchoResult: UDPEchoResult | null = null;
 
   // Histórico de cada diagnóstico
-  pingHistory: any[] = [];
-  traceRouteHistory: any[] = [];
-  speedTestHistory: any[] = [];
-  dnsLookupHistory: any[] = [];
-  udpEchoHistory: any[] = [];
+  pingHistory: PingResult[] = [];
+  traceRouteHistory: TraceRouteResult[] = [];
+  speedTestHistory: SpeedTestResult[] = [];
+  dnsLookupHistory: DNSLookupResult[] = [];
+  udpEchoHistory: UDPEchoResult[] = [];
 
   // Parâmetros de cada diagnóstico
   pingHost: string = '8.8.8.8';
@@ -81,7 +99,9 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
 
   constructor(
     private cpeService: CpeService,
-    private wsService: WebSocketService
+    private wsService: WebSocketService,
+    private diagnosticParser: DiagnosticParserService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
@@ -93,6 +113,14 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
     if (this.serialNumber) {
       this.wsService.subscribeToCpe(this.serialNumber);
     }
+  }
+
+  /**
+   * Formata um item do histórico de diagnóstico para exibição amigável.
+   * @param item O resultado do diagnóstico a ser formatado.
+   */
+  public formatHistoryItem(item: DiagnosticResult): string {
+    return this.diagnosticParser.formatDiagnosticResult(item);
   }
 
   /**
@@ -140,12 +168,17 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
   private loadCapabilities(): void {
     if (!this.cpe?.parameters) return;
 
+    const getCapability = (path: string): boolean => {
+      const param = this.cpe!.parameters!.find(p => p.name === `Device.Capabilities.IP.Diagnostics.${path}`);
+      return param?.value === 'true';
+    };
+
     this.diagnosticCapabilities = {
-      ipPingSupported: this.cpe.parameters['Device.IP.Diagnostics.IPv4PingSupported'] === 'true',
-      ipTraceRouteSupported: this.cpe.parameters['Device.IP.Diagnostics.IPv4TraceRouteSupported'] === 'true',
-      ipDownloadSupported: this.cpe.parameters['Device.IP.Diagnostics.IPv4DownloadDiagnosticsSupported'] === 'true',
-      ipUploadSupported: this.cpe.parameters['Device.IP.Diagnostics.IPv4UploadDiagnosticsSupported'] === 'true',
-      ipUdpEchoSupported: this.cpe.parameters['Device.IP.Diagnostics.IPv4UDPEchoDiagnosticsSupported'] === 'true'
+      ipPingSupported: getCapability('IPPing'),
+      ipTraceRouteSupported: getCapability('TraceRoute'),
+      ipDownloadSupported: getCapability('Download'),
+      ipUploadSupported: getCapability('Upload'),
+      ipUdpEchoSupported: getCapability('UDPEcho')
     };
   }
 
@@ -179,6 +212,7 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
         this.speedTestResult = this.buildSpeedTestResult(event.results);
         console.log('[WebSocket] speedTestResult construído:', this.speedTestResult);
         this.loadSpeedTestHistory('Download');
+        this.cdr.markForCheck();
       })
     );
 
@@ -190,6 +224,7 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
         this.speedTestError = null;
         this.speedTestResult = this.buildSpeedTestResult(event.results);
         this.loadSpeedTestHistory('Upload');
+        this.cdr.markForCheck();
       })
     );
 
@@ -200,6 +235,7 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
         this.diagnosticRunning.Download = false;
         this.speedTestResult = null;
         this.speedTestError = event.error;
+        this.cdr.markForCheck();
       })
     );
 
@@ -210,6 +246,7 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
         this.diagnosticRunning.Upload = false;
         this.speedTestResult = null;
         this.speedTestError = event.error;
+        this.cdr.markForCheck();
       })
     );
   }
@@ -218,7 +255,7 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
    * Converte o resultsMap vindo do WebSocket para o formato SpeedTestResult do card.
    * O backend calcula throughputMbps e durationSeconds via TR-143.
    */
-  private buildSpeedTestResult(results: any): any {
+  private buildSpeedTestResult(results: any): LiveSpeedTestResult | null {
     if (!results) return null;
     return {
       throughput: results.throughputMbps !== undefined ? parseFloat(results.throughputMbps) : undefined,

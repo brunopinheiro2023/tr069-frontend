@@ -1,420 +1,659 @@
-<!-- ── SEÇÃO DE TELEMETRIA (Sistema/CPU/Memória/Uptime) ────────────────────── -->
-<div class="telemetry-section" *ngIf="serialNumber">
-  <div class="telemetry-header">
-    <h3><span class="material-symbols-rounded">sensors</span> Telemetria do Sistema</h3>
-    <div class="telemetry-actions">
-      <span class="last-updated" [class.stale]="isStale">
-        {{ cacheLabel }}
+<!-- Cards de Telemetria em Tempo Real - Arquitetura Modular por Domínio -->
+<!-- BUG TPL-1 FIX: acessos nested ['system']?.X substituídos por pipe metric / stringValue()  -->
+<!-- telemetryData é flat: { cpuUsage: {value,unit}, opticalRx: {value,unit}, ... }             -->
+
+<!-- ZONA 1 — Controles: sempre visíveis no topo, sem necessidade de scroll -->
+<div class="flex flex-wrap items-center justify-between gap-3 mb-4 px-4 pt-4">
+
+  <!-- Ações de coleta -->
+  <div class="flex items-center gap-2">
+    <button (click)="requestTelemetry()"
+            [disabled]="isLoading || isViewOnly || isCpeBusy"
+            class="refresh-btn flex items-center gap-1.5">
+      <span class="material-symbols-rounded text-base" [class.animate-spin]="isLoading">sync</span>
+      Monitorar Agora
+    </button>
+    <button (click)="requestVitals()"
+            [disabled]="vitalsLoading || isViewOnly || isCpeBusy"
+            class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md
+                   hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-40
+                   flex items-center gap-1.5">
+      <span class="material-symbols-rounded text-base" [class.animate-spin]="vitalsLoading">bolt</span>
+      Vitals Rápidos
+    </button>
+  </div>
+
+  <!-- Status da coleta -->
+  <div class="flex items-center gap-3 text-sm">
+    @if (isPartialResult) {
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full
+                   bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+        <span class="material-icons text-xs">warning</span>
+        Coleta parcial
       </span>
-      <button class="monitor-btn" [disabled]="telemetryLoading" (click)="requestTelemetry()">
-        <span *ngIf="!telemetryLoading" class="material-symbols-rounded">play_circle</span>
-        <span *ngIf="telemetryLoading" class="material-symbols-rounded spin">sync</span>
-        {{ telemetryLoading ? 'Coletando...' : 'Monitorar Agora' }}
+    }
+    <span class="text-gray-500 dark:text-gray-400 text-xs">{{ cacheLabel }}</span>
+    <span *ngIf="lastUpdated" class="text-gray-400 text-xs">
+      Atualizado: {{ lastUpdated | date:'HH:mm:ss' }}
+    </span>
+  </div>
+</div>
+
+<!-- Barra de progresso chunked -->
+<div *ngIf="telemetryLoading && telemetryProgress > 0" class="telemetry-progress-bar mx-4 mb-3">
+  <div class="progress-fill" [style.width.%]="telemetryProgress"></div>
+  <span class="progress-text">Coletando... {{ telemetryProgress }}%</span>
+</div>
+<div *ngIf="telemetryLoading && isPartialCollection"
+     class="mx-4 mb-3 text-xs text-yellow-500">
+  Coleta parcial — alguns dados podem estar indisponíveis.
+</div>
+
+<!-- ZONA 2 — KPI Row: visão instantânea do estado crítico -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 mb-4"
+     *ngIf="healthScoreBreakdown || telemetryData">
+
+  <!-- KPI 1: Health Score -->
+  <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center"
+       *ngIf="healthScoreBreakdown">
+    <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Saúde</div>
+    <div class="text-2xl font-bold"
+         [ngClass]="healthScoreBreakdown.total >= 80 ? 'text-green-500' :
+                    healthScoreBreakdown.total >= 50 ? 'text-yellow-500' : 'text-red-500'">
+      {{ healthScoreBreakdown.total }}
+    </div>
+    <div class="text-xs text-gray-400">/ 100</div>
+  </div>
+
+  <!-- KPI 2: WAN Status -->
+  <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center"
+       *ngIf="telemetryData?.['wanStatus'] || cpe?.wanIp">
+    <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">WAN</div>
+    <div class="text-sm font-bold"
+         [ngClass]="stringValue('wanStatus')?.toLowerCase() === 'connected' ? 'text-green-500' : 'text-red-500'">
+      {{ stringValue('wanStatus') || (cpe?.wanIp ? 'Com IP' : '—') }}
+    </div>
+    <div class="text-xs text-gray-400 truncate" *ngIf="cpe?.wanIp">{{ cpe?.wanIp }}</div>
+  </div>
+
+  <!-- KPI 3: Sinal RX -->
+  <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center"
+       *ngIf="telemetryData?.['opticalRx']">
+    <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Sinal RX</div>
+    <div class="text-lg font-bold" [ngClass]="isRxCritical ? 'text-red-500' : 'text-green-500'">
+      {{ telemetryData | metric : 'opticalRx' : { unit: '' } }}
+    </div>
+    <div class="text-xs text-gray-400">dBm</div>
+  </div>
+
+  <!-- KPI 4: CPU -->
+  <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center"
+       *ngIf="telemetryData?.['cpuUsage']">
+    <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">CPU</div>
+    <div class="text-2xl font-bold"
+         [ngClass]="+(telemetryData | metric : 'cpuUsage' : {}) >= 85 ? 'text-red-500' :
+                    +(telemetryData | metric : 'cpuUsage' : {}) >= 70 ? 'text-yellow-500' : 'text-green-500'">
+      {{ telemetryData | metric : 'cpuUsage' : { unit: '' } }}
+    </div>
+    <div class="text-xs text-gray-400">%</div>
+  </div>
+
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+
+  <!-- Banner de Modo Incidente — topo da grid, full-width, só aparece se ativo -->
+  <div *ngIf="incidentStatus.active"
+       class="col-span-full bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg p-3 text-sm text-red-700 dark:text-red-300">
+    🔴 <strong>Modo Incidente ativo</strong> — coleta acelerada (a cada 2 min) por
+    {{ incidentStatus.expiresInSeconds }}s, devido a uma métrica crítica ainda não normalizada.
+  </div>
+
+  <!-- Card Health Score -->
+  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+       *ngIf="healthScoreBreakdown">
+    <div class="flex items-center justify-between mb-3 border-b pb-2">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Saúde da CPE</h3>
+      <span class="text-2xl font-bold"
+            [ngClass]="healthScoreBadge(healthScoreBreakdown.total)">
+        {{ healthScoreBreakdown.total }}<span class="text-sm font-normal text-gray-400">/100</span>
+      </span>
+    </div>
+    <div class="space-y-3">
+      <div *ngFor="let entry of healthScoreBreakdown.components | keyvalue" class="space-y-1">
+        <div class="flex justify-between text-xs text-gray-600 dark:text-gray-400">
+          <span>{{ healthScoreLabels[entry.key] || entry.key }}</span>
+          <span [ngClass]="healthScoreBadge(entry.value.score)">{{ entry.value.score }}%</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+          <div class="h-1.5 rounded-full transition-all duration-500"
+               [ngClass]="healthScoreColor(entry.value.score)"
+               [style.width.%]="entry.value.score">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card Alertas enriquecido -->
+  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+       *ngIf="activeAlerts.length > 0">
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2">
+      Alertas Ativos <span class="text-sm font-normal text-red-500">({{ activeAlerts.length }})</span>
+    </h3>
+    <ul class="space-y-2 max-h-64 overflow-y-auto pr-1">
+      <li *ngFor="let alert of activeAlerts"
+          class="flex items-start gap-2 text-sm rounded-md p-2"
+          [ngClass]="alert.severity === 'critical'
+            ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+            : 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'">
+        <span class="text-base flex-shrink-0 mt-0.5">{{ alertIcon(alert.severity) }}</span>
+        <div class="flex-1 min-w-0">
+          <div class="font-medium">{{ alert.message }}</div>
+          <div class="text-xs opacity-70 mt-0.5" *ngIf="alert.value !== undefined && alert.threshold !== undefined">
+            Atual: {{ alert.value }} | Limite: {{ alert.threshold }}
+          </div>
+          <div class="text-xs opacity-70 mt-0.5">{{ timeAgo(alert.triggeredAt) }}</div>
+        </div>
+        <!-- Ação contextual: coletar vitals para alertas de sistema -->
+        <button *ngIf="['cpuUsage','memoryFree','wanStatus'].includes(alert.metric)"
+                (click)="requestVitals()"
+                [disabled]="vitalsLoading || isViewOnly"
+                class="text-xs px-1.5 py-0.5 rounded bg-current/10 hover:bg-current/20
+                       transition-colors flex-shrink-0 disabled:opacity-40">
+          Coletar
+        </button>
+      </li>
+    </ul>
+  </div>
+
+  <!-- Card Última Intervenção expandido -->
+  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+       *ngIf="lastIntervention?.found">
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2">Última Intervenção</h3>
+
+    <p class="text-sm text-gray-400 italic" *ngIf="lastIntervention?.pending">
+      ⏳ Aguardando snapshot pós-ação...
+    </p>
+
+    <div *ngIf="lastIntervention?.before && lastIntervention?.after">
+      <!-- Cabeçalhos -->
+      <div class="grid grid-cols-3 gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">
+        <div>Métrica</div>
+        <div class="text-center">Antes</div>
+        <div class="text-center">Depois</div>
+      </div>
+      <!-- Linhas de comparação -->
+      <div class="space-y-1.5 text-sm">
+        <!-- RX -->
+        <div class="grid grid-cols-3 gap-2">
+          <div class="text-gray-600 dark:text-gray-300">Sinal RX</div>
+          <div class="text-center text-gray-500">{{ lastIntervention?.before?.telemetry?.optical?.rxPower }} dBm</div>
+          <div class="text-center text-gray-500">{{ lastIntervention?.after?.telemetry?.optical?.rxPower }} dBm</div>
+        </div>
+        <!-- CPU -->
+        <div class="grid grid-cols-3 gap-2">
+          <div class="text-gray-600 dark:text-gray-300">CPU</div>
+          <div class="text-center text-gray-500">{{ lastIntervention?.before?.telemetry?.system?.cpuUsage }}%</div>
+          <div class="text-center text-gray-500">{{ lastIntervention?.after?.telemetry?.system?.cpuUsage }}%</div>
+        </div>
+        <!-- WAN Status -->
+        <div class="grid grid-cols-3 gap-2">
+          <div class="text-gray-600 dark:text-gray-300">WAN</div>
+          <div class="text-center text-gray-500">{{ lastIntervention?.before?.telemetry?.wan?.['status'] }}</div>
+          <div class="text-center text-gray-500">{{ lastIntervention?.after?.telemetry?.wan?.['status'] }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card Sistema -->
+  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+       *ngIf="telemetryData?.['cpuUsage'] || telemetryData?.['upTime'] || telemetryData?.['hostCount']">
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2">Sistema</h3>
+    <ul class="space-y-3 text-sm text-gray-700 dark:text-gray-300">
+
+      <!-- CPU com barra -->
+      <li *ngIf="telemetryData?.['cpuUsage']">
+        <div class="flex justify-between mb-1">
+          <span class="font-medium">CPU</span>
+          <span [ngClass]="usageBarColor(+(telemetryData | metric : 'cpuUsage' : {}))">
+            {{ telemetryData | metric : 'cpuUsage' : { unit: '%' } }}
+          </span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+          <div class="h-1.5 rounded-full transition-all duration-500"
+               [ngClass]="usageBarColor(+(telemetryData | metric : 'cpuUsage' : {}))"
+               [style.width.%]="+(telemetryData | metric : 'cpuUsage' : {})">
+          </div>
+        </div>
+      </li>
+
+      <!-- RAM com barra e total -->
+      <li *ngIf="ramUsagePercent !== null">
+        <div class="flex justify-between mb-1">
+          <span class="font-medium">RAM</span>
+          <span [ngClass]="usageBarColor(ramUsagePercent)">
+            {{ ramUsagePercent }}%
+            <span class="text-xs text-gray-400 ml-1" *ngIf="ramUsedMb && ramTotalMb">
+              ({{ ramUsedMb }} / {{ ramTotalMb }} MB)
+            </span>
+          </span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+          <div class="h-1.5 rounded-full transition-all duration-500"
+               [ngClass]="usageBarColor(ramUsagePercent)"
+               [style.width.%]="ramUsagePercent">
+          </div>
+        </div>
+      </li>
+
+      <!-- Uptime humanizado -->
+      <li *ngIf="telemetryData?.['upTime']">
+        <span class="font-medium">Uptime:</span>
+        {{ formatUptimeHuman(+(telemetryData | metric : 'upTime' : {})) }}
+      </li>
+
+      <!-- Temperatura -->
+      <li *ngIf="telemetryData?.['temperature']">
+        <span class="font-medium">Temperatura:</span>
+        {{ telemetryData | metric : 'temperature' : { unit: '°C' } }}
+      </li>
+
+      <!-- Dispositivos na rede (hostCount migrado de card LAN) -->
+      <li *ngIf="telemetryData?.['hostCount']">
+        <span class="font-medium">Dispositivos na Rede:</span>
+        {{ telemetryData | metric : 'hostCount' : { fallback: '0' } }} hosts
+      </li>
+
+    </ul>
+  </div>
+
+  <!-- Card WAN Status — métricas em tempo real -->
+  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+       *ngIf="telemetryData?.['wanStatus'] || telemetryData?.['wanDownstreamRate']">
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2">WAN — Status</h3>
+    <ul class="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+      <li>
+        <span class="font-medium">Conexão:</span>
+        <span class="ml-1 font-bold"
+              [ngClass]="stringValue('wanStatus')?.toLowerCase() === 'connected' ? 'text-green-500' : 'text-red-500'">
+          {{ stringValue('wanStatus') || 'Desconhecido' }}
+        </span>
+      </li>
+      <li *ngIf="telemetryData?.['wanDownstreamRate'] != null">
+        <span class="font-medium">Download:</span> {{ telemetryData | metric : 'wanDownstreamRate' : { unit: ' Mbps' } }}
+      </li>
+      <li *ngIf="telemetryData?.['wanUpstreamRate'] != null">
+        <span class="font-medium">Upload:</span> {{ telemetryData | metric : 'wanUpstreamRate' : { unit: ' Mbps' } }}
+      </li>
+      <li *ngIf="telemetryData?.['wanNativeLatency'] != null">
+        <span class="font-medium">Latência:</span> {{ telemetryData | metric : 'wanNativeLatency' : { unit: ' ms' } }}
+      </li>
+      <li *ngIf="telemetryData?.['wanNativeJitter'] != null">
+        <span class="font-medium">Jitter:</span> {{ telemetryData | metric : 'wanNativeJitter' : { unit: ' ms' } }}
+      </li>
+      <li *ngIf="telemetryData?.['wanBytesReceived'] != null">
+        <span class="font-medium">Bytes RX:</span> {{ telemetryData | metric : 'wanBytesReceived' : { transform: 'formatBytes' } }}
+      </li>
+      <li *ngIf="telemetryData?.['wanBytesSent'] != null">
+        <span class="font-medium">Bytes TX:</span> {{ telemetryData | metric : 'wanBytesSent' : { transform: 'formatBytes' } }}
+      </li>
+    </ul>
+  </div>
+
+  <!-- Card WAN Config — configuração via Bootstrap probe + edição SPV -->
+  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+       *ngIf="cpe?.wanIp || cpe?.wanGateway || cpe?.wanConfigUpdatedAt || cpe?.pppoeUsername">
+    <div class="flex items-center justify-between border-b pb-2 mb-4">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white">WAN — Configuração</h3>
+      <div class="flex items-center gap-2">
+        <span *ngIf="cpe?.wanConfigUpdatedAt" class="text-xs text-gray-400">
+          Probe: {{ cpe!.wanConfigUpdatedAt | date:'dd/MM HH:mm' }}
+        </span>
+        <button *ngIf="!isEditingWanConfig" (click)="loadWanConfig()"
+                class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
+          Editar
+        </button>
+        <button *ngIf="isEditingWanConfig" (click)="isEditingWanConfig = false"
+                class="text-xs px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded transition-colors">
+          Cancelar
+        </button>
+      </div>
+    </div>
+
+    <!-- Modo leitura em 2 colunas -->
+    <ng-container *ngIf="!isEditingWanConfig">
+      <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-gray-700 dark:text-gray-300">
+        <div *ngIf="cpe?.pppoeUsername">
+          <span class="font-medium block text-xs text-gray-500">PPPoE Usuário</span>
+          {{ cpe!.pppoeUsername }}
+        </div>
+        <div *ngIf="cpe?.wanIp">
+          <span class="font-medium block text-xs text-gray-500">IPv4 WAN</span>
+          {{ cpe!.wanIp }}
+        </div>
+        <div *ngIf="cpe?.wanSubnetMask">
+          <span class="font-medium block text-xs text-gray-500">Máscara</span>
+          {{ cpe!.wanSubnetMask }}
+        </div>
+        <div *ngIf="cpe?.wanGateway">
+          <span class="font-medium block text-xs text-gray-500">Gateway</span>
+          {{ cpe!.wanGateway }}
+        </div>
+        <div *ngIf="cpe?.wanDnsIsp">
+          <span class="font-medium block text-xs text-gray-500">DNS ISP</span>
+          {{ cpe!.wanDnsIsp }}
+        </div>
+        <div *ngIf="cpe?.wanDnsManual?.length">
+          <span class="font-medium block text-xs text-gray-500">DNS Manual</span>
+          {{ cpe!.wanDnsManual!.join(', ') }}
+        </div>
+        <div *ngIf="cpe?.wanMtu">
+          <span class="font-medium block text-xs text-gray-500">MTU</span>
+          {{ cpe!.wanMtu }} bytes
+        </div>
+        <div *ngIf="cpe?.wanVlanId">
+          <span class="font-medium block text-xs text-gray-500">VLAN ID</span>
+          {{ cpe!.wanVlanId }}
+        </div>
+      </div>
+    </ng-container>
+
+    <!-- Modo edição (formulário inalterado do EP 26.15) -->
+    <form *ngIf="isEditingWanConfig" (ngSubmit)="saveWanConfig()" class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">PPPoE Usuário</label>
+          <input type="text" [(ngModel)]="wanConfigFields.pppoeUsername" name="ppu"
+                 class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">MTU (576–1500)</label>
+          <input type="number" [(ngModel)]="wanConfigFields.mtu" name="mtu" min="576" max="1500"
+                 class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">DNS Primário</label>
+          <input type="text" [(ngModel)]="wanConfigFields.dnsServer1" name="dns1"
+                 class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">DNS Secundário</label>
+          <input type="text" [(ngModel)]="wanConfigFields.dnsServer2" name="dns2"
+                 class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">VLAN ID (1–4094)</label>
+          <input type="number" [(ngModel)]="wanConfigFields.vlanId" name="vlan" min="1" max="4094"
+                 class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+        </div>
+      </div>
+      <button type="submit" [disabled]="wanConfigSaving"
+              class="w-full px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded transition-colors">
+        {{ wanConfigSaving ? 'Salvando...' : 'Salvar Configuração' }}
+      </button>
+    </form>
+  </div>
+
+  <!-- Card Sinal Óptico -->
+  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+       *ngIf="telemetryData?.['opticalRx'] || telemetryData?.['gponStatus']">
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2">Sinal Óptico</h3>
+    <ul class="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+
+      <li>
+        <span class="font-medium">Link xPON:</span>
+        <span [ngClass]="stringValue('gponStatus')?.toLowerCase() === 'up' ? 'text-green-500' : 'text-red-500'">
+          {{ stringValue('gponStatus') || 'N/A' }}
+        </span>
+      </li>
+
+      <!-- RX com zona de sinalização -->
+      <li>
+        <div class="flex justify-between items-center">
+          <span class="font-medium">Sinal RX:</span>
+          <span [ngClass]="opticalZoneClass(rxZone)">
+            {{ telemetryData | metric : 'opticalRx' : { unit: ' dBm' } }}
+            <span class="text-xs font-normal ml-1">
+              {{ rxZone === 'ok' ? '✅' : rxZone === 'warning' ? '⚠️' : rxZone === 'critical' ? '🔴' : '' }}
+            </span>
+          </span>
+        </div>
+        <!-- Referência de zonas -->
+        <div class="flex text-xs text-gray-400 gap-3 mt-0.5">
+          <span class="text-green-500">&gt; -20 dBm OK</span>
+          <span class="text-yellow-500">-20 a -25 ⚠️</span>
+          <span class="text-red-500">&lt; -25 🔴</span>
+        </div>
+      </li>
+
+      <!-- TX com zona de sinalização -->
+      <li>
+        <div class="flex justify-between items-center">
+          <span class="font-medium">Sinal TX:</span>
+          <span [ngClass]="opticalZoneClass(txZone)">
+            {{ telemetryData | metric : 'opticalTx' : { unit: ' dBm' } }}
+            <span class="text-xs font-normal ml-1">
+              {{ txZone === 'ok' ? '✅' : txZone === 'warning' ? '⚠️' : txZone === 'critical' ? '🔴' : '' }}
+            </span>
+          </span>
+        </div>
+      </li>
+
+      <li *ngIf="telemetryData?.['opticalTemperature'] != null">
+        <span class="font-medium">Temperatura Óptica:</span>
+        {{ telemetryData | metric : 'opticalTemperature' : { unit: '°C' } }}
+      </li>
+      <li *ngIf="telemetryData?.['opticalVoltage'] != null">
+        <span class="font-medium">Tensão Laser:</span>
+        {{ telemetryData | metric : 'opticalVoltage' : { unit: 'V' } }}
+      </li>
+      <li *ngIf="telemetryData?.['biasCurrent'] != null">
+        <span class="font-medium">Corrente Bias:</span>
+        {{ telemetryData | metric : 'biasCurrent' : { unit: 'mA' } }}
+      </li>
+      <li *ngIf="telemetryData?.['opticalDistance']">
+        <span class="font-medium">Distância:</span>
+        {{ telemetryData | metric : 'opticalDistance' : { unit: 'm' } }}
+      </li>
+    </ul>
+  </div>
+
+  <!-- Card Wi-Fi com tabs -->
+  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+       *ngIf="telemetryData?.['wifi2gChannel'] || telemetryData?.['wifi5gChannel']">
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3 border-b pb-2">Rede Wi-Fi</h3>
+
+    <!-- Tabs 2.4G / 5G -->
+    <div class="flex border-b border-gray-200 dark:border-gray-700 mb-3">
+      <button *ngIf="telemetryData?.['wifi2gChannel']"
+              (click)="wifiTabSelected = '2g'"
+              class="px-4 py-1.5 text-sm font-medium transition-colors"
+              [ngClass]="wifiTabSelected === '2g'
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'">
+        2.4 GHz
+      </button>
+      <button *ngIf="telemetryData?.['wifi5gChannel']"
+              (click)="wifiTabSelected = '5g'"
+              class="px-4 py-1.5 text-sm font-medium transition-colors"
+              [ngClass]="wifiTabSelected === '5g'
+                ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400'
+                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'">
+        5 GHz
+      </button>
+    </div>
+
+    <!-- Painel 2.4 GHz -->
+    <div *ngIf="wifiTabSelected === '2g' && telemetryData?.['wifi2gChannel']"
+         class="space-y-1 text-sm text-gray-700 dark:text-gray-300">
+      <div class="grid grid-cols-2 gap-x-4 gap-y-1">
+        <div><span class="font-medium">Canal:</span> {{ telemetryData | metric : 'wifi2gChannel' : { fallback: 'Auto' } }}</div>
+        <div><span class="font-medium">Clientes:</span> {{ telemetryData | metric : 'wifi2gClients' : { fallback: '0' } }}</div>
+        <div *ngIf="telemetryData?.['wifi2gNoise']"><span class="font-medium">Ruído:</span> {{ telemetryData | metric : 'wifi2gNoise' : { unit: ' dBm' } }}</div>
+        <div *ngIf="telemetryData?.['wifi2gSnr']"><span class="font-medium">SNR:</span> {{ telemetryData | metric : 'wifi2gSnr' : { unit: ' dB' } }}</div>
+        <div *ngIf="telemetryData?.['wifi2gSignalStrength']"><span class="font-medium">Sinal:</span> {{ telemetryData | metric : 'wifi2gSignalStrength' : { unit: ' dBm' } }}</div>
+        <div *ngIf="telemetryData?.['wifi2gUtilization']"><span class="font-medium">Uso do Canal:</span> {{ telemetryData | metric : 'wifi2gUtilization' : { unit: '%' } }}</div>
+      </div>
+      <!-- Campos secundários colapsáveis -->
+      <details class="mt-2 text-xs text-gray-500">
+        <summary class="cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">Ver métricas avançadas</summary>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
+          <div *ngIf="telemetryData?.['wifi2gAverageRxRate']">Taxa RX: {{ telemetryData | metric : 'wifi2gAverageRxRate' : { unit: ' Mbps' } }}</div>
+          <div *ngIf="telemetryData?.['wifi2gAverageTxRate']">Taxa TX: {{ telemetryData | metric : 'wifi2gAverageTxRate' : { unit: ' Mbps' } }}</div>
+          <div *ngIf="telemetryData?.['wifi2gCongestionRate']">Congestionamento: {{ telemetryData | metric : 'wifi2gCongestionRate' : { unit: '%' } }}</div>
+          <div *ngIf="telemetryData?.['wifi2gErrorsReceived']">Erros RX: {{ telemetryData | metric : 'wifi2gErrorsReceived' : { fallback: '0' } }}</div>
+          <div *ngIf="telemetryData?.['wifi2gErrorsSent']">Erros TX: {{ telemetryData | metric : 'wifi2gErrorsSent' : { fallback: '0' } }}</div>
+        </div>
+      </details>
+    </div>
+
+    <!-- Painel 5 GHz -->
+    <div *ngIf="wifiTabSelected === '5g' && telemetryData?.['wifi5gChannel']"
+         class="space-y-1 text-sm text-gray-700 dark:text-gray-300">
+      <div class="grid grid-cols-2 gap-x-4 gap-y-1">
+        <div><span class="font-medium">Canal:</span> {{ telemetryData | metric : 'wifi5gChannel' : { fallback: 'Auto' } }}</div>
+        <div><span class="font-medium">Clientes:</span> {{ telemetryData | metric : 'wifi5gClients' : { fallback: '0' } }}</div>
+        <div *ngIf="telemetryData?.['wifi5gNoise']"><span class="font-medium">Ruído:</span> {{ telemetryData | metric : 'wifi5gNoise' : { unit: ' dBm' } }}</div>
+        <div *ngIf="telemetryData?.['wifi5gSnr']"><span class="font-medium">SNR:</span> {{ telemetryData | metric : 'wifi5gSnr' : { unit: ' dB' } }}</div>
+        <div *ngIf="telemetryData?.['wifi5gSignalStrength']"><span class="font-medium">Sinal:</span> {{ telemetryData | metric : 'wifi5gSignalStrength' : { unit: ' dBm' } }}</div>
+        <div *ngIf="telemetryData?.['wifi5gUtilization']"><span class="font-medium">Uso do Canal:</span> {{ telemetryData | metric : 'wifi5gUtilization' : { unit: '%' } }}</div>
+      </div>
+      <details class="mt-2 text-xs text-gray-500">
+        <summary class="cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">Ver métricas avançadas</summary>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
+          <div *ngIf="telemetryData?.['wifi5gAverageRxRate']">Taxa RX: {{ telemetryData | metric : 'wifi5gAverageRxRate' : { unit: ' Mbps' } }}</div>
+          <div *ngIf="telemetryData?.['wifi5gAverageTxRate']">Taxa TX: {{ telemetryData | metric : 'wifi5gAverageTxRate' : { unit: ' Mbps' } }}</div>
+          <div *ngIf="telemetryData?.['wifi5gCongestionRate']">Congestionamento: {{ telemetryData | metric : 'wifi5gCongestionRate' : { unit: '%' } }}</div>
+          <div *ngIf="telemetryData?.['wifi5gErrorsReceived']">Erros RX: {{ telemetryData | metric : 'wifi5gErrorsReceived' : { fallback: '0' } }}</div>
+          <div *ngIf="telemetryData?.['wifi5gErrorsSent']">Erros TX: {{ telemetryData | metric : 'wifi5gErrorsSent' : { fallback: '0' } }}</div>
+        </div>
+      </details>
+    </div>
+  </div>
+
+</div>
+
+<!-- Seção de Gráficos Históricos -->
+<div class="historical-charts mt-8">
+  <div class="flex justify-between items-center mb-4">
+    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Histórico de Desempenho</h3>
+
+    <!-- Seletor de Período -->
+    <div class="period-selector flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+      <button
+        (click)="changeHistoryPeriod(1)"
+        [class.active]="selectedPeriodHours === 1"
+        class="px-3 py-1 text-sm font-medium rounded-md transition-colors"
+        [disabled]="historyLoading">
+        1h
+      </button>
+      <button
+        (click)="changeHistoryPeriod(6)"
+        [class.active]="selectedPeriodHours === 6"
+        class="px-3 py-1 text-sm font-medium rounded-md transition-colors"
+        [disabled]="historyLoading">
+        6h
+      </button>
+      <button
+        (click)="changeHistoryPeriod(24)"
+        [class.active]="selectedPeriodHours === 24"
+        class="px-3 py-1 text-sm font-medium rounded-md transition-colors"
+        [disabled]="historyLoading">
+        24h
+      </button>
+      <button
+        (click)="changeHistoryPeriod(168)"
+        [class.active]="selectedPeriodHours === 168"
+        class="px-3 py-1 text-sm font-medium rounded-md transition-colors"
+        [disabled]="historyLoading">
+        7d
+      </button>
+      <button (click)="exportHistoryCsv()"
+              [disabled]="rawHistory.length === 0 || historyLoading"
+              class="ml-2 px-3 py-1 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600
+                     text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors
+                     disabled:opacity-40 disabled:cursor-not-allowed">
+        ⬇ CSV
       </button>
     </div>
   </div>
 
-  <!-- Cards de métricas -->
-  <div class="telemetry-cards grid-layout">
-    <div class="info-card telemetry-card">
-      <div class="card-icon cpu"><span class="material-symbols-rounded">speed</span></div>
-      <div class="card-body">
-        <span class="card-label">CPU</span>
-        <span class="card-value" [class.warn]="cpuValue !== null && cpuValue > 80">
-          {{ cpuValue !== null ? (cpuValue | number:'1.1-1') + '%' : '—' }}
-        </span>
+  <!-- Gráficos -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="chart-container">
+      <h4 class="chart-title">CPU & Memória</h4>
+      <div class="chart-canvas-wrapper">
+        <canvas baseChart [data]="chartData" [options]="chartOptions" [type]="'line'"></canvas>
       </div>
     </div>
-
-    <div class="info-card telemetry-card">
-      <div class="card-icon memory"><span class="material-symbols-rounded">memory_alt</span></div>
-      <div class="card-body">
-        <span class="card-label">Memória</span>
-        <span class="card-value" [class.warn]="memUsedPercent !== null && memUsedPercent > 85">
-          {{ memUsedPercent !== null ? memUsedPercent + '% usado' : '—' }}
-        </span>
-        <span class="card-sub" *ngIf="memFreeValue !== null && memTotalValue !== null">
-          {{ (memFreeValue / 1024 | number:'1.0-0') }} MB livre / {{ (memTotalValue / 1024 | number:'1.0-0') }} MB
-        </span>
+    <div class="chart-container">
+      <h4 class="chart-title">Sinal Óptico</h4>
+      <div class="chart-canvas-wrapper">
+        <canvas baseChart [data]="opticalChartData" [options]="opticalChartOptions" [type]="'line'"></canvas>
       </div>
-    </div>
-
-    <div class="info-card telemetry-card">
-      <div class="card-icon uptime"><span class="material-symbols-rounded">timer</span></div>
-      <div class="card-body">
-        <span class="card-label">Uptime</span>
-        <span class="card-value">
-          {{ uptimeHours !== null ? uptimeHours + 'h' : '—' }}
-        </span>
-      </div>
-    </div>
-
-    <!-- Cards de Sinal Óptico (telemetria em tempo real) -->
-    <div class="info-card telemetry-card">
-      <div class="card-icon optical"><span class="material-symbols-rounded">settings_input_component</span></div>
-      <div class="card-body">
-        <span class="card-label">RX Óptico</span>
-        <span class="card-value" [class.text-success]="opticalRxValue !== null && opticalRxValue >= -27" [class.text-danger]="opticalRxValue !== null && opticalRxValue < -27">
-          {{ opticalRxValue !== null ? (opticalRxValue | number:'1.1-1') + ' dBm' : '—' }}
-        </span>
-      </div>
-    </div>
-
-    <div class="info-card telemetry-card">
-      <div class="card-icon optical"><span class="material-symbols-rounded">wifi_tethering</span></div>
-      <div class="card-body">
-        <span class="card-label">TX Óptico</span>
-        <span class="card-value">
-          {{ opticalTxValue !== null ? (opticalTxValue | number:'1.1-1') + ' dBm' : '—' }}
-        </span>
-      </div>
-    </div>
-
-    <div class="info-card telemetry-card">
-      <div class="card-icon temp"><span class="material-symbols-rounded">thermometer</span></div>
-      <div class="card-body">
-        <span class="card-label">Temperatura</span>
-        <span class="card-value">
-          {{ temperatureValue !== null ? (temperatureValue | number:'1.1-1') + ' °C' : '—' }}
-        </span>
-      </div>
-    </div>
-
-    <!-- GPON Status -->
-    <div class="info-card telemetry-card">
-      <div class="card-icon" [class.gpon-ok]="isGponConnected" [class.gpon-err]="gponStatus !== null && !isGponConnected">
-        <span class="material-symbols-rounded">fiber_manual_record</span>
-      </div>
-      <div class="card-body">
-        <span class="card-label">GPON</span>
-        <span class="card-value" [class.text-success]="isGponConnected" [class.text-danger]="gponStatus !== null && !isGponConnected">
-          {{ gponStatus !== null ? gponStatus : '—' }}
-        </span>
-      </div>
-    </div>
-
-    <!-- Download / Upload -->
-    <div class="info-card telemetry-card">
-      <div class="card-icon network"><span class="material-symbols-rounded">download</span></div>
-      <div class="card-body">
-        <span class="card-label">Download</span>
-        <span class="card-value">{{ wanDownstreamRate !== null ? wanDownstreamRate + ' Kbps' : '—' }}</span>
-      </div>
-    </div>
-
-    <div class="info-card telemetry-card">
-      <div class="card-icon network-up"><span class="material-symbols-rounded">upload</span></div>
-      <div class="card-body">
-        <span class="card-label">Upload</span>
-        <span class="card-value">{{ wanUpstreamRate !== null ? wanUpstreamRate + ' Kbps' : '—' }}</span>
-      </div>
-    </div>
-
-    <!-- Corrente de Bias do Laser -->
-    <div class="info-card telemetry-card">
-      <div class="card-icon optical"><span class="material-symbols-rounded">bolt</span></div>
-      <div class="card-body">
-        <span class="card-label">Bias Laser</span>
-        <span class="card-value">{{ biasCurrentValue !== null ? (biasCurrentValue | number:'1.0-0') + ' µA' : '—' }}</span>
-      </div>
-    </div>
-
-    <!-- Estatísticas WAN: Bytes Recebidos -->
-    <div class="info-card telemetry-card">
-      <div class="card-icon network"><span class="material-symbols-rounded">download_done</span></div>
-      <div class="card-body">
-        <span class="card-label">Bytes Recebidos (total)</span>
-        <span class="card-value">{{ formatBytes(wanBytesReceived) }}</span>
-      </div>
-    </div>
-
-    <!-- Bytes Enviados -->
-    <div class="info-card telemetry-card">
-      <div class="card-icon network-up"><span class="material-symbols-rounded">upload_file</span></div>
-      <div class="card-body">
-        <span class="card-label">Bytes Enviados (total)</span>
-        <span class="card-value">{{ formatBytes(wanBytesSent) }}</span>
-      </div>
-    </div>
-
-    <!-- Pacotes Recebidos -->
-    <div class="info-card telemetry-card">
-      <div class="card-icon network"><span class="material-symbols-rounded">package_2</span></div>
-      <div class="card-body">
-        <span class="card-label">Pacotes Recebidos</span>
-        <span class="card-value">{{ wanPacketsReceived !== null ? (wanPacketsReceived | number:'1.0-0') : '—' }}</span>
-      </div>
-    </div>
-
-    <!-- Pacotes Enviados -->
-    <div class="info-card telemetry-card">
-      <div class="card-icon network-up"><span class="material-symbols-rounded">outbox</span></div>
-      <div class="card-body">
-        <span class="card-label">Pacotes Enviados</span>
-        <span class="card-value">{{ wanPacketsSent !== null ? (wanPacketsSent | number:'1.0-0') : '—' }}</span>
-      </div>
-    </div>
-
-    <!-- Erros Recebidos -->
-    <div class="info-card telemetry-card">
-      <div class="card-icon" [class.gpon-err]="wanErrorsReceived !== null && wanErrorsReceived > 0"><span class="material-symbols-rounded">error</span></div>
-      <div class="card-body">
-        <span class="card-label">Erros Recebidos</span>
-        <span class="card-value" [class.text-danger]="wanErrorsReceived !== null && wanErrorsReceived > 0">
-          {{ wanErrorsReceived !== null ? wanErrorsReceived : '—' }}
-        </span>
-      </div>
-    </div>
-
-    <!-- Erros Enviados -->
-    <div class="info-card telemetry-card">
-      <div class="card-icon" [class.gpon-err]="wanErrorsSent !== null && wanErrorsSent > 0"><span class="material-symbols-rounded">report_problem</span></div>
-      <div class="card-body">
-        <span class="card-label">Erros Enviados</span>
-        <span class="card-value" [class.text-danger]="wanErrorsSent !== null && wanErrorsSent > 0">
-          {{ wanErrorsSent !== null ? wanErrorsSent : '—' }}
-        </span>
-      </div>
-    </div>
-
-    <!-- Hosts na LAN -->
-    <div class="info-card telemetry-card">
-      <div class="card-icon"><span class="material-symbols-rounded">devices</span></div>
-      <div class="card-body">
-        <span class="card-label">Hosts na LAN</span>
-        <span class="card-value">{{ hostCount !== null ? hostCount : '—' }}</span>
-      </div>
-    </div>
-
-    <!-- Wi-Fi 2.4GHz Clientes -->
-    <div class="info-card telemetry-card">
-      <div class="card-icon"><span class="material-symbols-rounded">wifi</span></div>
-      <div class="card-body">
-        <span class="card-label">Wi-Fi 2.4GHz — Clientes</span>
-        <span class="card-value">{{ wifi2gClients !== null ? wifi2gClients : '—' }}</span>
-        <span class="card-sub" *ngIf="wifi2gChannel !== null && wifi2gTxPower !== null">
-          Canal {{ wifi2gChannel }} · TX {{ wifi2gTxPower }}%
-        </span>
-      </div>
-    </div>
-
-    <!-- Wi-Fi 5GHz Clientes -->
-    <div class="info-card telemetry-card">
-      <div class="card-icon"><span class="material-symbols-rounded">wifi_tethering</span></div>
-      <div class="card-body">
-        <span class="card-label">Wi-Fi 5GHz — Clientes</span>
-        <span class="card-value">{{ wifi5gClients !== null ? wifi5gClients : '—' }}</span>
-        <span class="card-sub" *ngIf="wifi5gChannel !== null && wifi5gTxPower !== null">
-          Canal {{ wifi5gChannel }} · TX {{ wifi5gTxPower }}%
-        </span>
-      </div>
-    </div>
-
-    <!-- Wi-Fi Total (todas as redes) -->
-    <div class="info-card telemetry-card">
-      <div class="card-icon"><span class="material-symbols-rounded">devices</span></div>
-      <div class="card-body">
-        <span class="card-label">Wi-Fi Total — Clientes</span>
-        <span class="card-value">{{ wifiTotalClients !== null ? wifiTotalClients : '—' }}</span>
-        <span class="card-sub">Todas as redes (Principal + Guest + IoT)</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── SEÇÃO DE ANÁLISE AVANÇADA ──────────────────────────────────────── -->
-  <div class="analysis-section" *ngIf="analysisData">
-    <div class="telemetry-header">
-      <h3><span class="material-symbols-rounded">analytics</span> Análise Avançada</h3>
-      <span class="health-badge" [class.health-good]="analysisHealth === 'good'" [class.health-warning]="analysisHealth === 'warning'" [class.health-critical]="analysisHealth === 'critical'">
-        {{ analysisHealth === 'good' ? 'Saudável' : analysisHealth === 'warning' ? 'Atenção' : analysisHealth === 'critical' ? 'Crítico' : 'Desconhecido' }}
-      </span>
-    </div>
-
-    <!-- Alertas agregados -->
-    <div class="analysis-alerts" *ngIf="analysisAlerts.length > 0">
-      <div class="alert-item" *ngFor="let alert of analysisAlerts" [class.alert-critical]="alert.severity === 'critical'" [class.alert-warning]="alert.severity === 'warning' || alert.severity === 'group_issue' || alert.severity === 'local_issue'">
-        <span class="material-symbols-rounded">{{ alert.severity === 'critical' ? 'error' : 'warning' }}</span>
-        <span>{{ alert.message }}</span>
-      </div>
-    </div>
-
-    <div class="telemetry-cards grid-layout analysis-cards">
-      <!-- Tendência Óptica (Análise 1) -->
-      <div class="info-card analysis-card" *ngIf="opticalTrend">
-        <div class="card-icon" [class.optical-degrading]="opticalTrend?.rxTrend?.direction === 'degrading'" [class.optical-stable]="opticalTrend?.rxTrend?.direction === 'stable' || !opticalTrend?.alert">
-          <span class="material-symbols-rounded">trending_down</span>
-        </div>
-        <div class="card-body">
-          <span class="card-label">Tendência Óptica (7 dias)</span>
-          <span class="card-value" [class.text-danger]="opticalTrend?.alert" [class.text-success]="!opticalTrend?.alert">
-            {{ opticalTrend?.rxTrend?.slopePerDay > 0 ? '+' : '' }}{{ opticalTrend?.rxTrend?.slopePerDay | number:'1.2-2' }} dBm/dia
-          </span>
-          <span class="card-sub">R² = {{ opticalTrend?.rxTrend?.r2 | number:'1.2-2' }} · {{ opticalTrend?.rxTrend?.direction === 'degrading' ? 'Degradando' : opticalTrend?.rxTrend?.direction === 'improving' ? 'Melhorando' : 'Estável' }}</span>
-        </div>
-      </div>
-
-      <!-- Estabilidade / Reboots (Análise 7) -->
-      <div class="info-card analysis-card" *ngIf="rebootStability">
-        <div class="card-icon" [class.stability-good]="rebootStability?.stability === 'excellent' || rebootStability?.stability === 'good'" [class.stability-bad]="rebootStability?.stability === 'fair' || rebootStability?.stability === 'poor'">
-          <span class="material-symbols-rounded">restart_alt</span>
-        </div>
-        <div class="card-body">
-          <span class="card-label">Estabilidade ({{ rebootStability?.days }} dias)</span>
-          <span class="card-value" [class.text-success]="rebootStability?.rebootCount === 0" [class.text-warning]="rebootStability?.rebootCount > 0">
-            {{ rebootStability?.rebootCount }} reboot(s)
-          </span>
-          <span class="card-sub" *ngIf="rebootStability?.uptimeHours !== null">Uptime: {{ rebootStability?.uptimeHours }}h · {{ rebootStability?.stability }}</span>
-        </div>
-      </div>
-
-      <!-- Anomalias de Tráfego (Análise 8) -->
-      <div class="info-card analysis-card" *ngIf="trafficAnomalies">
-        <div class="card-icon" [class.anomaly-alert]="trafficAnomalies?.alert">
-          <span class="material-symbols-rounded">network_ping</span>
-        </div>
-        <div class="card-body">
-          <span class="card-label">Anomalias de Tráfego (24h)</span>
-          <span class="card-value" [class.text-success]="!trafficAnomalies?.alert" [class.text-warning]="trafficAnomalies?.alert">
-            {{ trafficAnomalies?.anomalyCount || 0 }} pico(s)
-          </span>
-          <span class="card-sub" *ngIf="trafficAnomalies?.rxStats?.avgMbps !== null">
-            Média RX: {{ trafficAnomalies?.rxStats?.avgMbps | number:'1.1-1' }} Mbps
-          </span>
-        </div>
-      </div>
-
-      <!-- Comparação OLT (Análise 9) -->
-      <div class="info-card analysis-card" *ngIf="oltComparison && !oltComparison?.error">
-        <div class="card-icon" [class.olt-outlier]="oltComparison?.isOutlier" [class.olt-group-issue]="oltComparison?.isGroupProblem" [class.olt-normal]="!oltComparison?.alert">
-          <span class="material-symbols-rounded">hub</span>
-        </div>
-        <div class="card-body">
-          <span class="card-label">Comparação OLT ({{ oltComparison?.peerCount }} peers)</span>
-          <span class="card-value" [class.text-danger]="oltComparison?.alert" [class.text-success]="!oltComparison?.alert">
-            <span *ngIf="oltComparison?.diffFromAvg != null">
-              {{ oltComparison?.diffFromAvg > 0 ? '+' : '' }}{{ oltComparison?.diffFromAvg | number:'1.1-1' }} dBm
-            </span>
-            <span *ngIf="oltComparison?.diffFromAvg == null">—</span>
-          </span>
-          <span class="card-sub">
-            <span *ngIf="oltComparison?.peerAvgRx != null">Média grupo: {{ oltComparison?.peerAvgRx | number:'1.1-1' }} dBm · </span>
-            {{ oltComparison?.subnet }}
-          </span>
-        </div>
-      </div>
-
-      <!-- Correlação Térmica (Análise 10) -->
-      <div class="info-card analysis-card" *ngIf="thermalCorrelation">
-        <div class="card-icon" [class.thermal-alert]="thermalCorrelation?.alert" [class.thermal-ok]="!thermalCorrelation?.alert">
-          <span class="material-symbols-rounded">thermostat</span>
-        </div>
-        <div class="card-body">
-          <span class="card-label">Correlação Térmica (7 dias)</span>
-          <span class="card-value" [class.text-danger]="thermalCorrelation?.alert" [class.text-success]="!thermalCorrelation?.alert">
-            {{ thermalCorrelation?.correlation !== null ? (thermalCorrelation?.correlation | number:'1.2-2') : '—' }}
-          </span>
-          <span class="card-sub">
-            <span *ngIf="thermalCorrelation?.tempStats?.avg != null">Temp média: {{ thermalCorrelation?.tempStats?.avg | number:'1.1-1' }}°C · </span>
-            {{ thermalCorrelation?.diagnosis === 'ventilation_issue' ? 'Ventilação' : thermalCorrelation?.diagnosis === 'overheating' ? 'Superaquecimento' : thermalCorrelation?.diagnosis === 'unknown' ? 'Dados insuficientes' : 'Normal' }}
-          </span>
-        </div>
-      </div>
-
-      <!-- Latência / DNS -->
-      <div class="info-card analysis-card" *ngIf="latencyDns">
-        <div class="card-icon" [class.latency-alert]="latencyDns?.alert" [class.latency-ok]="!latencyDns?.alert">
-          <span class="material-symbols-rounded">speed</span>
-        </div>
-        <div class="card-body">
-          <span class="card-label">Latência / DNS</span>
-          <span class="card-value" [class.text-danger]="latencyDns?.alert" [class.text-success]="!latencyDns?.alert">
-            {{ latencyDns?.latency?.diagnostic?.avgMs !== null ? (latencyDns?.latency?.diagnostic?.avgMs + ' ms') : 'N/A' }}
-          </span>
-          <span class="card-sub">
-            <span *ngIf="latencyDns?.hasData">Qualidade: {{ latencyDns?.quality }} · IPPing</span>
-            <span *ngIf="!latencyDns?.hasData">IPPingDiagnostics indisponível nesta CPE</span>
-          </span>
-        </div>
-      </div>
-
-      <!-- Tráfego por Destino -->
-      <div class="info-card analysis-card" *ngIf="topDestinations">
-        <div class="card-icon">
-          <span class="material-symbols-rounded">travel_explore</span>
-        </div>
-        <div class="card-body">
-          <span class="card-label">Padrão de Uso (24h)</span>
-          <span class="card-value">{{ topDestinations?.usagePattern === 'streaming_evening' ? 'Streaming' : topDestinations?.usagePattern === 'gaming_late_night' ? 'Gaming' : topDestinations?.usagePattern === 'work_hours' ? 'Trabalho' : 'Misto' }}</span>
-          <span class="card-sub" *ngIf="topDestinations?.totalRxGb !== null">
-            {{ topDestinations?.totalRxGb | number:'1.1-1' }} GB ↓ · {{ topDestinations?.totalTxGb | number:'1.1-1' }} GB ↑
-          </span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Gráfico de histórico CPU/Memória (últimas 6h) -->
-  <div class="info-card chart-card" *ngIf="rawHistory.length > 0">
-    <h3><span class="material-symbols-rounded">show_chart</span> CPU & Memória — últimas 6h</h3>
-    <div class="chart-wrap">
-      <canvas baseChart
-        [type]="'line'"
-        [labels]="chartLabels"
-        [datasets]="chartDatasets"
-        [options]="chartOptions"
-        [legend]="true">
-      </canvas>
-    </div>
-  </div>
-
-  <!-- Gráfico de histórico Óptico (últimas 6h) -->
-  <div class="info-card chart-card" *ngIf="rawHistory.length > 0">
-    <h3><span class="material-symbols-rounded">show_chart</span> Sinal Óptico — últimas 6h</h3>
-    <div class="chart-wrap">
-      <canvas baseChart
-        [type]="'line'"
-        [labels]="opticalChartLabels"
-        [datasets]="opticalChartDatasets"
-        [options]="opticalChartOptions"
-        [legend]="true">
-      </canvas>
     </div>
   </div>
 </div>
 
-<!-- ── INFORMAÇÕES GERAIS (Dados estáticos da CPE) ─────────────────────── -->
-<div class="grid-layout">
-    <div class="info-card">
-        <h3><span class="material-symbols-rounded">public</span> Configuração WAN</h3>
-        <div class="info-row">
-            <span class="label">Endereço IPv4:</span>
-            <span class="value font-mono">{{ cpe?.wanIp || 'N/A' }}</span>
-        </div>
-    </div>
+<!-- Seção Diagnóstico Técnico Avançado -->
+<div *ngIf="analysisData" class="mt-8 p-4">
+  <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Diagnóstico Técnico Avançado</h3>
 
-    <div class="info-card">
-        <h3><span class="material-symbols-rounded">settings_input_component</span> Sinal Óptico (GPON/EPON)</h3>
-        <div class="info-row">
-            <span class="label">Potência de Recepção (Rx):</span>
-            <span class="value" [class.text-danger]="isRxCritical" [class.text-success]="isRxGood">
-                {{ rxDisplay }}
-            </span>
-        </div>
-        <div class="info-row">
-            <span class="label">Potência de Transmissão (Tx):</span>
-            <span class="value">{{ txDisplay }}</span>
-        </div>
+  <!-- Banner de Resumo -->
+  <div [class]="analysisData.summary.overallHealth === 'critical' ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700' : analysisData.summary.overallHealth === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700' : 'bg-green-50 dark:bg-green-900/30 border-green-300 dark:border-green-700'"
+       class="border rounded-lg p-3 mb-4 text-sm">
+    <strong>Saúde Geral:</strong> {{ overallHealthLabel }}
+    <span *ngIf="analysisData.summary.alertCount > 0" class="ml-2">({{ analysisData.summary.alertCount }} alerta(s))</span>
+    <div *ngIf="analysisAlerts.length > 0" class="mt-2 space-y-1">
+      <div *ngFor="let alert of analysisAlerts" class="text-xs">
+        <span [ngClass]="alert.severity === 'critical' ? 'text-red-700 dark:text-red-300' : 'text-yellow-700 dark:text-yellow-300'">
+          {{ alert.severity === 'critical' ? '🔴' : '⚠️' }} {{ alert.message }}
+        </span>
+      </div>
     </div>
+  </div>
 
-    <div class="info-card">
-        <h3><span class="material-symbols-rounded">memory</span> Identificação do Hardware</h3>
-        <div class="info-row">
-            <span class="label">Fabricante (OUI):</span>
-            <span class="value">{{ cpe?.manufacturer }} ({{ cpe?.oui }})</span>
+  <!-- Indicador de loading da análise -->
+  <div *ngIf="analysisLoading" class="flex items-center gap-2 text-sm text-gray-400 py-8 justify-center">
+    <span class="material-symbols-rounded animate-spin text-base">progress_activity</span>
+    Analisando dados dos últimos 7 dias...
+  </div>
+
+  <!-- Cards priorizados por severidade -->
+  <div *ngIf="!analysisLoading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <ng-container *ngFor="let entry of sortedAnalysisEntries">
+      <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border"
+           [ngClass]="analysisCardBorder(entry.data)">
+        <div class="flex items-center justify-between mb-2">
+          <h4 class="font-semibold text-gray-900 dark:text-white text-sm">
+            {{ getAnalysisInfo(entry.key) || entry.key }}
+          </h4>
+          <span class="text-base">{{ analysisBadge(entry.data) }}</span>
         </div>
-        <div class="info-row">
-            <span class="label">Versão de Firmware:</span>
-            <span class="value">{{ cpe?.softwareVersion || 'Desconhecida' }}</span>
+        <p class="text-sm text-gray-600 dark:text-gray-300">{{ entry.data.message }}</p>
+
+        <!-- Detalhes específicos por tipo de análise -->
+        <div class="mt-2 text-xs text-gray-500 space-y-0.5">
+          <div *ngIf="entry.data.rxTrend?.slopePerDay != null">RX Slope: {{ entry.data.rxTrend.slopePerDay }} dBm/dia</div>
+          <div *ngIf="entry.data.rebootCount > 0">{{ entry.data.rebootCount }} reboot(s) em {{ entry.data.days }} dias</div>
+          <div *ngIf="entry.data.anomalyCount > 0">{{ entry.data.anomalyCount }} pico(s) detectado(s)</div>
+          <div *ngIf="entry.data.errorRatePerHour > 0">{{ entry.data.errorRatePerHour }} erros/hora</div>
+          <div *ngIf="entry.data.biasTrend?.currentBias != null">Bias atual: {{ entry.data.biasTrend.currentBias }} µA</div>
+          <div *ngIf="entry.data.trend?.slopePerHour != null">Slope memória: {{ entry.data.trend.slopePerHour }}%/hora</div>
+          <div *ngIf="entry.data.avgVoltage != null">Tensão média: {{ entry.data.avgVoltage?.toFixed(2) }}V</div>
+          <div *ngIf="entry.data.totalRxGb != null">RX: {{ entry.data.totalRxGb }} GB | TX: {{ entry.data.totalTxGb }} GB</div>
+          <div *ngIf="entry.data.correlation != null">Correlação térmica: {{ entry.data.correlation }}</div>
+          <div *ngIf="entry.data.latency?.measuredAt">Medido há {{ formatMeasuredAt(entry.data.latency.measuredAt) }}</div>
         </div>
+      </div>
+    </ng-container>
+
+    <!-- Placeholder quando analysisData existe mas analyses está vazio -->
+    <div *ngIf="sortedAnalysisEntries.length === 0 && !analysisLoading"
+         class="col-span-full text-center text-sm text-gray-400 py-8">
+      Nenhum resultado de análise disponível para este período.
     </div>
+  </div>
 </div>

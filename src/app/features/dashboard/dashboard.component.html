@@ -4,8 +4,8 @@
         <div class="metrics-grid">
             <app-skeleton shape="card" height="90px" [count]="3"></app-skeleton>
         </div>
-        <div class="skeleton-table" style="margin-top: 24px;">
-            <app-skeleton shape="text-lg" width="240px" style="margin-bottom: 12px"></app-skeleton>
+        <div class="skeleton-table" class="mt-6">
+            <app-skeleton shape="text-lg" width="240px" class="mb-3"></app-skeleton>
             <app-skeleton shape="table-row" [count]="6"></app-skeleton>
         </div>
     </div>
@@ -13,38 +13,137 @@
     <!-- Conteúdo real: exibido apenas quando não está carregando -->
     <div *ngIf="!loading" class="fade-in">
         <div class="metrics-grid">
+            <!-- Widget de Saúde da Frota (Step 9) -->
+            <div class="card fleet-health-card" *ngIf="healthSummary">
+                <div class="card-icon success"><span class="material-symbols-rounded">health_and_safety</span></div>
+                <div class="card-info">
+                    <h3>Saúde da Frota</h3>
+                    <p>{{ healthSummary.online }}/{{ healthSummary.totalCpes }}</p>
+                    <small class="health-details">
+                        <span class="health-item online">{{ healthSummary.online }} online</span>
+                        <span class="health-item offline">{{ healthSummary.offline }} offline</span>
+                        <span class="health-item critical" *ngIf="healthSummary.criticalAlerts > 0">{{ healthSummary.criticalAlerts }} críticos</span>
+                    </small>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-icon"><span class="material-symbols-rounded">router</span></div>
                 <div class="card-info">
                     <h3>CPEs Online</h3>
-                    <p>{{ cpesOnlineCount }}</p>
+                    <p>{{ globalOnlineCount }}</p>
                 </div>
             </div>
-            <div class="card">
+            <div class="card clickable-card" [class.active-danger]="filterCriticalGpon" (click)="toggleCriticalGponFilter()" title="Clique para filtrar apenas CPEs com sinal crítico">
                 <div class="card-icon warning"><span class="material-symbols-rounded">warning</span></div>
                 <div class="card-info">
                     <h3>Sinal GPON Crítico</h3>
-                    <p>{{ criticalGponCount }}</p>
+                    <p>{{ globalCriticalGponCount }}</p>
                 </div>
             </div>
             <div class="card">
                 <div class="card-icon info"><span class="material-symbols-rounded">speed</span></div>
                 <div class="card-info">
                     <h3>Tarefas Pendentes</h3>
-                    <p>{{ pendingTasksCount }}</p>
+                    <p>{{ globalPendingTasksCount }}</p>
+                </div>
+            </div>
+
+            <!-- Card do Gráfico de Saúde ACS (Worker Threads) -->
+            <div class="card health-card" style="display: flex; flex-direction: column; padding: 12px 16px; overflow: hidden;">
+                <div *ngIf="!xmlParserMetrics && !workerHealthDegraded" class="skeleton-loader" style="padding: 20px; text-align: center; color: #94a3b8; font-size: 0.75rem;">
+                    Carregando saúde do ACS...
+                </div>
+                <div *ngIf="workerHealthDegraded" class="error-banner" style="padding: 8px 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 4px; margin-bottom: 8px; font-size: 0.7rem; color: #fca5a5;">
+                    ⚠ Não foi possível atualizar métricas — exibindo último valor conhecido
+                </div>
+                <ng-container *ngIf="xmlParserMetrics">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <h3 style="font-size: 0.85rem; color: #94a3b8; margin: 0; font-weight: 600;">Saúde do ACS (Workers)</h3>
+                        <span class="status-badge" [ngClass]="'status-badge ' + workerHealthSeverity" style="font-size: 0.7rem; padding: 2px 6px;">
+                            {{ workerHealthSeverity === 'ok' ? 'Estável' : workerHealthSeverity === 'warning' ? 'Atenção' : 'Crítico' }}
+                        </span>
+                    </div>
+                    <div style="display: flex; gap: 12px; font-size: 0.75rem; color: #cbd5e1; margin-bottom: 8px; z-index: 10;">
+                        <span><strong style="color: #f8fafc;">{{ xmlParserMetrics.avgProcessingTimeMs }}ms</strong> CPU</span>
+                        <span><strong style="color: #f8fafc;">{{ xmlParserMetrics.lastMemoryUsageMB }}MB</strong> RAM</span>
+                        <span><strong style="color: #f8fafc;">{{ xmlParserMetrics.activeWorkers }}/{{ xmlParserMetrics.poolSize }}</strong> Threads</span>
+                    </div>
+                    <div style="flex: 1; min-height: 45px; position: relative; margin: -10px -16px -12px -16px;">
+                        <canvas baseChart [datasets]="xmlChartDatasets" [labels]="xmlChartLabels" [options]="xmlChartOptions" type="line"></canvas>
+                    </div>
+                </ng-container>
+            </div>
+        </div>
+
+        <!-- Cards Secundários: Filtros Dinâmicos por Marca e Modelo -->
+        <div class="filters-grid" *ngIf="globalManufacturers.length > 0 || globalModels.length > 0">
+            <div class="filter-group">
+                <h4 class="filter-title">Fabricantes</h4>
+                <div class="chips-container">
+                    <button *ngFor="let m of globalManufacturers"
+                            class="chip-btn"
+                            [class.active]="filterManufacturer === m.name"
+                            (click)="onManufacturerFilterChange(m.name)">
+                        {{ m.name }} <span class="chip-badge">{{ m.count }}</span>
+                    </button>
+                </div>
+            </div>
+            <div class="filter-group">
+                <h4 class="filter-title">Modelos (CPE)</h4>
+                <div class="chips-container">
+                    <button *ngFor="let m of globalModels"
+                            class="chip-btn"
+                            [class.active]="filterModel === m.name"
+                            (click)="onModelFilterChange(m.name)">
+                        {{ m.name }} <span class="chip-badge">{{ m.count }}</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="filter-group" *ngIf="globalFirmwares.length > 0">
+                <h4 class="filter-title">Firmwares Ativos</h4>
+                <div class="chips-container scrollable-chips">
+                    <button *ngFor="let f of globalFirmwares"
+                            class="chip-btn"
+                            [class.active]="filterFirmware === f.name"
+                            (click)="onFirmwareFilterChange(f.name)">
+                        {{ f.name }} <span class="chip-badge">{{ f.count }}</span>
+                    </button>
                 </div>
             </div>
         </div>
 
         <div class="content-card table-card">
             <div class="table-header">
-                <h2>Equipamentos Conectados <span class="total-count">({{ totalItems }})</span></h2>
-                <div class="table-filters">
+                <!-- Lado Esquerdo: Título e Ações Diretas -->
+                <div class="header-main">
+                    <h2 class="table-title">Equipamentos Conectados <span class="total-count">({{ globalTotalCpes }})</span></h2>
+                    
+                    <!-- Ações em Massa (Moveu para perto do título) -->
+                    <div class="bulk-actions" *ngIf="selectedCpes.size > 0">
+                        <span class="selected-count">
+                            {{ selectedCpes.size }} selecionado(s)
+                        </span>
+                        <button class="filter-btn active" title="Exportar CSV" (click)="exportSelectedToCsv()">
+                            <span class="material-symbols-rounded icon-sm">download</span>
+                        </button>
+
+                        <button class="filter-btn active btn-danger-outline" title="Reiniciar Selecionados" (click)="bulkRebootSelected()">
+                            <span class="material-symbols-rounded icon-sm">power_settings_new</span>
+                            <span class="btn-label">Reiniciar</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lado Direito: Filtros e Busca -->
+                <div class="table-toolbar">
+                    <app-alerts-panel></app-alerts-panel>
                     <div class="search-box">
                         <span class="material-symbols-rounded search-icon">search</span>
                         <input
                             type="text"
-                            placeholder="Buscar por serial ou modelo..."
+                            placeholder="Buscar serial, modelo ou IP..."
                             [(ngModel)]="searchQuery"
                             (ngModelChange)="onFilterChange()"
                             class="search-input"
@@ -58,49 +157,87 @@
                         <button class="filter-btn offline" [class.active]="filterStatus === 'offline'"
                                 (click)="onStatusFilterChange('offline')">Offline</button>
                     </div>
+
+                    <button *ngIf="filterStatus !== 'all' || filterManufacturer || filterModel || filterFirmware || searchQuery || filterCriticalGpon"
+                            class="filter-btn btn-clear-filters circle-btn"
+                            (click)="clearFilters()" title="Limpar Filtros">
+                        <span class="material-symbols-rounded icon-sm">filter_alt_off</span>
+                    </button>
                 </div>
             </div>
 
             <div class="table-responsive">
+            <!-- CDK Virtual Scroll Viewport (Otimiza renderização de muitas linhas) -->
+            <cdk-virtual-scroll-viewport itemSize="70" class="vmoas-viewport">
             <table class="vmoas-table">
                 <thead>
                     <tr>
+                        <th class="col-checkbox">
+                            <input type="checkbox"
+                                   (change)="toggleSelectAll($event)"
+                                   [checked]="selectedCpes.size === cpes.length && cpes.length > 0" />
+                        </th>
                         <th>Status</th>
                         <th>Serial Number</th>
                         <th>Modelo</th>
                         <th>IP WAN</th>
-                        <th>Wi-Fi 2.4G</th>
+                        <th>PPPoE</th>
                         <th>Sinal Óptico (Rx)</th>
+                        <th class="sortable-header" (click)="toggleHealthScoreSort()">
+                            Saúde
+                            <span class="material-symbols-rounded sort-icon" *ngIf="healthScoreSortDirection">
+                                {{ healthScoreSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+                            </span>
+                        </th>
                         <th>Ações</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr *ngFor="let cpe of cpes" (click)="goToDetails(cpe.serialNumber)" style="cursor: pointer;">
+                    <!-- Alterado para cdkVirtualFor para suportar centenas de CPEs renderizadas sem travar -->
+                    <tr *cdkVirtualFor="let cpe of cpes; trackBy: trackByCpe" (click)="goToDetails(cpe.serialNumber)" class="table-row-clickable">
+                        <td class="col-checkbox" (click)="$event.stopPropagation()">
+                            <input type="checkbox"
+                                   [checked]="selectedCpes.has(cpe.serialNumber)"
+                                   (change)="toggleSelection(cpe.serialNumber)" />
+                        </td>
                         <td>
                             <span class="status-badge" [class.online]="cpe.isOnline" [class.offline]="!cpe.isOnline">
                                 {{ cpe.isOnline ? 'Online' : 'Offline' }}
                             </span>
+                            <!-- Indicador de Tempo Atrás -->
+                            <div class="time-ago">
+                                {{ getTimeAgo(cpe.lastInform) }}
+                            </div>
                         </td>
                         <td class="bold-text">{{ cpe.serialNumber }}</td>
                         <td>{{ cpe.productClass || cpe.manufacturer }}</td>
                         <td>{{ cpe.wanIp || 'Aguardando...' }}</td>
                         <td>
-                            <span *ngIf="cpe.wifi2g?.ssid; else noWifi">
-                                {{ cpe.wifi2g?.ssid }}
-                                (Ch: {{ cpe.wifi2g?.channel }})
+                            <span class="pppoe-user">{{ cpe._pppoe }}</span>
+                        </td>
+                        <td>
+                            <span class="rx-power" *ngIf="cpe._rx !== undefined; else noRx"
+                                  [class.critical]="cpe._rx < -27"
+                                  [class.good]="cpe._rx >= -27">
+                                {{ cpe._rx | number:'1.1-2' }} dBm
                             </span>
-                            <ng-template #noWifi>
+                            <ng-template #noRx>
                                 <span class="text-muted">N/D</span>
                             </ng-template>
                         </td>
                         <td>
-                            <span class="rx-power"
-                                  [class.critical]="cpe.opticalRx !== undefined && cpe.opticalRx < -27"
-                                  [class.good]="cpe.opticalRx !== undefined && cpe.opticalRx >= -27">
-                                {{ cpe.opticalRx !== undefined ? cpe.opticalRx + ' dBm' : 'N/D' }}
+                            <span class="health-score-badge"
+                                  *ngIf="cpe.healthScore !== undefined && cpe.healthScore !== null; else noScore"
+                                  [class.score-good]="cpe.healthScore >= 80"
+                                  [class.score-warning]="cpe.healthScore >= 50 && cpe.healthScore < 80"
+                                  [class.score-critical]="cpe.healthScore < 50">
+                                {{ cpe.healthScore }}
                             </span>
+                            <ng-template #noScore>
+                                <span class="text-muted">N/D</span>
+                            </ng-template>
                         </td>
-                        <td>
+                        <td class="actions-cell">
                             <button class="action-btn"
                                     (click)="wakeUpDevice(cpe.serialNumber); $event.stopPropagation()"
                                     title="Acordar CPE">
@@ -118,35 +255,81 @@
                                     title="Diagnóstico Wi-Fi dedicado">
                                 <span class="material-symbols-rounded">analytics</span>
                             </button>
+
+                            <button class="action-btn ai-btn"
+                                    (click)="runAiAnalysis(cpe); $event.stopPropagation()"
+                                    title="Análise Preditiva de Saúde (IA)">
+                                <span class="material-symbols-rounded" [class.rotating]="isAnalyzingAi && selectedCpeForAi?.serialNumber === cpe.serialNumber">smart_toy</span>
+                            </button>
+
+                            <button class="action-btn danger"
+                                    (click)="deleteCpe(cpe); $event.stopPropagation()"
+                                    title="Excluir CPE do Sistema">
+                                <span class="material-symbols-rounded">delete</span>
+                            </button>
                         </td>
                     </tr>
                     <tr *ngIf="cpes.length === 0">
-                        <td colspan="7" class="empty-state">Nenhuma CPE encontrada ou registrada no ACS.</td>
+                        <td colspan="8" class="empty-state">Nenhuma CPE encontrada ou registrada no ACS.</td>
                     </tr>
                 </tbody>
             </table>
+            </cdk-virtual-scroll-viewport>
         </div>
     </div>
 
-        <!-- Paginador -->
-        @if (totalPages > 1) {
-            <div class="paginator">
-                <button class="page-btn" [disabled]="currentPage === 1" (click)="onPageChange(currentPage - 1)">
-                    <span class="material-symbols-rounded">chevron_left</span>
-                </button>
-                @for (page of pageNumbers; track page) {
-                    <button
-                        class="page-btn"
-                        [class.active]="page === currentPage"
-                        (click)="onPageChange(page)"
-                        [style.display]="(page === 1 || page === totalPages || (page >= currentPage - 2 && page <= currentPage + 2)) ? 'flex' : 'none'"
-                    >{{ page }}</button>
-                }
-                <button class="page-btn" [disabled]="currentPage === totalPages" (click)="onPageChange(currentPage + 1)">
-                    <span class="material-symbols-rounded">chevron_right</span>
-                </button>
-                <span class="page-info">{{ (currentPage - 1) * itemsPerPage + 1 }}–{{ pageEnd }} de {{ totalItems }}</span>
+    </div>
+
+    <!-- Overlay do Modal de Inteligência Artificial -->
+    <div class="modal-overlay" *ngIf="isAiModalOpen" (click)="closeAiModal()">
+        <div class="modal-content ai-modal" (click)="$event.stopPropagation()">
+            <div class="modal-header">
+                <h2>Análise Preditiva de Falhas (IA)</h2>
+                <button class="close-btn" (click)="closeAiModal()"><span class="material-symbols-rounded">close</span></button>
             </div>
-        }
+
+            <div class="modal-body">
+                <div *ngIf="isAnalyzingAi" class="ai-loading">
+                    <span class="material-symbols-rounded rotating">smart_toy</span>
+                    <p>O Motor de IA está correlacionando o histórico de GPON, CPU e Wi-Fi...</p>
+                </div>
+
+                <div class="ai-orientation" *ngIf="!isAnalyzingAi && aiReport">
+                    <div class="orientation-icon">
+                        <span class="material-symbols-rounded">psychology</span>
+                    </div>
+                    <div class="orientation-text">
+                        <h4>Como interpretar esta análise preditiva?</h4>
+                        <p>Nossa Inteligência Artificial não olha apenas para o sinal do momento (que muitas vezes mascara problemas na fibra). Ela projeta falhas futuras (como desgaste do laser SFP, saturação de banda ou Memory Leak no firmware) usando a regressão matemática nos dados históricos.<br><br>
+                        <strong>Guia Operacional:</strong><br>
+                        <span class="badge-guide green">Score 76 a 100</span> Saudável. O cliente está bem atendido, sem necessidade de ações.<br>
+                        <span class="badge-guide yellow">Score 41 a 75</span> Atenção. Monitore o cliente ou agende uma visita preventiva sem urgência.<br>
+                        <span class="badge-guide red">Score 0 a 40</span> Crítico (Risco Iminente). Agende reparo imediatamente para evitar queda e cancelamento!</p>
+                    </div>
+                </div>
+
+                <div *ngIf="!isAnalyzingAi && aiReport" class="ai-results">
+                    <div class="score-banner" [ngClass]="aiReport.classification || 'low'">
+                        <div class="score-circle">{{ aiReport.score || 0 }}</div>
+                        <div class="score-info">
+                            <h3>Risco de Falha: {{ (aiReport.classification || 'Indeterminado') | uppercase }}</h3>
+                            <p>Probabilidade de degradação severa da conexão ou falha iminente de hardware.</p>
+                        </div>
+                    </div>
+                    <div class="ai-details" *ngIf="aiReport.factors && aiReport.factors.length > 0">
+                        <h4>Fatores Identificados</h4>
+                        <ul><li *ngFor="let factor of aiReport.factors"><span class="material-symbols-rounded">info</span> {{ factor }}</li></ul>
+                    </div>
+                    <div class="ai-details" *ngIf="aiReport.probableCauses && aiReport.probableCauses.length > 0">
+                        <h4>Causas e Sugestões Analíticas</h4>
+                        <ul><li *ngFor="let cause of aiReport.probableCauses"><span class="material-symbols-rounded">build</span> {{ cause }}</li></ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="page-btn active" (click)="closeAiModal()">Concluir Análise</button>
+            </div>
+        </div>
     </div>
 </div>

@@ -72,9 +72,6 @@
 // ---------------------------------------------------------------------------
 @mixin focus-ring($color: var(--accent-color)) {
   outline: none;
-  box-shadow: 0 0 0 3px rgba($color, 0.4);
-  // Fallback se o browser não suportar rgba com CSS var:
-  // A cor do anel usa o token de acento diretamente.
   box-shadow: 0 0 0 3px var(--accent-light);
 }
 

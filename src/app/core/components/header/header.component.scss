@@ -90,7 +90,8 @@
   }
 }
 
-.theme-toggle-btn {
+.theme-toggle-btn,
+.logout-btn {
   background: none;
   border: none;
   color: var(--text-secondary);
@@ -105,6 +106,13 @@
   &:hover {
     background-color: var(--bg-body);
     color: var(--accent-color);
+  }
+}
+
+// Adiciona uma cor de destaque vermelha (opcional) no hover exclusivo do botão de sair
+.logout-btn {
+  &:hover {
+    color: #ef4444; // Um tom vermelho de perigo padrão Tailwind (red-500)
   }
 }
 

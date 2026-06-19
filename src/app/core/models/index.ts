@@ -8,6 +8,20 @@
 // Sempre que o backend alterar o schema, este arquivo deve ser atualizado.
 // =============================================================================
 
+/** Resposta padrão para comandos RPC enfileirados (Set, Reboot, etc). */
+export interface CommandResponse {
+  message: string;
+  taskId?: string; // ID da tarefa no RabbitMQ/Redis para rastreamento
+  diagnosticId?: string; // ID do diagnóstico para cancelamento
+}
+
+/** Parâmetro para envio em um comando SetParameterValues. */
+export interface CpeParameterPayload {
+  name: string;
+  value: string | number | boolean;
+  type?: string;
+}
+
 /**
  * Parâmetro individual da árvore TR-069 / TR-181 da CPE.
  * O backend armazena como array de objetos para evitar chaves com pontos no MongoDB.
@@ -21,6 +35,17 @@ export interface CpeParameter {
   type?: string;
   /** Indica se o ACS tem permissão para alterar via SetParameterValues. */
   writable?: boolean;
+}
+
+/**
+ * Parâmetro do cache interno do ACS (campo `parametersCache` do Mongoose).
+ * Difere de CpeParameter: inclui metadados de cache (lastSeen, cachedAt).
+ */
+export interface CpeParameterCached {
+  name: string;
+  value: string;
+  lastSeen?: string;  // ISO 8601 — última vez visto na CPE
+  cachedAt?: string;  // ISO 8601 — quando foi armazenado no cache
 }
 
 /**
@@ -65,13 +90,31 @@ export interface CpeDevice {
 
   // Árvore de parâmetros TR-069 / TR-181
   parameters?: CpeParameter[];
+  /**
+   * Cache de parâmetros TR-069 retornado pelo backend (campo real do MongoDB).
+   * Inclui metadados de timestamp. Substitui o acesso por `parameters` que não é
+   * populado diretamente pelo endpoint getCpeDetails.
+   */
+  parametersCache?: CpeParameterCached[];
   wanIp?: string;
+  wanSubnetMask?: string;
+  wanGateway?: string;
+  wanDnsIsp?: string;
+  wanDnsManual?: string[];
+  wanMtu?: number;
+  wanVlanId?: number;
+  pppoeUsername?: string;
+  wanConfigUpdatedAt?: string; // ISO 8601
   isOnline?: boolean;
   lastInform?: string; // ISO 8601
 
   // Métricas ópticas GPON/EPON
   opticalRx?: number; // dBm (ex: -23.5)
   opticalTx?: number; // dBm (ex: 2.1)
+
+  // Health Score calculado pelo backend a cada hora
+  healthScore?: number;          // 0-100
+  healthScoreUpdatedAt?: string; // ISO 8601
 
   // Wi-Fi
   wifi2g?: CpeWifiBand;
@@ -175,6 +218,11 @@ export interface WifiDiagnosticsData {
   ipDownloadSupported?: boolean;
   ipUploadSupported?: boolean;
   ipUdpEchoSupported?: boolean;
+
+  pagination?: {
+    page: number;
+    limit: number;
+  };
 }
 
 export interface WifiBandDiagnostics {
@@ -385,8 +433,8 @@ export interface ToastNotification {
 // =============================================================================
 
 export interface CpePredictionFactor {
-  score: number;       // 0-100 (pior = maior)
-  status: 'good' | 'warning' | 'critical';
+  score: number | null;       // 0-100 (pior = maior), null se indisponível
+  status: 'good' | 'warning' | 'critical' | 'unavailable';
   value: number | null;
   message: string;
 }
@@ -397,8 +445,8 @@ export interface CpePredictionInsights {
 }
 
 export interface CpePredictionResult {
-  score: number;
-  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  score: number | null;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical' | 'insufficient_data';
   riskLabel: string;
   failureProbability: number;
   estimatedTimeToFailure: string;
@@ -407,14 +455,29 @@ export interface CpePredictionResult {
 export interface CpePrediction {
   serialNumber: string;
   analyzedAt: string;
+  algorithmVersion: string;
   prediction: CpePredictionResult;
   factors: {
-    gponSignal: CpePredictionFactor;
-    connectivity: CpePredictionFactor;
-    memoryHealth: CpePredictionFactor;
-    cpuHealth: CpePredictionFactor;
-    hostStability: CpePredictionFactor;
-    wifiNoise: CpePredictionFactor;
+    gponSignal?: CpePredictionFactor;
+    connectivity?: CpePredictionFactor;
+    memoryHealth?: CpePredictionFactor;
+    cpuHealth?: CpePredictionFactor;
+    hostStability?: CpePredictionFactor;
+    wifiNoise?: CpePredictionFactor;
+    opticalTrend?: CpePredictionFactor;
+    memoryLeakTrend?: CpePredictionFactor;
+    laserHealth?: CpePredictionFactor;
+  };
+  previousFactors?: {
+    gponSignal?: CpePredictionFactor;
+    connectivity?: CpePredictionFactor;
+    memoryHealth?: CpePredictionFactor;
+    cpuHealth?: CpePredictionFactor;
+    hostStability?: CpePredictionFactor;
+    wifiNoise?: CpePredictionFactor;
+    opticalTrend?: CpePredictionFactor;
+    memoryLeakTrend?: CpePredictionFactor;
+    laserHealth?: CpePredictionFactor;
   };
   insights: CpePredictionInsights;
 }
@@ -429,12 +492,335 @@ export interface TelemetryMetric {
   description: string;
 }
 
+// Subdocumentos modulares para telemetria estruturada
+export interface SystemTelemetry {
+  upTime: number;
+  cpuUsage: number;
+  memoryFree: number;
+  memoryTotal: number;
+  temperature?: number;
+}
+
+export interface WanTelemetry {
+  status?: string;
+  ipv4Address?: string;
+  dnsServers?: string;
+  ipv6Status?: string;
+  ipv6Address?: string;
+}
+
+export interface OpticalTelemetry {
+  xponStatus?: string;
+  rxPower?: number;
+  txPower?: number;
+  temperature?: number;
+  voltage?: number;
+  biasCurrent?: number;
+  distance?: number;
+  downstreamRate?: number;
+  upstreamRate?: number;
+}
+
+export interface WifiRadioTelemetry {
+  channel?: number;
+  transmitPower?: number;
+  noise?: number;
+  clients?: number;
+  snr?: number;
+  utilization?: number;
+  errorsReceived?: number;
+  errorsSent?: number;
+  signalStrength?: number;
+  congestionRate?: number;
+  averageRxRate?: number;
+  averageTxRate?: number;
+}
+
+export interface WifiTelemetry {
+  radio2g?: WifiRadioTelemetry;
+  radio5g?: WifiRadioTelemetry;
+}
+
+export interface LanTelemetry {
+  hostCount?: number;
+}
+
+/**
+ * Alerta de telemetria — transição de estado de uma métrica vital (threshold).
+ * Espelha o schema TelemetryAlert do backend.
+ */
+export interface TelemetryAlert {
+  _id?: string;
+  serialNumber: string;
+  metric: string;             // 'opticalRx' | 'cpuUsage' | 'wifi2gNoise' | 'wifi5gNoise'
+  severity: 'warning' | 'critical';
+  status: 'active' | 'resolved';
+  value?: number;
+  threshold?: number;
+  triggeredAt: string;        // ISO 8601
+  resolvedAt?: string | null;
+  message: string;
+  acknowledgedBy?: string | null;
+  acknowledgedAt?: string | null;
+}
+
 export interface TelemetryData {
-  [metricKey: string]: TelemetryMetric;
+  // NOTA ARQUITETURAL: dados chegam em formato FLAT via WebSocket e REST cache.
+  // Métricas chegam como chaves diretas: cpuUsage, opticalRx, wanStatus, etc.
+  // O indexer [metricKey: string]: any suporta o formato real de dados.
+  [metricKey: string]: any;   // Formato real: chaves diretas do backend (cpuUsage, opticalRx, etc.)
 }
 
 export interface TelemetryUpdateEvent {
   serialNumber: string;
   data: TelemetryData;
   timestamp: string;
+}
+
+/** Resposta do cache de telemetria do Redis. */
+export interface TelemetryCacheResponse {
+  success: boolean;
+  serialNumber: string;
+  data: TelemetryData;
+  timestamp: number;
+  ageSeconds: number;
+  message: string;
+}
+
+/** Snapshot individual de telemetria para séries temporais. */
+export interface TelemetrySnapshot {
+  timestamp: string;
+  cpuUsage?: number;
+  memoryUsage?: number;      // percentual calculado (legacy WebSocket cache)
+  memoryFree?: number;       // KB bruto (TelemetryVitals)
+  memoryTotal?: number;      // KB bruto (TelemetryVitals)
+  opticalRx?: number;
+  opticalTx?: number;
+  wanStatus?: string;        // NOVO — disponível em TelemetryVitals
+  gponStatus?: string;       // NOVO — disponível em TelemetryVitals
+  hostCount?: number;        // NOVO — número de hosts conectados (TelemetryVitals)
+  source?: string;           // NOVO — 'vitals' | 'hourly' (para debug)
+}
+
+/** Resposta para endpoints de séries temporais. */
+export interface TelemetryHistoryResponse {
+  success: boolean;
+  data: TelemetrySnapshot[];
+  hours?: number;
+  days?: number;
+  count: number;
+}
+
+/** Análise de tendência para uma métrica específica. */
+export interface TrendAnalysis {
+  serialNumber: string;
+  days: number;
+  sampleCount: number;
+  reliableModel: boolean;
+  r2: number;
+  rxTrend: { slopePerDay: number; r2: number; direction: 'degrading' | 'improving' | 'stable' };
+  txTrend: { slopePerDay: number; r2: number };
+  alert: boolean;
+  severity: 'critical' | 'warning' | 'good';
+  message: string;
+}
+
+/** Análise de estabilidade de reboots. */
+export interface RebootStabilityAnalysis {
+  serialNumber: string;
+  days: number;
+  sampleCount: number;
+  rebootCount: number;
+  rebootEvents: { at: Date; previousUptime: number; newUptime: number }[];
+  uptimeHours: number | null;
+  rebootsPerWeek: number;
+  stability: 'excellent' | 'good' | 'fair' | 'poor';
+  alert: boolean;
+  message: string;
+}
+
+/** Análise de anomalias de tráfego. */
+export interface TrafficAnomaliesAnalysis {
+  serialNumber: string;
+  hours: number;
+  sampleCount: number;
+  deltaCount: number;
+  anomalyCount: number;
+  anomalies: { timestamp: Date; type: string; valueMbps: number; avgMbps: number }[];
+  alert: boolean;
+  message: string;
+}
+
+/** Comparação com outras CPEs na mesma OLT. */
+export interface OltComparisonAnalysis {
+  serialNumber: string;
+  wanIp: string;
+  subnet: string;
+  peerCount: number;
+  onlinePeerCount?: number;
+  targetRx: number | null;
+  peerAvgRx: number | null;
+  peerMinRx: number | null;
+  peerMaxRx: number | null;
+  diffFromAvg: number | null;
+  isOutlier: boolean;
+  isGroupProblem: boolean;
+  alert: boolean;
+  severity: 'group_issue' | 'local_issue' | 'normal';
+  message: string;
+  peers: { serialNumber: string; wanIp: string; opticalRx: number | null; isOnline: boolean }[];
+}
+
+/** Correlação entre temperatura e performance. */
+export interface ThermalCorrelationAnalysis {
+  serialNumber: string;
+  days: number;
+  sampleCount: number;
+  pairedCount: number;
+  tempStats: { avg: number | null; max: number | null };
+  cpuStats: { avg: number | null };
+  correlation: number | null;
+  diagnosis: 'ventilation_issue' | 'overheating' | 'normal';
+  alert: boolean;
+  message: string;
+}
+
+/** Análise de latência e DNS. */
+export interface LatencyDnsAnalysis {
+  serialNumber: string;
+  hasData: boolean;
+  latency: {
+    target: string;
+    avgMs: number | null;
+    minMs: number | null;
+    maxMs: number | null;
+    successCount: number | null;
+    measuredAt: Date | null;
+  } | null;
+  quality: 'excellent' | 'good' | 'fair' | 'poor';
+  alert: boolean;
+  message: string;
+}
+
+/** Destinos de tráfego mais comuns. */
+export interface TopDestination {
+  destination: string;
+  bytes: number;
+  percent: number;
+}
+
+/** Resposta completa da análise avançada de telemetria. */
+export interface TelemetryAnalysis {
+  serialNumber: string;
+  analyzedAt: string;
+  summary: {
+    overallHealth: 'good' | 'warning' | 'critical' | 'unknown';
+    alertCount: number;
+    alerts: {
+      severity: 'info' | 'warning' | 'critical';
+      message: string;
+    }[];
+  };
+  analyses: {
+    opticalTrend?: TrendAnalysis;
+    rebootStability?: RebootStabilityAnalysis;
+    trafficAnomalies?: TrafficAnomaliesAnalysis;
+    oltComparison?: OltComparisonAnalysis;
+    thermalCorrelation?: ThermalCorrelationAnalysis;
+    latencyDns?: LatencyDnsAnalysis;
+    topDestinations?: {
+      serialNumber: string;
+      periodHours: number;
+      totalRxGb: number;
+      totalTxGb: number;
+      peakHours: number[];
+      usagePattern: string;
+      estimatedTopCategories: string[];
+      message: string;
+    };
+    wanErrors?: any;
+    laserHealth?: any;
+    memoryLeak?: any;
+    powerSupply?: any;
+  };
+}
+
+// =============================================================================
+// DIAGNÓSTICOS (Histórico)
+// =============================================================================
+
+/** Resultado de um diagnóstico de Ping. */
+export interface PingResult {
+  diagnosticsState: string;
+  host: string;
+  successCount: number;
+  failureCount: number;
+  averageResponseTime: number;
+  minResponseTime: number;
+  maxResponseTime: number;
+  timestamp: string;
+}
+
+/** Resultado de um diagnóstico de TraceRoute. */
+export interface TraceRouteResult {
+  diagnosticsState: string;
+  host: string;
+  hopCount: number;
+  responseTime: number;
+  hops: { hopNumber: number; ipAddress: string; responseTime: number; }[];
+  timestamp: string;
+}
+
+/** Resultado de um diagnóstico de Teste de Velocidade (TR-143). */
+export interface SpeedTestResult {
+  diagnosticsState: string;
+  direction: 'Download' | 'Upload';
+  testBytesReceived?: number;
+  totalBytesReceived?: number;
+  testBytesSent?: number;
+  totalBytesSent?: number;
+  BOMTime: number;
+  EOMTime: number;
+  ROMTime: number;
+  timestamp: string;
+}
+
+/** Resultado de um diagnóstico de DNS. */
+export interface DNSLookupResult {
+  diagnosticsState: string;
+  dnsServer: string;
+  hostName: string;
+  results: { status: string; answerType: string; hostName: string; ipAddresses: string; dnsServerIp: string; responseTime: number; }[];
+  timestamp: string;
+}
+
+/** Resultado de um diagnóstico de UDP Echo. */
+export interface UDPEchoResult {
+  diagnosticsState: string;
+  packetsReceived: number;
+  packetsResponded: number;
+  bytesReceived: number;
+  bytesResponded: number;
+  timestamp: string;
+}
+
+/** Resultado de uma varredura de redes vizinhas. */
+export interface WifiNeighborResult {
+  channel: number;
+  ssid: string;
+  bssid: string;
+  signalStrength: number;
+  band: string;
+  channelBandwidth: string;
+  timestamp: string;
+}
+
+/** Entrada genérica no histórico de diagnósticos. */
+export type DiagnosticResult = PingResult | TraceRouteResult | SpeedTestResult | DNSLookupResult | UDPEchoResult | WifiNeighborResult;
+
+/** Resposta para endpoints de histórico de diagnósticos. */
+export interface DiagnosticHistoryResponse<T extends DiagnosticResult> {
+  success: boolean;
+  data: T[];
+  count: number;
 }

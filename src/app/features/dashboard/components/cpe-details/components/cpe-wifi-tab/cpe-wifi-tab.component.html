@@ -7,7 +7,36 @@
     </p>
 </div>
 
-<div class="vmoas-wifi-dashboard">
+<!-- Estado: coletando configuração Wi-Fi da CPE -->
+<div *ngIf="isCollectingConfig" class="vmoas-collecting-state">
+  <div class="vmoas-radar-spinner" style="width:48px;height:48px;"></div>
+  <h3>Coletando Configuração Wi-Fi</h3>
+  <p>Aguardando resposta da CPE via protocolo TR-069. Este processo pode levar até 60 segundos.</p>
+  <small>A CPE está sendo contactada via Connection Request. O formulário será populado automaticamente.</small>
+</div>
+
+<!-- Estado: erro / timeout -->
+<div *ngIf="!isCollectingConfig && collectConfigError" class="vmoas-empty-state">
+  <span class="material-symbols-rounded" style="font-size:48px;color:#f59e0b;">wifi_off</span>
+  <h3>Configuração Wi-Fi Indisponível</h3>
+  <p>Não foi possível coletar os parâmetros SSID desta CPE. A CPE pode estar offline ou não suportar TR-069 Wi-Fi Management.</p>
+  <app-button variant="secondary" iconLeft="refresh" (clicked)="triggerWifiConfigCollection()">
+    Tentar Novamente
+  </app-button>
+</div>
+
+<!-- Estado: timeout após 60s -->
+<div *ngIf="!isCollectingConfig && collectConfigTimedOut && !collectConfigError" class="vmoas-empty-state">
+  <span class="material-symbols-rounded" style="font-size:48px;color:#ef4444;">timer_off</span>
+  <h3>Tempo Limite Atingido</h3>
+  <p>A CPE não respondeu ao Connection Request em 60 segundos. Verifique se está online.</p>
+  <app-button variant="secondary" iconLeft="refresh" (clicked)="triggerWifiConfigCollection()">
+    Tentar Novamente
+  </app-button>
+</div>
+
+<div class="vmoas-wifi-dashboard" [formGroup]="wifiForm"
+     *ngIf="!isCollectingConfig && !collectConfigError && !collectConfigTimedOut">
 
     <div class="vmoas-card global-card">
         <div class="card-header-global" style="display: flex; justify-content: space-between; align-items: center;">
@@ -50,7 +79,7 @@
                     <span class="toggle-desc">A CPE assume o controlo e mescla as bandas automaticamente no hardware.</span>
                 </div>
                 <label class="vmoas-switch">
-                    <input type="checkbox" [(ngModel)]="smartConnect" (ngModelChange)="applySmartConnectToggle()">
+                    <input type="checkbox" formControlName="smartConnect" (change)="applySmartConnectToggle($event)">
                     <span class="vmoas-slider"></span>
                 </label>
             </div>
@@ -58,49 +87,49 @@
     </div>
 
     <h3 class="section-title mt-4">Redes Principais (Clientes e Dispositivos Pessoais)</h3>
-    <div class="ssid-grid mt-2">
-        <ng-container *ngFor="let ssid of discoveredSsids">
-            <ng-container *ngIf="ssid.isPrimary">
-                <div class="vmoas-card ssid-card" [class.is-locked]="smartConnect && ssid.band === '5GHz'">
+    <div class="ssid-grid mt-2" formArrayName="ssids">
+        <ng-container *ngFor="let ssidCtrl of ssidsArray.controls; let i = index" [formGroupName]="i">
+            <ng-container *ngIf="ssidCtrl.get('isPrimary')?.value">
+                <div class="vmoas-card ssid-card" [class.is-locked]="smartConnect && ssidCtrl.get('band')?.value === '5GHz'">
 
                     <div class="ssid-header">
                         <div class="ssid-title-group">
                             <div class="icon-wrapper">
                                 <span class="material-symbols-rounded">
-                                    {{ ssid.band === '5GHz' ? 'wifi_tethering' : 'wifi' }}
+                                    {{ ssidCtrl.get('band')?.value === '5GHz' ? 'wifi_tethering' : 'wifi' }}
                                 </span>
                             </div>
                             <div>
-                                <h3>SSID Primário #{{ ssid.index }}</h3>
+                                <h3>SSID Primário #{{ ssidCtrl.get('index')?.value }}</h3>
                                 <div class="badge-group">
-                                    <span class="band-badge">{{ ssid.band }}</span>
-                                    <span class="protocol-badge">{{ ssid.isTR181 ? 'TR-181' : 'TR-098' }}</span>
-                                    <span class="status-badge" [class.status-up]="ssid.status === 'Up' || ssid.status === 'Enabled'">
-                                        {{ ssid.status }}
+                                    <span class="band-badge">{{ ssidCtrl.get('band')?.value }}</span>
+                                    <span class="protocol-badge">{{ ssidCtrl.get('isTR181')?.value ? 'TR-181' : 'TR-098' }}</span>
+                                    <span class="status-badge" [class.status-up]="ssidCtrl.get('status')?.value === 'Up' || ssidCtrl.get('status')?.value === 'Enabled'">
+                                        {{ ssidCtrl.get('status')?.value }}
                                     </span>
                                 </div>
                             </div>
                         </div>
 
-                        <ng-container *ngIf="smartConnect && ssid.band === '5GHz'">
+                        <ng-container *ngIf="smartConnect && ssidCtrl.get('band')?.value === '5GHz'">
                             <div class="locked-badge"><span class="material-symbols-rounded">lock</span> Gerido pela CPE</div>
                         </ng-container>
 
-                        <ng-container *ngIf="!(smartConnect && ssid.band === '5GHz')">
-                            <label class="vmoas-switch" [class.hardware-locked]="ssid.isLockedByHardware">
-                                <input type="checkbox" [(ngModel)]="ssid.enable" [disabled]="ssid.isLockedByHardware"
-                                       (ngModelChange)="applyImmediateToggle(ssid.enablePath, ssid.enable ? 'true':'false', 'xsd:boolean')">
+                        <ng-container *ngIf="!(smartConnect && ssidCtrl.get('band')?.value === '5GHz')">
+                            <label class="vmoas-switch" [class.hardware-locked]="ssidCtrl.get('isLockedByHardware')?.value">
+                                <input type="checkbox" formControlName="enable"
+                                       (change)="applyImmediateToggle(ssidCtrl.get('enablePath')?.value, $event, 'xsd:boolean')">
                                 <span class="vmoas-slider"></span>
                             </label>
                         </ng-container>
                     </div>
 
-                    <div class="ssid-body" [class.is-disabled]="!ssid.enable || (smartConnect && ssid.band === '5GHz')">
+                    <div class="ssid-body" [class.is-disabled]="!ssidCtrl.get('enable')?.value || (smartConnect && ssidCtrl.get('band')?.value === '5GHz')">
                         <div class="input-group">
                             <label>Nome da Rede (SSID)</label>
                             <div class="input-wrapper">
                                 <span class="material-symbols-rounded input-icon">signal_cellular_alt</span>
-                                <input type="text" class="vmoas-input" [(ngModel)]="ssid.name">
+                                <input type="text" class="vmoas-input" formControlName="name">
                             </div>
                         </div>
 
@@ -108,7 +137,7 @@
                             <label>Segurança / Criptografia</label>
                             <div class="input-wrapper">
                                 <span class="material-symbols-rounded input-icon">shield</span>
-                                <select class="vmoas-input" [(ngModel)]="ssid.securityMode" style="appearance: auto; padding-left: 40px;">
+                                <select class="vmoas-input" formControlName="securityMode" style="appearance: auto; padding-left: 40px;">
                                     <option value="WPA2">WPA2 Personal (Recomendado)</option>
                                     <option value="WPA2-WPA3">WPA2/WPA3 (Moderno Wi-Fi 6)</option>
                                     <option value="None">Rede Aberta (Sem Senha)</option>
@@ -120,30 +149,30 @@
                             <label>Senha da Rede</label>
                             <div class="input-wrapper">
                                 <span class="material-symbols-rounded input-icon">key</span>
-                                <input type="password" class="vmoas-input" [(ngModel)]="ssid.password" [disabled]="ssid.securityMode === 'None'" placeholder="Mínimo 8 caracteres">
+                                <input type="password" class="vmoas-input" formControlName="password" placeholder="Mínimo 8 caracteres">
                             </div>
                         </div>
 
-                        <div *ngIf="!(smartConnect && ssid.band === '5GHz')" style="display: flex; justify-content: flex-end; margin-top: 15px;">
+                        <div *ngIf="!(smartConnect && ssidCtrl.get('band')?.value === '5GHz')" style="display: flex; justify-content: flex-end; margin-top: 15px;">
                             <app-button
                                 variant="primary"
                                 size="sm"
                                 iconLeft="save"
                                 [loading]="isApplyingWifi"
-                                [disabled]="!ssid.enable"
-                                (clicked)="saveCard(ssid)"
+                                [disabled]="!ssidCtrl.get('enable')?.value || ssidCtrl.invalid"
+                                (clicked)="saveCard(i)"
                             >
                                 Salvar Rede
                             </app-button>
                         </div>
 
-                        <div *ngIf="ssid.isTR181 || ssid.atfPath.includes('ATFEnable')" class="ap-advanced-section">
+                        <div *ngIf="ssidCtrl.get('isTR181')?.value || (ssidCtrl.get('atfPath')?.value && ssidCtrl.get('atfPath')?.value.includes('ATFEnable'))" class="ap-advanced-section">
                             <h4 class="section-divider">Recursos Avançados de Rádio</h4>
 
                             <div class="toggle-item minimal">
                                 <div class="toggle-info"><span class="toggle-title">Airtime Fairness (ATF)</span></div>
                                 <label class="vmoas-switch small">
-                                    <input type="checkbox" [(ngModel)]="ssid.atf" (ngModelChange)="applyImmediateToggle(ssid.atfPath, ssid.atf ? 'true':'false', 'xsd:boolean')">
+                                    <input type="checkbox" formControlName="atf" (change)="applyImmediateToggle(ssidCtrl.get('atfPath')?.value, $event, 'xsd:boolean')">
                                     <span class="vmoas-slider"></span>
                                 </label>
                             </div>
@@ -151,15 +180,15 @@
                             <div class="toggle-item minimal">
                                 <div class="toggle-info"><span class="toggle-title">MU-MIMO</span></div>
                                 <label class="vmoas-switch small">
-                                    <input type="checkbox" [(ngModel)]="ssid.muMimo" (ngModelChange)="applyImmediateToggle(ssid.muMimoPath, ssid.muMimo ? 'true':'false', 'xsd:boolean')">
+                                    <input type="checkbox" formControlName="muMimo" (change)="applyImmediateToggle(ssidCtrl.get('muMimoPath')?.value, $event, 'xsd:boolean')">
                                     <span class="vmoas-slider"></span>
                                 </label>
                             </div>
 
-                            <div *ngIf="ssid.isTR181" class="toggle-item minimal">
+                            <div *ngIf="ssidCtrl.get('isTR181')?.value" class="toggle-item minimal">
                                 <div class="toggle-info"><span class="toggle-title">OFDMA</span><span class="toggle-desc">Otimiza pacotes p/ IoT.</span></div>
                                 <label class="vmoas-switch small">
-                                    <input type="checkbox" [(ngModel)]="ssid.ofdma" (ngModelChange)="applyImmediateToggle(ssid.ofdmaPath, ssid.ofdma ? 'true':'false', 'xsd:boolean')">
+                                    <input type="checkbox" formControlName="ofdma" (change)="applyImmediateToggle(ssidCtrl.get('ofdmaPath')?.value, $event, 'xsd:boolean')">
                                     <span class="vmoas-slider"></span>
                                 </label>
                             </div>
@@ -172,55 +201,55 @@
 
     <div *ngIf="visibleGuestsCount > 0">
         <h3 class="section-title mt-4">Redes de Visitantes (Isoladas)</h3>
-        <div class="ssid-grid mt-2">
-            <ng-container *ngFor="let ssid of discoveredSsids">
-                <ng-container *ngIf="!ssid.isPrimary && ssid.uiVisible">
-                    <div class="vmoas-card ssid-card guest-card" [class.is-locked]="smartConnect && ssid.band === '5GHz'">
+        <div class="ssid-grid mt-2" formArrayName="ssids">
+            <ng-container *ngFor="let ssidCtrl of ssidsArray.controls; let i = index" [formGroupName]="i">
+                <ng-container *ngIf="!ssidCtrl.get('isPrimary')?.value && ssidCtrl.get('uiVisible')?.value">
+                    <div class="vmoas-card ssid-card guest-card" [class.is-locked]="smartConnect && ssidCtrl.get('band')?.value === '5GHz'">
 
                         <div class="ssid-header">
                             <div class="ssid-title-group">
                                 <div class="icon-wrapper guest-icon"><span class="material-symbols-rounded">group</span></div>
                                 <div>
-                                    <h3>Visitante (Slot {{ ssid.guestId }}) #{{ ssid.index }}</h3>
+                                    <h3>Visitante (Slot {{ ssidCtrl.get('guestId')?.value }}) #{{ ssidCtrl.get('index')?.value }}</h3>
                                     <div class="badge-group">
-                                        <span class="band-badge guest-badge">{{ ssid.band }}</span>
-                                        <span class="status-badge" [class.status-up]="ssid.status === 'Up' || ssid.status === 'Enabled'">{{ ssid.status }}</span>
+                                        <span class="band-badge guest-badge">{{ ssidCtrl.get('band')?.value }}</span>
+                                        <span class="status-badge" [class.status-up]="ssidCtrl.get('status')?.value === 'Up' || ssidCtrl.get('status')?.value === 'Enabled'">{{ ssidCtrl.get('status')?.value }}</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <ng-container *ngIf="smartConnect && ssid.band === '5GHz'">
+                            <ng-container *ngIf="smartConnect && ssidCtrl.get('band')?.value === '5GHz'">
                                 <div class="locked-badge"><span class="material-symbols-rounded">lock</span></div>
                             </ng-container>
-                            <ng-container *ngIf="!(smartConnect && ssid.band === '5GHz')">
+                            <ng-container *ngIf="!(smartConnect && ssidCtrl.get('band')?.value === '5GHz')">
                                 <app-button
                                     variant="danger"
                                     size="sm"
                                     iconLeft="delete"
                                     [disabled]="isApplyingWifi"
-                                    (clicked)="removeGuestNetwork(ssid.guestId)"
+                                    (clicked)="removeGuestNetwork(ssidCtrl.get('guestId')?.value)"
                                     title="Excluir Rede"
                                 ></app-button>
                             </ng-container>
                         </div>
 
-                        <div class="ssid-body" [class.is-disabled]="!ssid.enable || (smartConnect && ssid.band === '5GHz')">
+                        <div class="ssid-body" [class.is-disabled]="!ssidCtrl.get('enable')?.value || (smartConnect && ssidCtrl.get('band')?.value === '5GHz')">
 
                             <div class="input-group" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                                 <label style="margin: 0;">Status da Transmissão:</label>
-                                <label class="vmoas-switch" [class.hardware-locked]="ssid.isLockedByHardware">
-                                    <input type="checkbox" [(ngModel)]="ssid.enable" [disabled]="ssid.isLockedByHardware"
-                                           (ngModelChange)="applyImmediateToggle(ssid.enablePath, ssid.enable ? 'true':'false', 'xsd:boolean')">
+                                <label class="vmoas-switch" [class.hardware-locked]="ssidCtrl.get('isLockedByHardware')?.value">
+                                    <input type="checkbox" formControlName="enable"
+                                           (change)="applyImmediateToggle(ssidCtrl.get('enablePath')?.value, $event, 'xsd:boolean')">
                                     <span class="vmoas-slider"></span>
                                 </label>
                             </div>
 
-                            <div class="input-group"><label>Nome da Rede</label><div class="input-wrapper"><input type="text" class="vmoas-input" [(ngModel)]="ssid.name"></div></div>
+                            <div class="input-group"><label>Nome da Rede</label><div class="input-wrapper"><input type="text" class="vmoas-input" formControlName="name"></div></div>
 
                             <div class="input-group">
                                 <label>Criptografia</label>
                                 <div class="input-wrapper">
-                                    <select class="vmoas-input" [(ngModel)]="ssid.securityMode" style="appearance: auto; padding-left: 10px;">
+                                    <select class="vmoas-input" formControlName="securityMode" style="appearance: auto; padding-left: 10px;">
                                         <option value="WPA2">WPA2</option>
                                         <option value="WPA2-WPA3">WPA2/WPA3</option>
                                         <option value="None">Aberta</option>
@@ -228,33 +257,33 @@
                                 </div>
                             </div>
 
-                            <div class="input-group"><label>Senha</label><div class="input-wrapper"><input type="password" class="vmoas-input" [(ngModel)]="ssid.password" [disabled]="ssid.securityMode === 'None'"></div></div>
+                            <div class="input-group"><label>Senha</label><div class="input-wrapper"><input type="password" class="vmoas-input" formControlName="password"></div></div>
 
-                            <div *ngIf="!(smartConnect && ssid.band === '5GHz')" style="display: flex; justify-content: flex-end; margin-top: 15px;">
+                            <div *ngIf="!(smartConnect && ssidCtrl.get('band')?.value === '5GHz')" style="display: flex; justify-content: flex-end; margin-top: 15px;">
                                 <app-button
                                     variant="primary"
                                     size="sm"
                                     iconLeft="save"
                                     [loading]="isApplyingWifi"
-                                    [disabled]="!ssid.enable"
-                                    (clicked)="saveCard(ssid)"
+                                    [disabled]="!ssidCtrl.get('enable')?.value || ssidCtrl.invalid"
+                                    (clicked)="saveCard(i)"
                                 >
                                     Salvar Rede
                                 </app-button>
                             </div>
 
-                            <div *ngIf="ssid.isTR181" class="ap-advanced-section">
+                            <div *ngIf="ssidCtrl.get('isTR181')?.value" class="ap-advanced-section">
                                 <div class="toggle-item minimal">
                                     <div class="toggle-info"><span class="toggle-title">MU-MIMO</span></div>
                                     <label class="vmoas-switch small">
-                                        <input type="checkbox" [(ngModel)]="ssid.muMimo" (ngModelChange)="applyImmediateToggle(ssid.muMimoPath, ssid.muMimo ? 'true':'false', 'xsd:boolean')">
+                                        <input type="checkbox" formControlName="muMimo" (change)="applyImmediateToggle(ssidCtrl.get('muMimoPath')?.value, $event, 'xsd:boolean')">
                                         <span class="vmoas-slider"></span>
                                     </label>
                                 </div>
                                 <div class="toggle-item minimal">
                                     <div class="toggle-info"><span class="toggle-title">OFDMA</span></div>
                                     <label class="vmoas-switch small">
-                                        <input type="checkbox" [(ngModel)]="ssid.ofdma" (ngModelChange)="applyImmediateToggle(ssid.ofdmaPath, ssid.ofdma ? 'true':'false', 'xsd:boolean')">
+                                        <input type="checkbox" formControlName="ofdma" (change)="applyImmediateToggle(ssidCtrl.get('ofdmaPath')?.value, $event, 'xsd:boolean')">
                                         <span class="vmoas-slider"></span>
                                     </label>
                                 </div>

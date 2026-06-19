@@ -1,12 +1,132 @@
-import { Component, Input, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, OnChanges, SimpleChanges, DestroyRef, inject, ChangeDetectionStrategy, ChangeDetectorRef, NgZone } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
-import { Subscription } from 'rxjs';
-import { ChartConfiguration, ChartDataset } from 'chart.js';
+import { FormsModule } from '@angular/forms';
+import { filter, Subscription, interval, Subject, EMPTY, timer, timeout } from 'rxjs';
+import { exhaustMap, finalize, catchError, bufferTime } from 'rxjs/operators';
+import { ChartDataset, ChartOptions } from 'chart.js';
 import { NgChartsModule } from 'ng2-charts';
-import { CpeDevice, TelemetryData, TelemetryMetric } from '../../../../../../core/models';
+import { CpeDevice, TelemetryAlert, TelemetryAnalysis, TelemetryData, TelemetryMetric, TelemetrySnapshot } from '../../../../../../core/models';
 import { CpeService } from '../../../../../../core/services/cpe.service';
 import { WebSocketService } from '../../../../../../core/services/websocket.service';
 import { ToastService } from '../../../../../../core/services/toast.service';
+import { DiagnosticParserService } from '../../../../../../core/services/diagnostic-parser.service';
+import { TelemetryCacheService } from '../../../../../../core/services/telemetry-cache.service';
+// OTIMIZAÇÃO: Importação dos novos Pipes puros
+import { FormatBytesPipe } from '../../../../../../core/pipes/format-bytes.pipe';
+import { MetricPipe } from '../../../../../../core/pipes/metric.pipe';
+
+// Interface para snapshots de intervenção (retorno aninhado de getLastIntervention)
+interface InterventionSnapshot {
+  source: string;
+  createdAt: string;
+  telemetry?: { optical?: { rxPower?: number }; system?: { cpuUsage?: number }; wan?: Record<string, unknown> };
+}
+
+// Interfaces para tipagem de eventos WebSocket
+interface ValueChangeEvent {
+  serialNumber: string;
+  changedParams?: unknown;
+  changeType?: string;
+}
+
+interface TelemetryUpdateEvent {
+  serialNumber: string;
+  data: TelemetryData;
+  timestamp: string;
+  partial?: boolean;
+  message?: string;
+  source?: string;
+  tabContext?: string;
+}
+
+// Configuração compartilhada de gráficos (estática para evitar recriação)
+const CHART_COMMON_OPTIONS: ChartOptions<'line'> = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: false,
+  interaction: { mode: 'index', intersect: false },
+  plugins: {
+    legend: {
+      display: true,
+      labels: { color: '#94a3b8', font: { size: 12 } }
+    },
+    tooltip: {
+      backgroundColor: 'rgba(15, 18, 39, 0.95)',
+      titleColor: '#f8fafc',
+      bodyColor: '#e2e8f0',
+      borderWidth: 1,
+    }
+  },
+  scales: {
+    x: {
+      ticks: { color: '#94a3b8', maxTicksLimit: 8 },
+      grid: { color: 'rgba(255,255,255,0.05)' }
+    },
+    y: {
+      ticks: { color: '#94a3b8' },
+      grid: { color: 'rgba(255,255,255,0.05)' }
+    }
+  }
+};
+
+// Map de suffixos para chaves de destino (estático para evitar recriação)
+const PARAM_MAP: ReadonlyArray<[string, string]> = [
+  ['cpuusage', 'cpu'],
+  ['cpu', 'cpu'], // Mapeamento direto para compatibilidade com backend
+  ['memoryfree', 'memFree'],
+  ['memorystatus.free', 'memFree'],
+  ['memorytotal', 'memTotal'],
+  ['memorystatus.total', 'memTotal'],
+  ['uptime', 'upTime'],
+  ['xponstatus', 'gponStatus'],
+  ['rxpower', 'rxPower'],
+  ['opticalsignallevel', 'rxPower'],
+  ['txpower', 'txPower'],
+  ['transceivertemperature', 'temp'],
+  ['temperature', 'temp'], // Mapeamento direto para temperatura do SoC
+  ['supplyvottage', 'voltage'],
+  ['supplyvoltage', 'voltage'],
+  ['biascurrent', 'bias'],
+  ['bytesreceived', 'bytesRx'],
+  ['optical.interface.1.stats.bytesreceived', 'bytesRx'],
+  ['bytessent', 'bytesTx'],
+  ['optical.interface.1.stats.bytessent', 'bytesTx'],
+];
+
+/** Explicações curtas de cada análise técnica — linguagem direta, sem jargão estatístico. */
+const ANALYSIS_INFO: Readonly<Record<string, string>> = {
+  opticalTrend: 'Mede se o sinal óptico está caindo aos poucos (fibra envelhecendo), usando os últimos 7 dias.',
+  rebootStability: 'Conta quantas vezes a CPE reiniciou sozinha nos últimos dias.',
+  trafficAnomalies: 'Detecta picos de tráfego fora do padrão normal desta CPE nas últimas 24h.',
+  oltComparison: 'Compara o sinal óptico desta CPE com vizinhas na mesma rede — ajuda a saber se o problema é local ou da OLT/fibra compartilhada.',
+  thermalCorrelation: 'Verifica se a temperatura alta é por uso intenso (CPU) ou por falta de ventilação.',
+  latencyDns: 'Última medição de latência de ping registrada pela CPE (não em tempo real).',
+  topDestinations: 'Estimativa de uso (streaming, trabalho, jogos) baseada no horário de pico — não é inspeção real de conteúdo.',
+  wanErrors: 'Conta erros físicos na fibra (camada 1/2) — indica problema de cabo ou conector.',
+  laserHealth: 'Acompanha o envelhecimento do laser óptico pela corrente de bias.',
+  memoryLeak: 'Detecta se o firmware está perdendo memória RAM com o tempo (sinal de que vai travar).',
+  powerSupply: 'Verifica se a tensão da fonte de alimentação está estável.',
+};
+
+// Configuração base de datasets (estática para evitar recriação)
+const hexToRgba = (hex: string, alpha: number): string => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const createChartDataset = (label: string, color: string, data: (number | null)[]): ChartDataset<'line'> => ({
+  label,
+  data,
+  borderColor: color,
+  backgroundColor: hexToRgba(color, 0.15),
+  fill: true,
+  tension: 0.3,
+  pointRadius: 3,
+  pointBackgroundColor: color,
+});
 
 /**
  * Aba "Informações Gerais" com telemetria em tempo real + histórico gráfico.
@@ -19,15 +139,20 @@ import { ToastService } from '../../../../../../core/services/toast.service';
 @Component({
   selector: 'app-cpe-info-tab',
   standalone: true,
-  imports: [CommonModule, NgChartsModule],
+  imports: [CommonModule, FormsModule, NgChartsModule, FormatBytesPipe, MetricPipe],
   templateUrl: './cpe-info-tab.component.html',
-  styleUrls: ['./cpe-info-tab.component.scss']
+  styleUrls: ['./cpe-info-tab.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush // OTIMIZAÇÃO: Evita re-renderizações globais a cada pulso do WebSocket
 })
-export class CpeInfoTabComponent implements OnInit, OnDestroy {
+export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   /** Dados da CPE vindo do componente pai. */
   @Input() cpe: CpeDevice | null = null;
   /** Número de série para requisições de telemetria. */
   @Input() serialNumber: string = '';
+
+  private destroyRef = inject(DestroyRef); // Gerenciador de ciclo de vida moderno do Angular 17+
+  private cdr = inject(ChangeDetectorRef); // Injetor para disparar atualizações manuais na UI
+  private ngZone = inject(NgZone); // Injetor para garantir execução na zona do Angular
 
   // ── Telemetria em tempo real ─────────────────────────────────────────────
   telemetryData: TelemetryData | null = null;
@@ -35,43 +160,91 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy {
   telemetryLoading = false;
   telemetryError: string | null = null;
 
+  // ── Two-Phase UI State (Vitals + Standard) ─────────────────────────────────
+  vitalsLoading = false;   // indicador rápido (vitals)
+  vitalsReceived = false;   // true após primeiro vitals chegar
+
+  // ── Progresso de coleta por chunk ─────────────────────────────────────────
+  telemetryProgress = 0; // 0-100%
+  completedChunks = 0;
+  totalChunks = 0;
+  isPartialCollection = false; // true quando chunk falhou (partial: true)
+
+  // ── Single Driver: Controle de modo View-Only ─────────────────────────────
+  isViewOnly = false; // Se true, usuário está em modo de visualização (não é Driver)
+
+  // ── Sincronização de Estado de Semáforo (Lock State Sync) ───────────────────
+  isCpeBusy = false; // Se true, CPE está em tráfego CWMP ativo (botão bloqueado)
+
+  // ── Tracking de Viewers ───────────────────────────────────────────────────
+  viewers: string[] = []; // Lista de usernames visualizando a CPE
+
+  // ── Fallback UX ───────────────────────────────────────────────────────────
+  isStaleData = false; // Se true, dados são de cache MongoDB (Redis offline)
+  staleDataTimestamp: Date | null = null; // Timestamp dos dados estagnados
+  isPartialResult = false; // true quando a última coleta retornou chunks incompletos
+
+  // ── Getter para debounce do botão (alias de telemetryLoading) ─────────────
+  get isLoading(): boolean {
+    return this.telemetryLoading;
+  }
+
+  // ── Getter para proteção de UI contra duplo clique (idempotência) ─────────
+  get isMonitoring(): boolean {
+    return this.telemetryLoading;
+  }
+
+  // ── Subject para controle de emissão com exhaustMap (prevenção de Efeito Eco) ──
+  private monitorTrigger$ = new Subject<void>();
+
   // ── Histórico para gráficos ──────────────────────────────────────────────
-  rawHistory: any[] = [];
+  rawHistory: TelemetrySnapshot[] = [];
   historyLoading = false;
+  selectedPeriodHours = 6; // Período padrão
+  private historySub?: Subscription; // OTIMIZAÇÃO: Proteção contra Condições de Corrida (Race Conditions)
+  private readonly timeFormatter = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }); // OTIMIZAÇÃO: Instância única
 
   // ── Análise avançada agregada ──────────────────────────────────────────
-  analysisData: any = null;
+  analysisData: TelemetryAnalysis | null = null;
   analysisLoading = false;
   analysisError: string | null = null;
 
+  // ── Painéis suplementares (Health Score, Alertas, Incidente, Intervenção) ──
+  healthScoreBreakdown: { total: number; components: Record<string, { score: number; weight: number }> } | null = null;
+  cpeAlerts: TelemetryAlert[] = [];
+  incidentStatus: { active: boolean; expiresInSeconds: number | null } = { active: false, expiresInSeconds: null };
+  lastIntervention: { found: boolean; before?: InterventionSnapshot; after?: InterventionSnapshot; pending?: boolean } | null = null;
+
+  // Getter para filtrar apenas alertas ativos (status: 'active')
+  get activeAlerts(): TelemetryAlert[] {
+    return this.cpeAlerts.filter(a => a.status === 'active').slice(0, 10);
+  }
+
+  // ── Configuração WAN (EP 26.15 — corrigido) ────────────────────────────
+  wanConfigFields = { pppoeUsername: '', dnsServer1: '', dnsServer2: '', mtu: 1492, vlanId: 0 };
+  isEditingWanConfig = false;
+  wanConfigSaving    = false;
+
   // ── Configuração do gráfico CPU/Memória ────────────────────────────────
   chartLabels: string[] = [];
-  chartDatasets: ChartDataset<'line'>[] = [];
-  chartOptions: ChartConfiguration<'line'>['options'] = {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
+  chartDatasets: ChartDataset<'line'>[] = [
+    createChartDataset('CPU (%)', '#7c3aed', []),
+    createChartDataset('Memória Usada (%)', '#06b6d4', []),
+  ];
+  chartData = { labels: this.chartLabels, datasets: this.chartDatasets };
+  chartOptions: ChartOptions<'line'> = {
+    ...CHART_COMMON_OPTIONS,
     plugins: {
-      legend: {
-        display: true,
-        labels: { color: '#94a3b8', font: { size: 12 } }
-      },
+      ...CHART_COMMON_OPTIONS.plugins,
       tooltip: {
-        backgroundColor: 'rgba(15, 18, 39, 0.95)',
-        titleColor: '#f8fafc',
-        bodyColor: '#e2e8f0',
+        ...CHART_COMMON_OPTIONS.plugins!.tooltip,
         borderColor: 'rgba(124, 58, 237, 0.3)',
-        borderWidth: 1,
       }
     },
     scales: {
-      x: {
-        ticks: { color: '#94a3b8', maxTicksLimit: 8 },
-        grid: { color: 'rgba(255,255,255,0.05)' }
-      },
+      x: CHART_COMMON_OPTIONS.scales?.['x'],
       y: {
-        ticks: { color: '#94a3b8' },
-        grid: { color: 'rgba(255,255,255,0.05)' },
+        ...(CHART_COMMON_OPTIONS.scales?.['y'] as any),
         beginAtZero: true,
         max: 100
       }
@@ -80,55 +253,172 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy {
 
   // ── Configuração do gráfico Óptico ─────────────────────────────────────
   opticalChartLabels: string[] = [];
-  opticalChartDatasets: ChartDataset<'line'>[] = [];
-  opticalChartOptions: ChartConfiguration<'line'>['options'] = {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
+  opticalChartDatasets: ChartDataset<'line'>[] = [
+    createChartDataset('RX (dBm)', '#10b981', []),
+    createChartDataset('TX (dBm)', '#f59e0b', []),
+  ];
+  opticalChartData = { labels: this.opticalChartLabels, datasets: this.opticalChartDatasets };
+  opticalChartOptions: ChartOptions<'line'> = {
+    ...CHART_COMMON_OPTIONS,
     plugins: {
-      legend: {
-        display: true,
-        labels: { color: '#94a3b8', font: { size: 12 } }
-      },
+      ...CHART_COMMON_OPTIONS.plugins,
       tooltip: {
-        backgroundColor: 'rgba(15, 18, 39, 0.95)',
-        titleColor: '#f8fafc',
-        bodyColor: '#e2e8f0',
+        ...CHART_COMMON_OPTIONS.plugins!.tooltip,
         borderColor: 'rgba(16, 185, 129, 0.3)',
-        borderWidth: 1,
       }
     },
     scales: {
-      x: {
-        ticks: { color: '#94a3b8', maxTicksLimit: 8 },
-        grid: { color: 'rgba(255,255,255,0.05)' }
-      },
+      x: CHART_COMMON_OPTIONS.scales?.['x'],
       y: {
-        ticks: { color: '#94a3b8' },
-        grid: { color: 'rgba(255,255,255,0.05)' },
+        ...(CHART_COMMON_OPTIONS.scales?.['y'] as any),
         title: { display: true, text: 'dBm', color: '#94a3b8' }
       }
     }
   };
 
-  private wsSub = new Subscription();
-  private readonly CACHE_TTL_MS = 60_000; // 60 segundos de cache no frontend
-
   constructor(
     private cpeService: CpeService,
     private wsService: WebSocketService,
     private toastService: ToastService,
+    private diagnosticParser: DiagnosticParserService,
+    private telemetryCacheService: TelemetryCacheService,
   ) {}
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
+    // ── Setup do barramento reativo com exhaustMap e catchError (prevenção de Efeito Eco) ──
+    this.monitorTrigger$.pipe(
+      takeUntilDestroyed(this.destroyRef),
+      exhaustMap(() => {
+        this.telemetryLoading = true; // Feedback visual imediato
+        this.vitalsLoading = true;    // Indicador de vitals
+
+        // Retorna o fluxo HTTP
+        return this.cpeService.requestTelemetry(this.serialNumber).pipe(
+          // CAPTURA INTERNA: Impede que o erro suba e mate o Subject monitorTrigger$
+          catchError((err) => {
+            this.telemetryLoading = false; // Desliga spinner em caso de erro
+            this.vitalsLoading = false;    // Desliga indicador de vitals
+            this.toastService.error(err.error?.error || 'Erro ao conectar com a CPE.');
+            return EMPTY; // Retorna um fluxo vazio e finalizado de forma segura
+          })
+        );
+      })
+    ).subscribe({
+      next: (response: any) => {
+        // VERIFICAÇÃO DE CACHE: Se o backend retornou dados em cache, atualiza a UI local na hora
+        if (response && response.source === 'cache') {
+          this.telemetryLoading = false; // Dupla garantia de encerramento do spinner
+          this.vitalsLoading = false;    // Desliga indicador de vitals
+
+          // Atualiza a variável local que renderiza os blocos de CPU/Memória na tela
+          this.telemetryData = response.telemetry;
+
+          // Toast informativo customizado
+          this.toastService.info(response.message || 'Exibindo dados armazenados em cache.');
+        } else if (response && response.source === 'network') {
+          // Coleta enfileirada no RabbitMQ — spinner continua até o WebSocket encerrar
+          const httpStatus = Number(response.status);
+          if (httpStatus === 202) {
+            this.toastService.info(response.message || 'Coleta já está em andamento. Aguarde a atualização na tela.');
+          } else {
+            this.toastService.success('A CPE está online. Coleta em tempo real iniciada via TR-069...');
+          }
+          // telemetryLoading já é true (setado no exhaustMap) — sem necessidade de reatribuir
+        } else {
+          // Fallback: source desconhecido ou ausente
+          const httpStatus = Number(response?.status);
+          if (httpStatus === 202) {
+            this.toastService.info(response.message || 'Coleta já está em andamento. Aguarde a atualização na tela.');
+          } else {
+            this.toastService.success('Telemetria iniciada com sucesso na CPE!');
+          }
+        }
+      }
+    });
+
+    // Inscreve-se na sala da CPE para receber eventos WebSocket específicos
+    if (this.serialNumber) {
+      this.wsService.subscribeToCpe(this.serialNumber);
+    }
+    this.loadFromFrontendCache();
+    this.extractFallbackTelemetry(); // Fallback imediato de 0ms a partir do BD
+    // Registra listeners WebSocket antes das chamadas HTTP
     this.listenForTelemetryUpdates();
-    this.loadHistory();       // carrega gráfico de 6h
-    this.loadFromCache();     // tenta cache primeiro (SEM tocar na CPE)
-    this.loadAnalysis();      // carrega análise avançada agregada
+    this.listenForTelemetryProgress(); // Listener para progresso por chunk
+    this.listenForTelemetryComplete(); // Listener para encerramento de spinner via WebSocket
+    this.listenForCpeValueChange();
+    this.listenForAlerts(); // Listener para alertas de telemetria
+    this.listenForPresenceEvents(); // Single Driver: escuta conflitos e promoções
+    this.startHeartbeat(); // Inicia heartbeat para manter controle de Driver
+    // Escalonamento das chamadas HTTP para evitar burst (429 Too Many Requests)
+    this.loadLatestVitals();       // NOVO: 0ms — carga imediata do snapshot TelemetryVitals
+    await this.loadHistory();      // imediato — gráfico precisa de dados antes de qualquer update
+    timer(150).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.loadFromCache());
+    timer(300).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.loadAnalysis());
+    timer(450).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.loadSupplementaryPanels());
   }
 
   ngOnDestroy(): void {
-    this.wsSub.unsubscribe();
+    // Cancela inscrição na sala da CPE
+    if (this.serialNumber) {
+      this.wsService.unsubscribeFromCpe(this.serialNumber);
+    }
+    // Previne memory leak e erros no console se o componente for destruído
+    // enquanto aguarda a resposta de telemetria da CPE
+    if (this.telemetryTimeoutId) {
+      clearTimeout(this.telemetryTimeoutId);
+    }
+    // Limpa timers de flash visual
+    this.flashTimers.forEach(timer => clearTimeout(timer));
+    this.flashTimers.clear();
+    
+    // ── Prevenção de Ghost Viewers: Emite leave_cpe_room ao destruir ──
+    this.destroyRef.onDestroy(() => {
+      if (this.wsService['socket']?.connected && this.serialNumber) {
+        this.wsService['socket'].emit('leave_cpe_room', { serialNumber: this.serialNumber });
+      }
+    });
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['cpe'] && this.cpe?.parameters) {
+      this.extractFallbackTelemetry();
+    }
+    if (changes['cpe'] && this.cpe) {
+      // Só recarrega painéis suplementares quando healthScore ou isOnline mudaram
+      const prevCpe = changes['cpe'].previousValue as CpeDevice | null;
+      if (prevCpe?.healthScore !== this.cpe.healthScore || prevCpe?.isOnline !== this.cpe.isOnline) {
+        this.loadSupplementaryPanels();
+      }
+    }
+    if (changes['serialNumber'] && this.serialNumber) {
+      this.loadSupplementaryPanels();
+    }
+  }
+
+  // ── Efeitos Visuais (Highlight) ─────────────────────────────────────────
+  flashingMetrics = new Set<string>();
+  private flashTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly MAX_FLASH_TIMERS = 30;
+
+  /** Dispara um efeito visual de "piscar" para uma métrica específica */
+  triggerFlash(metricKey: string): void {
+    // Limita acumulação de timers em CPEs com muitas métricas ou alta frequência de chunks
+    if (this.flashTimers.size >= this.MAX_FLASH_TIMERS) return;
+    // Não recria timer já ativo para a mesma chave
+    if (this.flashTimers.has(metricKey)) return;
+    this.flashingMetrics.add(metricKey);
+    const timer = setTimeout(() => {
+      this.flashingMetrics.delete(metricKey);
+      this.flashTimers.delete(metricKey);
+      this.cdr.markForCheck(); // Atualiza a view após remover o flash
+    }, 2000); // Remove o efeito após 2s
+    this.flashTimers.set(metricKey, timer);
+  }
+
+  /** Verifica se o card deve estar piscando agora */
+  hasFlash(metricKey: string): boolean {
+    return this.flashingMetrics.has(metricKey);
   }
 
   // ── Getters de Análise Avançada ────────────────────────────────────────
@@ -142,29 +432,230 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy {
   get analysisAlerts() { return this.analysisData?.summary?.alerts || []; }
   get analysisHealth() { return this.analysisData?.summary?.overallHealth || 'unknown'; }
 
+  // Traduz overallHealth para português
+  get overallHealthLabel(): string {
+    const health = this.analysisData?.summary?.overallHealth || 'unknown';
+    const labels: Record<string, string> = {
+      good: 'Bom',
+      warning: 'Atenção',
+      critical: 'Crítico',
+      unknown: 'Desconhecido'
+    };
+    return labels[health] || health;
+  }
+
+  // ── EP 26.37: Novos getters e métodos ───────────────────────────────────
+
+  // Step 1: Health Score
+  readonly healthScoreLabels: Record<string, string> = {
+    connectivity: 'Conectividade WAN/GPON',
+    optical:      'Sinal Óptico',
+    system:       'Recursos do Sistema',
+    wifi:         'Ruído Wi-Fi',
+    stability:    'Estabilidade Histórica',
+  };
+
+  healthScoreColor(score: number): string {
+    if (score >= 80) return 'bg-green-500';
+    if (score >= 50) return 'bg-yellow-400';
+    return 'bg-red-500';
+  }
+
+  healthScoreBadge(score: number): string {
+    if (score >= 80) return 'text-green-600 dark:text-green-400';
+    if (score >= 50) return 'text-yellow-600 dark:text-yellow-400';
+    return 'text-red-600 dark:text-red-400';
+  }
+
+  // Step 2: Sistema
+  formatUptimeHuman(seconds: number | null | undefined): string {
+    if (seconds == null || isNaN(Number(seconds))) return '—';
+    const s = Math.round(Number(seconds));
+    if (s < 60) return `${s}s`;
+    const minutes = Math.floor(s / 60);
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    const rem = hours % 24;
+    return rem > 0 ? `${days}d ${rem}h` : `${days}d`;
+  }
+
+  get ramUsagePercent(): number | null {
+    const free  = this.safeExtractValue(this.telemetryData as any, 'memoryFree');
+    const total = this.safeExtractValue(this.telemetryData as any, 'memoryTotal');
+    if (free == null || total == null || total <= 0) return null;
+    return Math.round(((total - free) / total) * 100);
+  }
+
+  get ramUsedMb(): number | null {
+    const free  = this.safeExtractValue(this.telemetryData as any, 'memoryFree');
+    const total = this.safeExtractValue(this.telemetryData as any, 'memoryTotal');
+    if (free == null || total == null) return null;
+    return Math.round((total - free) / 1024);
+  }
+
+  get ramTotalMb(): number | null {
+    const total = this.safeExtractValue(this.telemetryData as any, 'memoryTotal');
+    if (total == null) return null;
+    return Math.round(total / 1024);
+  }
+
+  usageBarColor(pct: number | null): string {
+    if (pct == null) return 'bg-gray-400';
+    if (pct >= 85) return 'bg-red-500';
+    if (pct >= 70) return 'bg-yellow-400';
+    return 'bg-green-500';
+  }
+
+  // Step 3: Óptico
+  get rxZone(): 'ok' | 'warning' | 'critical' | 'unknown' {
+    const rx = this.safeExtractValue(this.telemetryData as any, 'opticalRx');
+    if (rx == null) return 'unknown';
+    if (rx > -20) return 'ok';
+    if (rx >= -25) return 'warning';
+    return 'critical';
+  }
+
+  get txZone(): 'ok' | 'warning' | 'critical' | 'unknown' {
+    const tx = this.safeExtractValue(this.telemetryData as any, 'opticalTx');
+    if (tx == null) return 'unknown';
+    if (tx > -5) return 'ok';
+    if (tx >= -8) return 'warning';
+    return 'critical';
+  }
+
+  opticalZoneClass(zone: 'ok' | 'warning' | 'critical' | 'unknown'): string {
+    return {
+      ok:      'text-green-500 font-semibold',
+      warning: 'text-yellow-500 font-semibold',
+      critical:'text-red-500 font-bold',
+      unknown: 'text-gray-400',
+    }[zone];
+  }
+
+  // Step 4: Wi-Fi tabs
+  wifiTabSelected: '2g' | '5g' = '2g';
+
+  private autoSelectWifiTab(): void {
+    const c2g = this.safeExtractValue(this.telemetryData as any, 'wifi2gClients') ?? 0;
+    const c5g = this.safeExtractValue(this.telemetryData as any, 'wifi5gClients') ?? 0;
+    if (!this.telemetryData?.['wifi' + (this.wifiTabSelected === '2g' ? '2g' : '5g') + 'Channel']) {
+      this.wifiTabSelected = this.telemetryData?.['wifi5gChannel'] ? '5g' : '2g';
+    }
+  }
+
+  // Step 5: Export CSV
+  exportHistoryCsv(): void {
+    if (!this.rawHistory.length) return;
+
+    const headers = ['timestamp', 'cpuUsage', 'memoryFreeKb', 'memoryTotalKb', 'opticalRx_dBm', 'opticalTx_dBm', 'wanStatus', 'gponStatus'];
+
+    const rows = this.rawHistory.map(snap => {
+      return [
+        new Date(snap.timestamp).toISOString(),
+        (snap as any)['cpuUsage'] ?? '',
+        (snap as any)['memoryFree'] ?? '',
+        (snap as any)['memoryTotal'] ?? '',
+        (snap as any)['opticalRx'] ?? '',
+        (snap as any)['opticalTx'] ?? '',
+        (snap as any)['wanStatus'] ?? '',
+        (snap as any)['gponStatus'] ?? '',
+      ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `telemetria_${this.serialNumber}_${this.selectedPeriodHours}h_${new Date().toISOString().slice(0,10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Step 6: Análise priorizada
+  readonly analysisInfoMap: Record<string, string> = {
+    opticalTrend:       'Tendência Óptica',
+    rebootStability:    'Estabilidade de Reboot',
+    trafficAnomalies:   'Anomalias de Tráfego',
+    oltComparison:      'Comparação com OLT',
+    thermalCorrelation: 'Correlação Térmica',
+    latencyDns:         'Latência DNS',
+    topDestinations:    'Top Destinos de Tráfego',
+    wanErrors:          'Erros WAN',
+    laserHealth:        'Saúde do Laser',
+    memoryLeak:         'Vazamento de Memória',
+    powerSupply:        'Fonte de Energia',
+  };
+
+  getAnalysisInfo(key: string): string {
+    return this.analysisInfoMap[key] || key;
+  }
+
+  formatMeasuredAt(measuredAt: string): string {
+    const seconds = Math.floor((Date.now() - new Date(measuredAt).getTime()) / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}min`;
+    return `${Math.floor(seconds / 3600)}h`;
+  }
+
+
+  get sortedAnalysisEntries(): Array<{ key: string; data: any }> {
+    if (!this.analysisData?.analyses) return [];
+    const severityOrder: Record<string, number> = { critical: 0, warning: 1, ok: 2, normal: 2 };
+    return Object.entries(this.analysisData.analyses)
+      .filter(([, v]) => v != null)
+      .map(([key, data]) => ({ key, data }))
+      .sort((a, b) => {
+        const sa = severityOrder[a.data?.severity ?? a.data?.status ?? 'ok'] ?? 2;
+        const sb = severityOrder[b.data?.severity ?? b.data?.status ?? 'ok'] ?? 2;
+        return sa - sb;
+      });
+  }
+
+  analysisCardBorder(data: any): string {
+    const sev = data?.severity ?? data?.status ?? 'ok';
+    if (sev === 'critical') return 'border-red-400 dark:border-red-600';
+    if (sev === 'warning')  return 'border-yellow-400 dark:border-yellow-600';
+    return 'border-gray-200 dark:border-gray-700';
+  }
+
+  analysisBadge(data: any): string {
+    const sev = data?.severity ?? data?.status ?? '';
+    if (sev === 'critical') return '🔴';
+    if (sev === 'warning')  return '⚠️';
+    if (sev === 'ok' || sev === 'normal') return '✅';
+    return '';
+  }
+
+
+  // ── EP 26.36: Métodos para alertas enriquecidos ───────────────────────────
+  /** Ícone de severidade para o card de alertas */
+  alertIcon(severity: string): string {
+    return severity === 'critical' ? '🔴' : '⚠️';
+  }
+
+  /** Converte timestamp para "há X min/h" */
+  timeAgo(timestamp: string | Date | undefined): string {
+    if (!timestamp) return '';
+    const diff = Date.now() - new Date(timestamp).getTime();
+    const min  = Math.floor(diff / 60000);
+    if (min < 1)   return 'agora';
+    if (min < 60)  return `há ${min}min`;
+    const h = Math.floor(min / 60);
+    if (h < 24)    return `há ${h}h`;
+    return `há ${Math.floor(h / 24)}d`;
+  }
+
   // ── Getters legados (WAN, Óptica, Hardware) ────────────────────────────
   get isRxCritical(): boolean {
-    return this.cpe?.opticalRx !== undefined && this.cpe.opticalRx < -27;
+    const rxPower = this.safeExtractValue(this.telemetryData!, 'opticalRx');
+    return rxPower !== null && rxPower < -25;
   }
   get isRxGood(): boolean {
-    return this.cpe?.opticalRx !== undefined && this.cpe.opticalRx >= -27;
-  }
-  get rxDisplay(): string {
-    return this.cpe?.opticalRx !== undefined ? `${this.cpe.opticalRx} dBm` : 'N/A';
-  }
-  get txDisplay(): string {
-    return this.cpe?.opticalTx !== undefined ? `${this.cpe.opticalTx} dBm` : 'N/A';
-  }
-
-  // ── Telemetria ──────────────────────────────────────────────────────────
-  /** Getter para uso no template (Angular não expõe Date global). */
-  get now(): number {
-    return Date.now();
-  }
-
-  /** True se o último update tem mais de 5 minutos. */
-  get isStale(): boolean {
-    return !this.lastUpdated || (Date.now() - this.lastUpdated.getTime()) > 300_000;
+    const rxPower = this.safeExtractValue(this.telemetryData!, 'opticalRx');
+    return rxPower !== null && rxPower >= -25;
   }
 
   /** Retorna label de cache (ex: "Atualizado há 12s · cache"). */
@@ -177,190 +668,145 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy {
     return `Atualizado há ${minutes}min`;
   }
 
-  /** Retorna métrica parseada como número, ou null. */
-  metricValue(key: string): number | null {
-    const m = this.telemetryData?.[key] as TelemetryMetric | undefined;
-    if (!m || m.value === undefined) return null;
-    const n = parseFloat(m.value);
-    return isNaN(n) ? null : n;
+  /** Retorna métrica como string, ou null. */
+  stringValue(key: string): string | null {
+    const m = this.telemetryData?.[key];
+    if (m === undefined || m === null) return null;
+
+    // Trata caso onde m é um primitivo (backend/cache) ou um objeto TelemetryMetric
+    const val = typeof m === 'object' && 'value' in m ? (m as TelemetryMetric).value : m;
+    if (val === undefined || val === null) return null;
+
+    return String(val);
   }
 
-  /** CPU percentual. */
-  get cpuValue(): number | null {
-    return this.metricValue('cpuUsage');
-  }
-
-  /** Memória livre em KB. */
-  get memFreeValue(): number | null {
-    return this.metricValue('memoryFree');
-  }
-
-  /** Memória total em KB (para calcular % usada). */
-  get memTotalValue(): number | null {
-    return this.metricValue('memoryTotal');
-  }
-
-  /** Percentual de memória usada. */
-  get memUsedPercent(): number | null {
-    const free = this.memFreeValue;
-    const total = this.memTotalValue;
-    if (free === null || total === null || total <= 0) return null;
-    return Math.round(((total - free) / total) * 100);
-  }
-
-  /** Uptime em horas (aproximado). */
-  get uptimeHours(): number | null {
-    const up = this.metricValue('upTime');
-    return up !== null ? Math.round(up / 3600) : null;
-  }
-
-  /** Sinal óptico RX (dBm) — telemetria em tempo real. */
-  get opticalRxValue(): number | null {
-    return this.metricValue('opticalRx');
-  }
-
-  /** Sinal óptico TX (dBm) — telemetria em tempo real. */
-  get opticalTxValue(): number | null {
-    return this.metricValue('opticalTx');
-  }
-
-  /** Temperatura do SoC/PCB (°C) — fallback para transceptor óptico se SoC não disponível. */
-  get temperatureValue(): number | null {
-    const socTemp = this.metricValue('temperature');
-    if (socTemp !== null) return socTemp;
-    // Fallback: transceiver óptico (XC220-G3 não expõe SoC temperature)
-    return this.metricValue('opticalTemperature');
-  }
-
-  /** Temperatura do transceptor óptico (°C). */
-  get opticalTempValue(): number | null {
-    return this.metricValue('opticalTemperature');
-  }
-
-  /** Tensão do transceptor óptico (V). */
-  get opticalVoltageValue(): number | null {
-    return this.metricValue('opticalVoltage');
-  }
-
-  /** Status GPON ('connected' | 'disconnected' | null). */
-  get gponStatus(): string | null {
-    const m = this.telemetryData?.['gponStatus'] as any;
-    return m?.value ?? null;
-  }
-
-  /** True se GPON está conectado. */
-  get isGponConnected(): boolean {
-    return this.gponStatus?.toLowerCase() === 'connected';
-  }
-
-  /** Taxa de download atual em Kbps. */
-  get wanDownstreamRate(): number | null {
-    return this.metricValue('wanDownstreamRate');
-  }
-
-  /** Taxa de upload atual em Kbps. */
-  get wanUpstreamRate(): number | null {
-    return this.metricValue('wanUpstreamRate');
-  }
-
-  /** Corrente de bias do laser óptico (µA). */
-  get biasCurrentValue(): number | null {
-    return this.metricValue('biasCurrent');
-  }
-
-  /** Total de bytes recebidos (desde o boot). */
-  get wanBytesReceived(): number | null {
-    return this.metricValue('wanBytesReceived');
-  }
-
-  /** Total de bytes enviados (desde o boot). */
-  get wanBytesSent(): number | null {
-    return this.metricValue('wanBytesSent');
-  }
-
-  /** Total de pacotes recebidos. */
-  get wanPacketsReceived(): number | null {
-    return this.metricValue('wanPacketsReceived');
-  }
-
-  /** Total de pacotes enviados. */
-  get wanPacketsSent(): number | null {
-    return this.metricValue('wanPacketsSent');
-  }
-
-  /** Erros de recebimento (degradação de link). */
-  get wanErrorsReceived(): number | null {
-    return this.metricValue('wanErrorsReceived');
-  }
-
-  /** Erros de envio. */
-  get wanErrorsSent(): number | null {
-    return this.metricValue('wanErrorsSent');
-  }
-
-  /** Quantidade de hosts na LAN. */
-  get hostCount(): number | null {
-    return this.metricValue('hostCount');
-  }
-
-  /** Clientes Wi-Fi 2.4GHz. */
-  get wifi2gClients(): number | null {
-    return this.metricValue('wifi2gClients');
-  }
-
-  /** Clientes Wi-Fi 5GHz. */
-  get wifi5gClients(): number | null {
-    return this.metricValue('wifi5gClients');
-  }
-
-  /** Total de clientes Wi-Fi em todas as redes (Principal + Guest + IoT). */
-  get wifiTotalClients(): number | null {
-    return this.metricValue('wifiTotalClients');
-  }
-
-  /** Canal 2.4GHz. */
-  get wifi2gChannel(): number | null {
-    return this.metricValue('wifi2gChannel');
-  }
-
-  /** Canal 5GHz. */
-  get wifi5gChannel(): number | null {
-    return this.metricValue('wifi5gChannel');
-  }
-
-  /** Potência de TX Wi-Fi 2.4GHz (%). */
-  get wifi2gTxPower(): number | null {
-    return this.metricValue('wifi2gTxPower');
-  }
-
-  /** Potência de TX Wi-Fi 5GHz (%). */
-  get wifi5gTxPower(): number | null {
-    return this.metricValue('wifi5gTxPower');
-  }
-
-  /** Formata bytes legíveis (ex: 1.5 GB, 840 MB). */
-  formatBytes(bytes: number | null): string {
-    if (bytes === null) return '—';
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    const v = bytes / Math.pow(k, i);
-    return `${v.toFixed(2)} ${sizes[i]}`;
+  /**
+   * Retorna o valor numérico de bytes da WAN para uso estrito no pipe formatBytes.
+   * @param key Chave da métrica (wanBytesReceived ou wanBytesSent)
+   */
+  getWanBytes(key: string): number {
+    const m = this.telemetryData?.[key];
+    if (!m) return 0;
+    const val = typeof m === 'object' && 'value' in m ? (m as TelemetryMetric).value : m;
+    const parsed = parseFloat(String(val));
+    return isNaN(parsed) ? 0 : parsed;
   }
 
   // ── Ações ────────────────────────────────────────────────────────────────
+
+  /**
+   * Extrai valores vitais estáticos da árvore TR-069 para renderização Zero-Latency (0ms).
+   * Utiliza as conversões da norma OMCI (ITU-T G.988) para exibir dBm, Volts e Celsius reais.
+   */
+  private extractFallbackTelemetry(): void {
+    if (!this.cpe || !this.cpe.parameters) return;
+
+    const values: Record<string, string> = {};
+
+    for (const p of this.cpe.parameters) {
+      if (!p.name) continue;
+      const nameLower = p.name.toLowerCase();
+      
+      // Encontra o sufixo correspondente no array estático (O(n) com n pequeno)
+      for (const [suffix, key] of PARAM_MAP) {
+        if (nameLower.endsWith(suffix)) {
+          values[key] = p.value;
+          break;
+        }
+      }
+    }
+
+    if (!this.telemetryData) this.telemetryData = {};
+    const t = this.telemetryData;
+
+    // OTIMIZAÇÃO: Resolve as constantes matemáticas OMCI antes da atribuição (Anti-Leak)
+    const valRx = values['rxPower'] ? this.diagnosticParser.parseOmciRx(values['rxPower']) : null;
+    const valTx = values['txPower'] ? this.diagnosticParser.parseOmciTx(values['txPower']) : null;
+    const valTemp = values['temp'] ? this.diagnosticParser.parseOmciTemp(values['temp']) : null;
+    const valVoltage = values['voltage'] ? this.diagnosticParser.parseOmciVoltage(values['voltage']) : null;
+    const valBias = values['bias'] ? this.diagnosticParser.parseOmciBias(values['bias']) : null;
+
+    // CORREÇÃO: Adicionado 'unit' e 'description' exigidos estritamente pela interface TelemetryMetric (TS2739)
+    // Processa dados do fallback local (parâmetros da CPE)
+    if (!t['cpuUsage'] && values['cpu']) t['cpuUsage'] = { value: String(parseFloat(values['cpu'])), unit: '%', description: 'CPU Usage' };
+    if (!t['memoryFree'] && values['memFree']) t['memoryFree'] = { value: String(parseFloat(values['memFree'])), unit: 'KB', description: 'Free Memory' };
+    if (!t['memoryTotal'] && values['memTotal']) t['memoryTotal'] = { value: String(parseFloat(values['memTotal'])), unit: 'KB', description: 'Total Memory' };
+    if (!t['upTime'] && values['upTime']) t['upTime'] = { value: String(parseFloat(values['upTime'])), unit: 's', description: 'Uptime' };
+    if (!t['gponStatus'] && values['gponStatus']) t['gponStatus'] = { value: values['gponStatus'], unit: '', description: 'GPON Status' };
+    if (!t['opticalRx'] && valRx !== null) t['opticalRx'] = { value: String(valRx), unit: 'dBm', description: 'Optical RX' };
+    if (!t['opticalTx'] && valTx !== null) t['opticalTx'] = { value: String(valTx), unit: 'dBm', description: 'Optical TX' };
+    if (!t['opticalTemperature'] && valTemp !== null) t['opticalTemperature'] = { value: String(valTemp), unit: '°C', description: 'Optical Temperature' };
+    if (!t['opticalVoltage'] && valVoltage !== null) t['opticalVoltage'] = { value: String(valVoltage), unit: 'V', description: 'Optical Voltage' };
+    if (!t['biasCurrent'] && valBias !== null) t['biasCurrent'] = { value: String(valBias), unit: 'mA', description: 'Bias Current' };
+    if (!t['wanBytesReceived'] && values['bytesRx']) t['wanBytesReceived'] = { value: String(parseFloat(values['bytesRx'])), unit: 'B', description: 'WAN Bytes Received' };
+    if (!t['wanBytesSent'] && values['bytesTx']) t['wanBytesSent'] = { value: String(parseFloat(values['bytesTx'])), unit: 'B', description: 'WAN Bytes Sent' };
+
+    this.cdr.markForCheck(); // Atualiza interface com os fallbacks
+  }
+
+  /**
+   * Carrega o snapshot mais recente do TelemetryVitals do banco para carga inicial.
+   * Padrão híbrido: popula telemetryData imediatamente ao abrir a aba.
+   * WebSocket continua sobrescrevendo em tempo real quando novos dados chegam.
+   * Merge defensivo: só preenche campos que ainda estão null (evita sobrescrever WS).
+   */
+  private loadLatestVitals(): void {
+    if (!this.serialNumber) return;
+
+    this.cpeService.getLatestVitals(this.serialNumber)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => {
+          if (!res?.data) return;
+          const d = res.data;
+
+          // Padrão idêntico ao WebSocket source === 'vitals' (valores brutos, sem wrapper)
+          const vitalsFields: Partial<TelemetryData> = {};
+
+          if (d.cpuUsage   != null) vitalsFields['cpuUsage']   = d.cpuUsage;
+          if (d.memoryFree != null) vitalsFields['memoryFree']  = d.memoryFree;
+          if (d.memoryTotal!= null) vitalsFields['memoryTotal'] = d.memoryTotal;
+          if (d.opticalRx  != null) vitalsFields['opticalRx']   = d.opticalRx;
+          if (d.opticalTx  != null) vitalsFields['opticalTx']   = d.opticalTx;
+          if (d.wanStatus)          vitalsFields['wanStatus']   = d.wanStatus;
+          if (d.gponStatus)         vitalsFields['gponStatus']  = d.gponStatus;
+          if (d.hostCount  != null) vitalsFields['hostCount']   = d.hostCount;
+
+          // Merge defensivo: spread na ordem (vitals como base, telemetryData existente tem prioridade)
+          // Se WebSocket já populou antes do HTTP retornar, campos não-null do telemetryData prevalecem.
+          this.telemetryData = {
+            ...vitalsFields,
+            ...(this.telemetryData || {}),
+          } as TelemetryData;
+
+          // Atualizar lastUpdated apenas se não há dado mais recente do WebSocket
+          if (!this.lastUpdated && d.timestamp) {
+            this.lastUpdated = new Date(d.timestamp);
+          }
+
+          this.cdr.detectChanges();
+        },
+        error: () => {
+          // Erro silencioso — o WebSocket cobre o caso de fallback
+        }
+      });
+  }
+
   /** Busca telemetria do cache Redis SEM disparar coleta na CPE.
    *  Se não houver cache, não faz nada (usuário deve clicar em "Monitorar agora"). */
   loadFromCache(): void {
     if (!this.serialNumber) return;
 
-    this.cpeService.getTelemetryCache(this.serialNumber).subscribe({
+    this.cpeService.getTelemetryCache(this.serialNumber)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
       next: (res) => {
         if (res.success && res.data) {
-          this.telemetryData = res.data as TelemetryData;
+          this.telemetryData = { ...(this.telemetryData || {}), ...(res.data as TelemetryData) };
           this.lastUpdated = new Date(res.timestamp);
+          this.telemetryCacheService.saveLatestTelemetry(this.serialNumber, this.telemetryData, this.lastUpdated);
           this.telemetryLoading = false;
+          this.cdr.markForCheck();
         }
       },
       error: (err) => {
@@ -368,40 +814,92 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy {
         if (err.status !== 404) {
           this.telemetryError = 'Erro ao carregar cache de telemetria.';
         }
+        this.cdr.markForCheck();
       }
     });
   }
 
-  /** Timeout para desativar o spinner se a CPE não responder em 60s. */
+  /**
+   * Carrega dados do cache do navegador (localStorage) na inicialização.
+   * Mostra dados imediatamente enquanto os dados frescos são buscados.
+   */
+  private async loadFromFrontendCache(): Promise<void> {
+    if (!this.serialNumber) return;
+
+    // Carrega a telemetria mais recente
+    const cachedTelemetry = this.telemetryCacheService.loadLatestTelemetry(this.serialNumber);
+    if (cachedTelemetry) {
+      this.telemetryData = { ...(this.telemetryData || {}), ...(cachedTelemetry.data as TelemetryData) };
+      this.lastUpdated = new Date(cachedTelemetry.lastUpdated);
+      this.cdr.markForCheck();
+    }
+
+    // Carrega o histórico para o período selecionado
+    const cachedHistory = await this.telemetryCacheService.loadHistory(this.serialNumber, this.selectedPeriodHours);
+    if (cachedHistory) {
+      this.rawHistory = cachedHistory;
+      this.buildChart();
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** Timeout para desativar o spinner se a CPE não responder em 120s. */
   private telemetryTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   /** Solicita telemetria sob demanda ao backend (botão de refresh manual). */
   requestTelemetry(): void {
-    if (!this.serialNumber) return;
-    this.telemetryLoading = true;
-    this.telemetryError = null;
+    this.isPartialResult = false; // Limpa badge de coleta parcial ao iniciar nova coleta
+    this.telemetryProgress = 0; // Reseta barra de progresso
+    this.completedChunks = 0; // Reseta contador de chunks
+    this.totalChunks = 0; // Reseta total de chunks
+    this.isPartialCollection = false; // Reseta flag de coleta parcial
+    this.vitalsReceived = false; // Reseta flag de vitals recebidos
+    // Dispara a esteira. Se já estiver rodando, o exhaustMap ignora o next() internamente.
+    this.monitorTrigger$.next();
 
-    // Limpa timeout anterior se houver
-    if (this.telemetryTimeoutId) {
-      clearTimeout(this.telemetryTimeoutId);
-    }
-
-    this.cpeService.requestTelemetry(this.serialNumber, 'info').subscribe({
-      next: (res) => {
-        this.toastService.info(res.message || 'Solicitação enviada. Aguardando CPE...');
-        // Se em 60s o WebSocket não chegar, desativa o spinner e avisa o usuário
-        this.telemetryTimeoutId = setTimeout(() => {
-          if (this.telemetryLoading) {
-            this.telemetryLoading = false;
-            this.telemetryError = 'A CPE não respondeu dentro do tempo esperado (60s). Tente novamente.';
-            this.toastService.warning('Timeout: CPE não respondeu em 60 segundos.');
-          }
-        }, 60000);
-      },
-      error: () => {
+    // Proteção de timeout: se CPE não responder em 120s, desliga spinner.
+    // Segundo clique cancela o timeout anterior antes de criar um novo (sem duplicatas).
+    if (this.telemetryTimeoutId) clearTimeout(this.telemetryTimeoutId);
+    this.telemetryTimeoutId = setTimeout(() => {
+      if (this.telemetryLoading) {
         this.telemetryLoading = false;
-        this.telemetryError = 'Falha ao solicitar telemetria.';
-        this.toastService.error('Erro ao solicitar telemetria da CPE.');
+        this.toastService.warning('Tempo esgotado: CPE não respondeu em 120s. Verifique a conexão da CPE.');
+        this.cdr.markForCheck();
+      }
+      this.telemetryTimeoutId = null;
+    }, 120_000);
+  }
+
+  /** Solicita telemetria vitals (8 campos críticos) para resposta rápida (~2s). */
+  requestVitals(): void {
+    if (this.vitalsLoading) return; // Guard: previne múltiplas requisições simultâneas
+    this.vitalsLoading = true;
+
+    // Failsafe: libera o botão se WebSocket não chegar em 30s após HTTP 202.
+    // Cobre edge cases onde CR falha silenciosamente e stall não resolve o loading.
+    timer(30000).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      if (this.vitalsLoading) {
+        this.vitalsLoading = false;
+        this.cdr.markForCheck();
+      }
+    });
+
+    this.cpeService.requestVitals(this.serialNumber).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      timeout(30000), // Timeout 30s
+      catchError((err) => {
+        this.vitalsLoading = false;
+        this.toastService.error(err.error?.error || 'Erro ao conectar com a CPE.');
+        return EMPTY;
+      })
+    ).subscribe({
+      next: (response: any) => {
+        this.vitalsLoading = false;
+        if (response.status === 'queued') {
+          this.toastService.info('Coleta vitals enfileirada. Aguarde atualização via WebSocket.');
+        } else {
+          this.toastService.success('Telemetria vitals iniciada!');
+        }
       }
     });
   }
@@ -410,141 +908,672 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy {
   loadAnalysis(): void {
     if (!this.serialNumber) return;
     this.analysisLoading = true;
-    this.cpeService.getTelemetryAnalysis(this.serialNumber).subscribe({
+    this.cpeService.getTelemetryAnalysis(this.serialNumber)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
       next: (res) => {
-        this.analysisData = res;
+        this.analysisData = res as TelemetryAnalysis;
         this.analysisLoading = false;
+        this.cdr.markForCheck();
       },
       error: () => {
         this.analysisLoading = false;
         this.analysisError = 'Erro ao carregar análise avançada.';
+        this.cdr.markForCheck();
       }
     });
   }
 
+  loadWanConfig(): void {
+    if (!this.cpe) return;
+    this.wanConfigFields = {
+      pppoeUsername: this.cpe.pppoeUsername || '',
+      dnsServer1:   (this.cpe.wanDnsManual && this.cpe.wanDnsManual[0]) || '',
+      dnsServer2:   (this.cpe.wanDnsManual && this.cpe.wanDnsManual[1]) || '',
+      mtu:          this.cpe.wanMtu    || 1492,
+      vlanId:       this.cpe.wanVlanId || 0,
+    };
+    this.isEditingWanConfig = true;
+  }
+
+  saveWanConfig(): void {
+    if (!this.serialNumber) return;
+    const payload: Record<string, unknown> = {};
+    const f = this.wanConfigFields;
+    const c = this.cpe;
+
+    if (f.pppoeUsername !== (c?.pppoeUsername || ''))
+      payload['pppoeUsername'] = f.pppoeUsername;
+    if (f.dnsServer1 !== ((c?.wanDnsManual && c.wanDnsManual[0]) || ''))
+      payload['dnsServer1'] = f.dnsServer1;
+    if (f.dnsServer2 !== ((c?.wanDnsManual && c.wanDnsManual[1]) || ''))
+      payload['dnsServer2'] = f.dnsServer2;
+    if (f.mtu && f.mtu !== (c?.wanMtu || 1492))
+      payload['mtu'] = f.mtu;
+    if (f.vlanId !== undefined && f.vlanId !== (c?.wanVlanId || 0))
+      payload['vlanId'] = f.vlanId;
+
+    if (!Object.keys(payload).length) {
+      this.toastService.warning('Nenhuma alteração detectada.');
+      this.isEditingWanConfig = false;
+      return;
+    }
+
+    this.wanConfigSaving = true;
+    this.cpeService.updateWanConfig(this.serialNumber, payload).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      catchError((err: { error?: { error?: string } }) => {
+        this.wanConfigSaving = false;
+        this.toastService.error(err.error?.error || 'Erro ao atualizar configuração WAN.');
+        return EMPTY;
+      })
+    ).subscribe({
+      next: () => {
+        this.wanConfigSaving   = false;
+        this.isEditingWanConfig = false;
+        this.toastService.success('Configuração WAN enviada. A CPE será atualizada na próxima conexão.');
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  /** Carrega painéis suplementares (Health Score, Alertas, Incidente, Intervenção). */
+  private loadSupplementaryPanels(): void {
+    if (!this.serialNumber) return;
+
+    this.cpeService.getHealthScoreBreakdown(this.serialNumber).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (res) => { this.healthScoreBreakdown = res; this.cdr.detectChanges(); },
+      error: () => { /* silencioso — painel opcional */ },
+    });
+
+    this.cpeService.getCpeAlerts(this.serialNumber).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (res) => { this.cpeAlerts = res.data; this.cdr.detectChanges(); },
+      error: () => { /* silencioso */ },
+    });
+
+    this.cpeService.getIncidentStatus(this.serialNumber).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (res) => { this.incidentStatus = res; this.cdr.detectChanges(); },
+      error: () => { /* silencioso */ },
+    });
+
+    this.cpeService.getLastIntervention(this.serialNumber).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (res) => { this.lastIntervention = res; this.cdr.detectChanges(); },
+      error: () => { /* silencioso */ },
+    });
+  }
+
+  /** Escuta o evento específico bruto de VALUE CHANGE (TR-181) */
+  private listenForCpeValueChange(): void {
+    // Verifica se o método existe no serviço WebSocket
+    const wsService = this.wsService as { onCpeValueChange?: () => any };
+    if (typeof wsService.onCpeValueChange !== 'function') return;
+
+    wsService.onCpeValueChange()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        // OTIMIZAÇÃO (Micro-batching RxJS): Agrupa os eventos de Value Change passivos
+        // em janelas de 500ms para evitar travamentos na UI e Toast Spam gerados por CPEs ruidosas.
+        bufferTime(500),
+        filter((events: ValueChangeEvent[]) => events.length > 0)
+      )
+      .subscribe((events: ValueChangeEvent[]) => {
+        this.ngZone.run(() => {
+          // Filtra estritamente os eventos direcionados a esta CPE
+          const cpeEvents = events.filter((e: ValueChangeEvent) => e.serialNumber === this.serialNumber);
+          if (cpeEvents.length === 0) return;
+
+          let hasWanStatusChange = false;
+
+          // Processa e consolida o lote de Value Changes iterativamente
+          cpeEvents.forEach((event: ValueChangeEvent) => {
+            if (event.changeType === 'wan_status_change') hasWanStatusChange = true;
+          });
+
+          // Notificação consolidada (Estresse Zero UX)
+          if (hasWanStatusChange) {
+            this.toastService.warning('Mudança de Rede: O status da interface WAN da CPE foi alterado.');
+          }
+          this.cdr.detectChanges(); // Renderiza o DOM imediatamente
+        });
+      });
+  }
+
+  /** Escuta alertas de telemetria (onTelemetryAlert, onTelemetryAlertResolved, onTelemetryAlertBatch) */
+  private listenForAlerts(): void {
+    const wsService = this.wsService as {
+      onTelemetryAlert?: () => any;
+      onTelemetryAlertResolved?: () => any;
+      onTelemetryAlertBatch?: () => any;
+    };
+
+    // onTelemetryAlert: alerta individual
+    if (typeof wsService.onTelemetryAlert === 'function') {
+      wsService.onTelemetryAlert()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((alert: TelemetryAlert) => {
+          if (alert.serialNumber === this.serialNumber) {
+            this.ngZone.run(() => {
+              this.cpeAlerts = [alert, ...this.cpeAlerts].slice(0, 50);
+              this.cdr.detectChanges();
+            });
+          }
+        });
+    }
+
+    // onTelemetryAlertResolved: alerta resolvido
+    if (typeof wsService.onTelemetryAlertResolved === 'function') {
+      wsService.onTelemetryAlertResolved()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((event: { serialNumber: string; metric: string }) => {
+          if (event.serialNumber === this.serialNumber) {
+            this.ngZone.run(() => {
+              this.cpeAlerts = this.cpeAlerts.filter(a => a.metric !== event.metric);
+              this.cdr.detectChanges();
+            });
+          }
+        });
+    }
+
+    // onTelemetryAlertBatch: lote de alertas
+    if (typeof wsService.onTelemetryAlertBatch === 'function') {
+      wsService.onTelemetryAlertBatch()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((batch: { alerts: TelemetryAlert[]; count: number }) => {
+          const cpeAlerts = batch.alerts.filter((a: TelemetryAlert) => a.serialNumber === this.serialNumber);
+          if (cpeAlerts.length > 0) {
+            this.ngZone.run(() => {
+              this.cpeAlerts = [...cpeAlerts, ...this.cpeAlerts].slice(0, 50);
+              this.cdr.detectChanges();
+            });
+          }
+        });
+    }
+  }
+
+  /** Escuta eventos de presença Single Driver (presence_conflict e driver_promoted) */
+  private listenForPresenceEvents(): void {
+    // Verifica se o método existe no serviço WebSocket
+    const wsService = this.wsService as { onPresenceConflict?: () => any; onDriverPromoted?: () => any; onCpeLocked?: () => any; onCpeUnlocked?: () => any; onDriverAcquired?: () => any; onViewOnly?: () => any; onDriverReleased?: () => any; onForceViewOnly?: () => any; onViewersUpdated?: () => any };
+
+    // ── Escuta driver_acquired: usuário adquiriu controle de Driver ──
+    if (typeof wsService.onDriverAcquired === 'function') {
+      wsService.onDriverAcquired()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((event: { serialNumber: string; username: string }) => {
+          if (event.serialNumber === this.serialNumber) {
+            this.ngZone.run(() => {
+              this.isViewOnly = false;
+              this.cdr.markForCheck();
+            });
+          }
+        });
+    }
+
+    // ── Escuta view_only: usuário entrou em modo View-Only ──
+    if (typeof wsService.onViewOnly === 'function') {
+      wsService.onViewOnly()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((event: { serialNumber: string; driver: string; message: string }) => {
+          if (event.serialNumber === this.serialNumber) {
+            this.ngZone.run(() => {
+              this.isViewOnly = true;
+              this.toastService.warning(event.message);
+              this.cdr.markForCheck();
+            });
+          }
+        });
+    }
+
+    // ── Escuta force_view_only: Backend forçou View-Only por latência ──
+    if (typeof wsService.onForceViewOnly === 'function') {
+      wsService.onForceViewOnly()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((event: { serialNumber: string; message: string }) => {
+          if (event.serialNumber === this.serialNumber) {
+            this.ngZone.run(() => {
+              this.isViewOnly = true;
+              this.toastService.warning(event.message);
+              this.cdr.markForCheck();
+            });
+          }
+        });
+    }
+
+    // ── Escuta driver_released: Driver liberou controle ──
+    if (typeof wsService.onDriverReleased === 'function') {
+      wsService.onDriverReleased()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((event: { serialNumber: string }) => {
+          if (event.serialNumber === this.serialNumber) {
+            this.ngZone.run(() => {
+              // Habilita botão "Assumir Controle"
+              this.isViewOnly = false;
+              this.cdr.markForCheck();
+            });
+          }
+        });
+    }
+
+    // ── Escuta viewers_updated: Lista de visualizadores atualizada ──
+    if (typeof wsService.onViewersUpdated === 'function') {
+      wsService.onViewersUpdated()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((event: { serialNumber: string; viewers: string[] }) => {
+          if (event.serialNumber === this.serialNumber) {
+            this.ngZone.run(() => {
+              // Atualiza lista de visualizadores (para renderizar avatares)
+              this.viewers = event.viewers;
+              this.cdr.markForCheck();
+            });
+          }
+        });
+    }
+
+    // ── Escuta cpe_locked: CPE está em tráfego CWMP ativo ──
+    if (typeof wsService.onCpeLocked === 'function') {
+      wsService.onCpeLocked()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((event: { serialNumber: string; source: string }) => {
+          if (event.serialNumber === this.serialNumber) {
+            this.ngZone.run(() => {
+              this.isCpeBusy = true;
+              this.cdr.markForCheck();
+            });
+          }
+        });
+    }
+
+    // ── Escuta cpe_unlocked: CPE está livre ──
+    if (typeof wsService.onCpeUnlocked === 'function') {
+      wsService.onCpeUnlocked()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((event: { serialNumber: string }) => {
+          if (event.serialNumber === this.serialNumber) {
+            this.ngZone.run(() => {
+              this.isCpeBusy = false;
+              this.cdr.markForCheck();
+            });
+          }
+        });
+    }
+  }
+
+  /** Inicia ciclo de heartbeat para manter controle de Driver */
+  private startHeartbeat(): void {
+    if (!this.serialNumber) return;
+    // Emite driver_keepalive a cada 30 segundos para renovar TTL no Redis
+    // Usa takeUntilDestroyed para limpeza automática e verifica socket.connected
+    interval(30000)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        filter(() => this.wsService['socket']?.connected === true)
+      )
+      .subscribe(() => {
+        this.wsService.emitDriverKeepalive(this.serialNumber);
+      });
+  }
+
   /** Escuta WebSocket de telemetria para esta CPE. */
   private listenForTelemetryUpdates(): void {
-    this.wsSub.add(
-      this.wsService.onTelemetryUpdate().subscribe(event => {
-        if (event.serialNumber !== this.serialNumber) return;
-        // Limpa timeout de segurança para evitar que ele dispare depois
-        if (this.telemetryTimeoutId) {
-          clearTimeout(this.telemetryTimeoutId);
-          this.telemetryTimeoutId = null;
-        }
-        // Faz merge dos novos dados com os existentes: garante que dados de
-        // chunks anteriores (ex: CPU/Uptime) não sejam apagados quando um
-        // evento parcial chega (ex: só optical após chunks 0+1 já mostrados).
-        this.telemetryData = { ...(this.telemetryData || {}), ...(event.data as TelemetryData) };
-        this.lastUpdated = new Date(event.timestamp);
-        this.telemetryLoading = false;
+    this.wsService.onTelemetryUpdate()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef)
+      )
+      .subscribe((event: TelemetryUpdateEvent) => {
+        this.ngZone.run(() => {
+          // Filtra estritamente os eventos direcionados a esta CPE
+          if (event.serialNumber !== this.serialNumber) return;
+  
+          if (this.telemetryTimeoutId) {
+            clearTimeout(this.telemetryTimeoutId);
+            this.telemetryTimeoutId = null;
+          }
 
-        // Se o backend indicar que é coleta parcial (chunks faltantes), avisa o técnico
-        if ((event as any).partial) {
-          const msg = (event as any).message || 'Coleta parcial — alguns lotes não responderam.';
-          this.toastService.warning(msg);
-        } else {
-          this.toastService.success('Telemetria recebida em tempo real.');
-        }
+          // Roteamento por source: vitals vs standard
+          if (event.source === 'vitals' || event.source === 'on-demand-vitals') {
+            // Atualiza APENAS os 10 campos vitais — não sobrescreve dados completos
+            const vitalsKeys = ['wanStatus', 'cpuUsage', 'memoryFree', 'memoryTotal', 'opticalRx', 'opticalTx',
+                                'gponStatus', 'wifi2gNoise', 'wifi5gNoise', 'hostCount'];
+            const vitalsData: Partial<TelemetryData> = {};
+            if (event.data && typeof event.data === 'object') {
+              for (const k of vitalsKeys) {
+                if (event.data[k] !== undefined) vitalsData[k] = event.data[k];
+              }
+              this.telemetryData = { ...(this.telemetryData || {}), ...vitalsData };
+            }
+            this.vitalsReceived = true;
+            this.vitalsLoading = false;
+          } else {
+            // Source 'standard' ou 'on-demand': atualiza todos os campos
+            if (event.data && typeof event.data === 'object') {
+              this.telemetryData = { ...(this.telemetryData || {}), ...event.data };
+            }
+          }
+          this.lastUpdated = new Date(event.timestamp);
+          this.telemetryCacheService.saveLatestTelemetry(this.serialNumber, this.telemetryData!, this.lastUpdated);
 
-        this.loadHistory(); // recarrega gráfico com dado mais recente
-      })
-    );
+          const hasPartial = event.partial;
+          const hasPassive = event.source === 'inform_passive';
+          const isBackground = event.tabContext === 'background';
+
+          // ── ATUALIZAÇÃO DE GRÁFICO O(1) VIA WebSocket ─────────────────────
+          // Atualiza gráficos para qualquer fonte (on-demand, passive, scheduler)
+          // para visualização contínua de métricas em tempo real.
+          if (event.data) {
+            this.addTelemetryPointToChart(event.data, event.timestamp);
+          }
+
+          if (event.data) {
+            Object.keys(event.data).forEach(key => this.triggerFlash(key));
+          }
+
+          this.telemetryLoading = false;
+
+          // Auto-seleciona o rádio Wi-Fi com mais clientes quando dados chegam
+          this.autoSelectWifiTab();
+
+          // Persiste estado de coleta parcial para o template (badge amarelo)
+          this.isPartialResult = hasPartial ?? false;
+
+          // Consolida as notificações visuais (Evita Toast Spam UI)
+          if (hasPartial) {
+            this.toastService.warning(event.message || 'Coleta parcial — alguns lotes não responderam.');
+          } else if (hasPassive) {
+            this.toastService.info('Active Notification: A CPE atualizou dados de telemetria passivamente.');
+          } else if (!isBackground) {
+            // UX: Evita Spam de Toast. Polling de background só ativa o update e o flash visual das cards.
+            this.toastService.success('Telemetria recebida em tempo real.');
+          }
+
+          // Força CD para atualizar cards de telemetria (mesmo sem dados de gráfico)
+          this.cdr.detectChanges();
+        });
+      });
+  }
+
+  /** Escuta evento de conclusão de telemetria via WebSocket para desligar spinner */
+  private listenForTelemetryComplete(): void {
+    const wsService = this.wsService as { onTelemetryComplete?: () => any };
+    if (typeof wsService.onTelemetryComplete !== 'function') return;
+
+    wsService.onTelemetryComplete()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((data: any) => {
+        if (data.serialNumber === this.serialNumber) {
+          this.ngZone.run(() => {
+            // telemetry_complete carrega { serialNumber, timestamp, totalChunks, source }
+            // Fontes passivas (scheduler/bootstrap) não fecham o spinner on-demand
+            const isPassiveSource = data.source === 'standard';
+            if (!isPassiveSource) {
+              // on-demand (batch único) — fecha spinner principal
+              this.telemetryLoading = false;
+              this.vitalsLoading = false;
+              this.telemetryProgress = 0;
+              this.completedChunks = 0;
+              this.totalChunks = 0;
+            }
+            if (data.partial) {
+              this.isPartialResult = true;
+              this.isPartialCollection = true;
+            }
+            if (this.telemetryTimeoutId) {
+              clearTimeout(this.telemetryTimeoutId);
+              this.telemetryTimeoutId = null;
+            }
+            this.cdr.markForCheck();
+          });
+        }
+      });
+  }
+
+  /** Escuta evento de progresso de telemetria por chunk para atualizar barra de progresso */
+  private listenForTelemetryProgress(): void {
+    const wsService = this.wsService as { onTelemetryProgress?: () => any };
+    if (typeof wsService.onTelemetryProgress !== 'function') return;
+
+    wsService.onTelemetryProgress()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((data: any) => {
+        if (data.serialNumber === this.serialNumber) {
+          this.ngZone.run(() => {
+            this.telemetryProgress = data.percent || 0;
+            this.completedChunks = data.completedChunks || 0;
+            this.totalChunks = data.totalChunks || 0;
+            if (data.partial) {
+              this.isPartialCollection = true;
+            }
+            this.cdr.markForCheck();
+          });
+        }
+      });
   }
 
   // ── Gráfico de histórico (últimas 6h) ──────────────────────────────────
+
+  /**
+   * Helper seguro para extrair valores numéricos de telemetria.
+   * Suporta ambas estruturas: { value: number } e plano { number }.
+   * @param data - Objeto de dados de telemetria
+   * @param key - Chave da métrica (ex: 'cpuUsage', 'memoryFree')
+   * @returns Valor numérico ou null se inválido
+   */
+  private safeExtractValue(data: TelemetryData, key: string): number | null {
+    const item = data[key];
+    if (item === null || item === undefined) return null;
+    
+    // Suporta ambos os formatos do backend:
+    //   { value: "27", unit: "%" }  ← WebSocket (string)
+    //   { value: 27, unit: "%" }    ← possível futuro (number direto)
+    if (typeof item === 'object' && 'value' in item) {
+      if (item.value === null || item.value === undefined || item.value === '') return null;
+      const num = Number(item.value);
+      return isNaN(num) ? null : num;
+    }
+    
+    // Suporta plain number (compatibilidade com dados já numéricos)
+    if (typeof item === 'number') return item;
+    
+    // Suporta string sem wrapper (edge case de normalização futura)
+    if (typeof item === 'string' && item.trim() !== '') {
+      const num = Number(item);
+      return isNaN(num) ? null : num;
+    }
+    
+    return null;
+  }
+
+  /**
+   * Altera o período do histórico e recarrega os dados do gráfico.
+   * @param hours - O período em horas (1, 6, 24).
+   */
+  changeHistoryPeriod(hours: number): void {
+    // Removido o bloqueio '|| this.historyLoading' permitindo ao RxJS abortar a request
+    // anterior para não prejudicar a intenção rápida do usuário (UX / Race Condition fix)
+    if (this.selectedPeriodHours === hours) return;
+    this.selectedPeriodHours = hours;
+    
+    // Limpa arrays de gráficos para evitar mistura de dados de períodos diferentes
+    this.chartLabels = [];
+    this.chartDatasets = [];
+    this.opticalChartLabels = [];
+    this.opticalChartDatasets = [];
+    
+    this.loadHistory();
+  }
+
   /** Carrega raw history e monta datasets do Chart.js. */
   loadHistory(): void {
     if (!this.serialNumber) return;
     this.historyLoading = true;
 
-    this.cpeService.getTelemetryRaw(this.serialNumber, 6).subscribe({
-      next: (res) => {
-        this.rawHistory = res.data || [];
+    // Cancela a requisição anterior se o técnico clicar rápido demais (Race Condition Prevention)
+    if (this.historySub) {
+      this.historySub.unsubscribe();
+    }
+
+    this.historySub = this.cpeService.getTelemetryVitalsHistory(this.serialNumber, this.selectedPeriodHours)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+      next: async (res) => {
+        this.rawHistory = (res.data as TelemetrySnapshot[]) || [];
+        await this.telemetryCacheService.saveHistory(this.serialNumber, this.selectedPeriodHours, this.rawHistory);
         this.buildChart();
         this.historyLoading = false;
+        this.cdr.detectChanges();
       },
-      error: () => {
-        this.historyLoading = false;
+      error: (err) => {
+        console.error('[loadHistory] Erro ao carregar histórico:', err);
+        // Garante que buildChart() seja chamado mesmo em erro (datasets vazios)
+        this.buildChart();
+        this.cdr.detectChanges();
       }
     });
+  }
+
+  /** Extrai valor de documento TelemetryRaw (nested) ou evento WebSocket (flat) */
+  private extractHistoryValue(d: any, flatKey: string, nestedPath: string[]): number | null {
+    // Tenta flat primeiro (compatibilidade com eventos WebSocket ao vivo)
+    const flat = d?.[flatKey];
+    if (typeof flat === 'number') return flat;
+    // Lê nested (documentos TelemetryRaw do MongoDB)
+    let cur: any = d;
+    for (const key of nestedPath) {
+      cur = cur?.[key];
+      if (cur == null) return null;
+    }
+    return typeof cur === 'number' ? cur : null;
   }
 
   private buildChart(): void {
     const data = this.rawHistory;
     if (data.length === 0) {
       this.chartLabels = [];
-      this.chartDatasets = [];
+      this.chartDatasets = [
+        createChartDataset('CPU (%)', '#7c3aed', []),
+        createChartDataset('Memória Usada (%)', '#06b6d4', []),
+      ];
       this.opticalChartLabels = [];
-      this.opticalChartDatasets = [];
+      this.opticalChartDatasets = [
+        createChartDataset('RX (dBm)', '#10b981', []),
+        createChartDataset('TX (dBm)', '#f59e0b', []),
+      ];
+      // Novas referências dos objetos wrapper
+      this.chartData         = { labels: this.chartLabels, datasets: this.chartDatasets };
+      this.opticalChartData = { labels: this.opticalChartLabels, datasets: this.opticalChartDatasets };
+      this.cdr.detectChanges();
       return;
     }
 
-    // Labels: hora formatada (ex: "14:32")
-    const labels = data.map(d => {
-      const date = new Date(d.timestamp);
-      return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-    });
+    // OTIMIZAÇÃO: Loop O(n) único. Substitui 5 `data.map()` independentes para construir
+    // os labels e os dados das linhas em uma única varredura. Economiza milhares de
+    // ciclos da CPU em matrizes de dados longos (Histórico de 24h).
+    const labels: string[] = [];
+    const cpuData: (number | null)[] = [];
+    const memData: (number | null)[] = [];
+    const rxData: (number | null)[] = [];
+    const txData: (number | null)[] = [];
+
+    for (const d of data) {
+        labels.push(this.timeFormatter.format(new Date(d.timestamp)));
+
+        cpuData.push(this.extractHistoryValue(d, 'cpuUsage', ['telemetry','system','cpuUsage']));
+
+        const memFree = this.extractHistoryValue(d, 'memoryFree', ['telemetry','system','memoryFree']);
+        const memTotal = this.extractHistoryValue(d, 'memoryTotal', ['telemetry','system','memoryTotal']);
+        memData.push(memFree !== null && memTotal !== null && memTotal > 0
+          ? Math.round(((memTotal - memFree) / memTotal) * 100)
+          : null);
+
+        rxData.push(this.extractHistoryValue(d, 'opticalRx', ['telemetry','optical','rxPower']));  // ← nome diferente!
+        txData.push(this.extractHistoryValue(d, 'opticalTx', ['telemetry','optical','txPower']));  // ← nome diferente!
+    }
+
     this.chartLabels = labels;
     this.opticalChartLabels = labels;
 
-    // Datasets: CPU e Memória Usada (%)
-    const cpuData = data.map(d => typeof d.cpuUsage === 'number' ? d.cpuUsage : null);
-    const memData = data.map(d => {
-      if (typeof d.memoryFree === 'number' && typeof d.memoryTotal === 'number' && d.memoryTotal > 0) {
-        return Math.round(((d.memoryTotal - d.memoryFree) / d.memoryTotal) * 100);
-      }
-      return null;
-    });
-
     this.chartDatasets = [
-      {
-        label: 'CPU (%)',
-        data: cpuData,
-        borderColor: '#7c3aed',
-        backgroundColor: 'rgba(124, 58, 237, 0.15)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 3,
-        pointBackgroundColor: '#7c3aed',
-      },
-      {
-        label: 'Memória Usada (%)',
-        data: memData,
-        borderColor: '#06b6d4',
-        backgroundColor: 'rgba(6, 182, 212, 0.15)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 3,
-        pointBackgroundColor: '#06b6d4',
-      }
+      createChartDataset('CPU (%)', '#7c3aed', cpuData),
+      createChartDataset('Memória Usada (%)', '#06b6d4', memData),
     ];
-
-    // Datasets Ópticos: RX e TX (dBm)
-    const rxData = data.map(d => typeof d.opticalRx === 'number' ? d.opticalRx : null);
-    const txData = data.map(d => typeof d.opticalTx === 'number' ? d.opticalTx : null);
 
     this.opticalChartDatasets = [
-      {
-        label: 'RX (dBm)',
-        data: rxData,
-        borderColor: '#10b981',
-        backgroundColor: 'rgba(16, 185, 129, 0.15)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 3,
-        pointBackgroundColor: '#10b981',
-      },
-      {
-        label: 'TX (dBm)',
-        data: txData,
-        borderColor: '#f59e0b',
-        backgroundColor: 'rgba(245, 158, 11, 0.15)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 3,
-        pointBackgroundColor: '#f59e0b',
-      }
+      createChartDataset('RX (dBm)', '#10b981', rxData),
+      createChartDataset('TX (dBm)', '#f59e0b', txData),
     ];
+
+    // Novas referências dos objetos wrapper (ng2-charts detecta mudança no input [data])
+    this.chartData         = { labels: this.chartLabels, datasets: this.chartDatasets };
+    this.opticalChartData = { labels: this.opticalChartLabels, datasets: this.opticalChartDatasets };
+
+    this.cdr.detectChanges(); // Renderiza imediatamente o gráfico
   }
+
+  /**
+   * Adiciona um novo ponto de telemetria ao gráfico em O(1) via WebSocket.
+   * Evita requisição HTTP adicional para recarregar o histórico.
+   * @param data - Dados de telemetria recebidos via WebSocket
+   * @param timestamp - Timestamp do dado
+   */
+  private addTelemetryPointToChart(data: TelemetryData, timestamp: string): void {
+    // ── PARTE SÍNCRONA: atualiza gráfico imediatamente (antes do detectChanges) ──
+    const cpuValue = this.safeExtractValue(data, 'cpuUsage');
+    const memFree = this.safeExtractValue(data, 'memoryFree');
+    const memTotal = this.safeExtractValue(data, 'memoryTotal');
+    const memValue = (memFree !== null && memTotal !== null && memTotal > 0)
+      ? Math.round(((memTotal - memFree) / memTotal) * 100)
+      : null;
+    const rxValue = this.safeExtractValue(data, 'opticalRx');
+    const txValue = this.safeExtractValue(data, 'opticalTx');
+
+    const timeLabel = this.timeFormatter.format(new Date(timestamp));
+
+    this.chartLabels.push(timeLabel);
+    this.opticalChartLabels.push(timeLabel);
+
+    if (this.chartDatasets[0]) this.chartDatasets[0].data.push(cpuValue);
+    if (this.chartDatasets[1]) this.chartDatasets[1].data.push(memValue);
+    if (this.opticalChartDatasets[0]) this.opticalChartDatasets[0].data.push(rxValue);
+    if (this.opticalChartDatasets[1]) this.opticalChartDatasets[1].data.push(txValue);
+
+    const MAX_POINTS = 100;
+    if (this.chartLabels.length > MAX_POINTS) {
+      this.chartLabels.shift();
+      this.opticalChartLabels.shift();
+      this.chartDatasets.forEach(ds => ds.data.shift());
+      this.opticalChartDatasets.forEach(ds => ds.data.shift());
+    }
+
+    // Novas referências para ng2-charts detectar a mudança (OnPush)
+    this.chartLabels           = [...this.chartLabels];
+    this.chartDatasets         = this.chartDatasets.map(ds => ({ ...ds, data: [...ds.data] }));
+    this.opticalChartLabels    = [...this.opticalChartLabels];
+    this.opticalChartDatasets  = this.opticalChartDatasets.map(ds => ({ ...ds, data: [...ds.data] }));
+
+    // Novas referências dos objetos wrapper (ng2-charts detecta mudança no input [data])
+    this.chartData             = { labels: this.chartLabels, datasets: this.chartDatasets };
+    this.opticalChartData     = { labels: this.opticalChartLabels, datasets: this.opticalChartDatasets };
+
+    // Nota: detectChanges() é chamado no listener listenForTelemetryUpdates() (linha 842)
+    // para garantir que cards de telemetria atualizem mesmo sem dados de gráfico.
+
+    // ── PARTE ASSÍNCRONA: persiste no cache (fire-and-forget, não bloqueia CD) ──
+    const newSnapshot: TelemetrySnapshot = {
+      timestamp: new Date(timestamp).toISOString(),
+      cpuUsage: cpuValue ?? undefined,
+      memoryUsage: memValue ?? undefined,
+      opticalRx: rxValue ?? undefined,
+      opticalTx: txValue ?? undefined,
+    };
+
+    this.telemetryCacheService.loadHistory(this.serialNumber, this.selectedPeriodHours)
+      .then(currentHistory => {
+        const updatedHistory = [...(currentHistory || []), newSnapshot];
+        if (updatedHistory.length > MAX_POINTS) {
+          updatedHistory.splice(0, updatedHistory.length - MAX_POINTS);
+        }
+        return this.telemetryCacheService.saveHistory(this.serialNumber, this.selectedPeriodHours, updatedHistory);
+      })
+      .catch(err => console.warn('Erro ao persistir snapshot no cache:', err));
+  }
+
 }

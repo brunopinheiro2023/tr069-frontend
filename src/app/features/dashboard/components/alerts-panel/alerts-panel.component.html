@@ -1,0 +1,53 @@
+<div class="alerts-panel-wrapper">
+  <div class="alerts-panel-trigger" (click)="togglePanel()" [class.has-alerts]="alerts.length > 0" title="Alertas de Telemetria">
+    <span class="material-symbols-rounded">notifications</span>
+    <span class="alert-badge" *ngIf="alerts.length > 0" [class.critical]="criticalCount > 0">
+      {{ alerts.length }}
+    </span>
+  </div>
+
+  <div class="alerts-panel-dropdown" *ngIf="isPanelOpen">
+    <div class="alerts-panel-header">
+      <span>Alertas Ativos ({{ alerts.length }})</span>
+      <button class="close-btn" (click)="togglePanel()">
+        <span class="material-symbols-rounded">close</span>
+      </button>
+    </div>
+    <div class="alerts-panel-list" *ngIf="alerts.length > 0; else noAlerts">
+      <div class="alert-group"
+           *ngFor="let group of groupedAlerts; trackBy: trackByGroup"
+           [class.critical]="group.maxSeverity === 'critical'"
+           [class.warning]="group.maxSeverity === 'warning'">
+        <div class="alert-group-header" (click)="goToDetails(group.serialNumber)">
+          <span class="alert-severity-dot"></span>
+          <strong>{{ group.serialNumber }}</strong>
+          <span class="alert-count">{{ group.alerts.length }} alerta{{ group.alerts.length > 1 ? 's' : '' }}</span>
+        </div>
+        <div class="alert-group-items">
+          <div class="alert-item"
+               *ngFor="let alert of group.alerts; trackBy: trackByAlert"
+               [class.acknowledged]="alert.acknowledgedBy">
+            <div class="alert-content">
+              <span>{{ alert.message }}</span>
+              <small>{{ alert.triggeredAt | date:'dd/MM HH:mm' }}</small>
+              <span *ngIf="alert.acknowledgedBy" class="acknowledged-badge">
+                Reconhecido por {{ alert.acknowledgedBy }}
+              </span>
+            </div>
+            <button class="acknowledge-btn"
+                    *ngIf="!alert.acknowledgedBy && alert._id"
+                    (click)="$event.stopPropagation(); acknowledgeAlert(alert._id)"
+                    title="Reconhecer alerta">
+              <span class="material-symbols-rounded">check</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ng-template #noAlerts>
+      <div class="no-alerts">Nenhum alerta ativo.</div>
+    </ng-template>
+  </div>
+
+  <div class="alerts-panel-backdrop" *ngIf="isPanelOpen" (click)="togglePanel()"></div>
+</div>

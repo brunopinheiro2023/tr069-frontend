@@ -1,10 +1,11 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { CpeService } from '../../../../core/services/cpe.service';
 import { WebSocketService } from '../../../../core/services/websocket.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { DataAgePipe } from '../../../../core/pipes/data-age.pipe';
 
 // IMPORTAÇÃO DOS FILHOS STANDALONE
 import { CpeInfoTabComponent } from './components/cpe-info-tab/cpe-info-tab.component';
@@ -22,7 +23,7 @@ import { CpeDevice } from '../../../../core/models';
   selector: 'app-cpe-details',
   standalone: true,
   // REGISTRO DOS FILHOS NO ARRAY DE IMPORTS
-  imports: [CommonModule, CpeInfoTabComponent, CpeWifiTabComponent, CpeRadioTabComponent, CpeDevicesTabComponent, CpeDiagnosticsTabNewComponent, CpeWifiAnalysisTabComponent, CpeAiTabComponent, ButtonComponent, SkeletonComponent],
+  imports: [CommonModule, CpeInfoTabComponent, CpeWifiTabComponent, CpeRadioTabComponent, CpeDevicesTabComponent, CpeDiagnosticsTabNewComponent, CpeWifiAnalysisTabComponent, CpeAiTabComponent, ButtonComponent, SkeletonComponent, DataAgePipe],
   templateUrl: './cpe-details.component.html',
   styleUrls: ['./cpe-details.component.scss']
 })
@@ -42,16 +43,10 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
     private cpeService: CpeService,
     private wsService: WebSocketService,
     private toastService: ToastService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   setActiveTab(tab: 'info' | 'wifi' | 'radio' | 'devices' | 'diagnostics' | 'wifi-analysis' | 'ai'): void {
-    // Limpa a fila de requisições pendentes da CPE ao trocar de aba,
-    // evitando acúmulo de requisições obsoletas quando o técnico navega.
-    if (this.serialNumber) {
-      this.cpeService.clearPendingTasks(this.serialNumber).subscribe({
-        error: () => { /* silencioso: não exibe erro se a CPE não tiver fila */ }
-      });
-    }
     this.activeTab = tab;
   }
 
@@ -65,6 +60,12 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
       this.goBack();
       return;
     }
+    
+    // ── Garante que o Angular só se inscreve na CPE se houver conexão estabelecida E se já não estiver inscrito ──
+    if (this.wsService['socket']?.connected && this.serialNumber) {
+      this.wsService.subscribeToCpe(this.serialNumber);
+    }
+    
     this.loadCpeDetails();
     this.setupRealTimeUpdates();
   }
@@ -80,23 +81,23 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
       next: (data) => {
         this.cpe = data;
         this.isLoading = false;
+        this.cdr.markForCheck();
       },
       error: () => {
         this.error = 'Não foi possível carregar os dados desta CPE.';
         this.isLoading = false;
+        this.cdr.markForCheck();
       }
     });
   }
 
   setupRealTimeUpdates(): void {
-    // Entra na sala da CPE para receber eventos específicos desta CPE
-    this.wsService.subscribeToCpe(this.serialNumber);
-
     // cpe_updated: sincroniza dados gerais
     this.wsSubscriptions.add(
       this.wsService.onCpeUpdated().subscribe(updatedCpe => {
         if (updatedCpe.serialNumber === this.serialNumber) {
           this.cpe = this.cpe ? { ...this.cpe, ...updatedCpe } : updatedCpe;
+          this.cdr.markForCheck();
         }
       })
     );
@@ -111,9 +112,11 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
           gpon_change:    'Sinal óptico alterado',
           wifi_change:    'Configuração Wi-Fi alterada',
           generic_change: 'Parâmetro alterado',
+
         };
         const label = typeLabel[event.changeType] || 'Parâmetro alterado';
         this.toastService.info(`${label} na CPE ${this.serialNumber}`);
+        this.cdr.markForCheck();
       })
     );
 
@@ -122,6 +125,7 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
       this.wsService.on('config_success').subscribe(ev => {
         if (ev.serialNumber === this.serialNumber) {
           this.toastService.success(ev.message || 'Configuração aplicada com sucesso!');
+          this.cdr.markForCheck();
         }
       })
     );
@@ -131,19 +135,25 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
       this.wsService.on('config_error').subscribe(ev => {
         if (ev.serialNumber === this.serialNumber) {
           this.toastService.error(ev.message || 'CPE rejeitou a configuração.');
+          this.cdr.markForCheck();
         }
+      })
+    );
+
+    // cpe_batch_update: durante mass reboot, a CPE sendo visualizada pode estar no array
+    // Busca pelo serialNumber e faz merge idêntico ao que faria o cpe_updated individual
+    this.wsSubscriptions.add(
+      this.wsService.onCpeBatchUpdate().subscribe(batch => {
+        const item = batch.items.find((i: any) => i.serialNumber === this.serialNumber);
+        if (!item) return;
+        this.cpe = this.cpe ? { ...this.cpe, ...item } : item;
+        if (batch.eventName === 'cpe_online') this.cpe!.isOnline = true;
+        this.cdr.markForCheck();
       })
     );
   }
 
   goBack(): void {
     this.router.navigate(['/dashboard']);
-  }
-
-  wakeUp(): void {
-    this.cpeService.wakeUpCpe(this.serialNumber).subscribe({
-      next: () => this.toastService.success('Connection Request enviado com sucesso!'),
-      error: () => this.toastService.error('Erro ao acordar a CPE.'),
-    });
   }
 }

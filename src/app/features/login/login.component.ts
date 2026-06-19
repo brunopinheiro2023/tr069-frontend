@@ -36,7 +36,25 @@ export class LoginComponent {
       },
       error: (err) => {
         this.isLoading = false;
-        // Pega a mensagem de erro que mandamos do Node.js (ex: Credenciais inválidas)
+        console.error('Erro de Login:', err);
+
+        // Trata erro 400 (Bad Request) vindo do Zod Validation
+        if (err.status === 400) {
+          const zodErrors = err.error?.errors || err.error?.details;
+          if (Array.isArray(zodErrors) && zodErrors.length > 0) {
+            // Pega a primeira mensagem de erro da lista do Zod e exibe na tela
+            this.errorMessage = zodErrors[0].message || 'Formato de dados inválido (Validação Zod).';
+            return;
+          }
+        }
+
+        // Adicionado: Mensagem específica para erro 404 do proxy
+        if (err.status === 404) {
+          this.errorMessage = 'Serviço de autenticação não encontrado. Verifique se o backend (Node.js) está rodando na porta 3000.';
+          return;
+        }
+
+        // Fallback: Pega a mensagem de erro comum do Node.js (ex: Credenciais inválidas, 401)
         this.errorMessage = err.error?.error || 'Erro de conexão com o servidor.';
       }
     });

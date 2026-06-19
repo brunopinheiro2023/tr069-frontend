@@ -1,0 +1,144 @@
+
+# ═══════════════════════════════════════════════════════════════
+# TR-069 ACS — Stack de produção com Docker
+#
+# Estrutura esperada na VPS:
+#   /opt/tr069/
+#   ├── backend/   → clone do repositório tr069-inova
+#   └── frontend/  → clone do repositório angular/tr069
+#
+# Uso:
+#   cd /opt/tr069/backend
+#   cp .env.production .env        # preencher variáveis reais
+#   docker compose up -d --build
+# ═══════════════════════════════════════════════════════════════
+
+services:
+
+  # ── MONGODB ────────────────────────────────────────────────────────────────
+  # Sem senha: deixe MONGO_ROOT_PASS vazio no .env — MongoDB sobe sem autenticação.
+  # Com senha: preencha MONGO_ROOT_PASS — MongoDB exigirá credenciais.
+  mongo:
+    image: mongo:4.4
+    container_name: tr069_mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: tr069_acs
+    volumes:
+      - mongo_data:/data/db
+      - mongo_config:/data/configdb
+    networks:
+      - tr069_net
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping').ok", "--quiet"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # ── REDIS ──────────────────────────────────────────────────────────────────
+  # Sem senha (REDIS_PASSWORD vazio no .env): Redis sobe sem autenticação.
+  redis:
+    image: redis:7-alpine
+    container_name: tr069_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - tr069_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── RABBITMQ ───────────────────────────────────────────────────────────────
+  # Sem senha: usa usuário/senha padrão "guest/guest" do RabbitMQ.
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: tr069_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - tr069_net
+    ports:
+      - "127.0.0.1:15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ── BACKEND (Node.js ACS) ──────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tr069_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # As URLs de conexão vêm diretamente do arquivo .env (ver .env.production)
+      # Isso evita substituição aninhada que o Docker Compose não suporta
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - tr069_net
+    # Porta exposta para que o Angular (ng serve) consiga acessar no modo desenvolvimento
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const h=require('http');h.get('http://localhost:3000/',r=>process.exit(0)).on('error',()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── FRONTEND (Angular + Nginx) ─────────────────────────────────────────────
+  frontend:
+    build:
+      # Caminho relativo ao docker-compose.yml (backend/)
+      # Na VPS: /opt/tr069/backend/../frontend = /opt/tr069/frontend
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: tr069_frontend
+    restart: unless-stopped
+    ports:
+      # Porta 80 exposta: CPEs (ACS) e navegadores (dashboard) chegam aqui
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - tr069_net
+
+# ── VOLUMES (persistência de dados) ────────────────────────────────────────
+volumes:
+  mongo_data:
+    driver: local
+  mongo_config:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+
+# ── REDE INTERNA ────────────────────────────────────────────────────────────
+networks:
+  tr069_net:
+    driver: bridge

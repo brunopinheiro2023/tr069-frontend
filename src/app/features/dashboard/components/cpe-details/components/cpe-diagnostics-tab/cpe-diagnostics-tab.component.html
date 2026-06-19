@@ -259,6 +259,11 @@
             (clicked)="runDiagnostic('IPPing')">
             Executar Ping
           </app-button>
+          <app-button variant="danger" size="sm" iconLeft="cancel"
+            *ngIf="diagnosticRunning['IPPing']"
+            (clicked)="cancelDiagnostic('IPPing', lastDiagnosticId['IPPing'])">
+            Cancelar
+          </app-button>
         </div>
       </ng-container>
       <p class="diag-unsupported-msg" *ngIf="!diagnosticCapabilities.ipPingSupported">
@@ -300,6 +305,11 @@
             [disabled]="readOnly || diagnosticRunning['TraceRoute']"
             (clicked)="runDiagnostic('TraceRoute')">
             Executar TraceRoute
+          </app-button>
+          <app-button variant="danger" size="sm" iconLeft="cancel"
+            *ngIf="diagnosticRunning['TraceRoute']"
+            (clicked)="cancelDiagnostic('TraceRoute', lastDiagnosticId['TraceRoute'])">
+            Cancelar
           </app-button>
         </div>
       </ng-container>
@@ -345,6 +355,11 @@
           [disabled]="readOnly || diagnosticRunning['DNSLookup']"
           (clicked)="runDiagnostic('DNSLookup')">
           Executar DNS
+        </app-button>
+        <app-button variant="danger" size="sm" iconLeft="cancel"
+          *ngIf="diagnosticRunning['DNSLookup']"
+          (clicked)="cancelDiagnostic('DNSLookup', lastDiagnosticId['DNSLookup'])">
+          Cancelar
         </app-button>
       </div>
     </div>

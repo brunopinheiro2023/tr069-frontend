@@ -35,9 +35,6 @@
                 <p class="subtitle">SN: {{ cpe.serialNumber }} | Último Informe: {{ cpe.lastInform | date:'short' }}</p>
             </div>
             <div class="hero-actions">
-                <button class="action-btn-primary" (click)="wakeUp()">
-                    <span class="material-symbols-rounded">bolt</span> Forçar Atualização (Wake Up)
-                </button>
                 <button class="action-btn-secondary" (click)="goToDiagnostics()">
                     <span class="material-symbols-rounded">analytics</span> Diagnóstico Wi-Fi Dedicado
                 </button>
@@ -63,7 +60,10 @@
             <div class="summary-card">
                 <span>Último Informe</span>
                 <strong>{{ cpe.lastInform | date:'short' }}</strong>
-                <small>{{ cpe.opticalRx !== undefined ? ('Rx ' + cpe.opticalRx + ' dBm') : 'Sinal óptico indisponível' }}</small>
+                <small>
+                    {{ cpe.lastInform | dataAge }}
+                    {{ cpe.opticalRx !== undefined ? (' • Rx ' + cpe.opticalRx + ' dBm') : ' • Sinal óptico indisponível' }}
+                </small>
             </div>
         </div>
 
@@ -92,13 +92,61 @@
         </div>
 
         <div class="tab-content">
-            <app-cpe-info-tab *ngIf="activeTab === 'info'" [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-info-tab>
-            <app-cpe-wifi-tab *ngIf="activeTab === 'wifi'" [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-wifi-tab>
-            <app-cpe-radio-tab *ngIf="activeTab === 'radio'" [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-radio-tab>
-            <app-cpe-devices-tab *ngIf="activeTab === 'devices'" [serialNumber]="serialNumber"></app-cpe-devices-tab>
-            <app-cpe-diagnostics-tab-new *ngIf="activeTab === 'diagnostics'" [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-diagnostics-tab-new>
-            <app-cpe-wifi-analysis-tab *ngIf="activeTab === 'wifi-analysis'" [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-wifi-analysis-tab>
-            <app-cpe-ai-tab *ngIf="activeTab === 'ai'" [serialNumber]="serialNumber"></app-cpe-ai-tab>
+            @if (activeTab === 'info') {
+                @defer (on immediate) {
+                    <app-cpe-info-tab [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-info-tab>
+                } @placeholder {
+                    <app-skeleton shape="card" height="300px"></app-skeleton>
+                }
+            }
+
+            @if (activeTab === 'wifi') {
+                @defer (on immediate) {
+                    <app-cpe-wifi-tab [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-wifi-tab>
+                } @placeholder {
+                    <app-skeleton shape="card" height="300px"></app-skeleton>
+                }
+            }
+
+            @if (activeTab === 'radio') {
+                @defer (on immediate) {
+                    <app-cpe-radio-tab [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-radio-tab>
+                } @placeholder {
+                    <app-skeleton shape="card" height="300px"></app-skeleton>
+                }
+            }
+
+            @if (activeTab === 'devices') {
+                @defer (on immediate) {
+                    <app-cpe-devices-tab [serialNumber]="serialNumber"></app-cpe-devices-tab>
+                } @placeholder {
+                    <app-skeleton shape="rect" height="400px"></app-skeleton>
+                }
+            }
+
+            @if (activeTab === 'diagnostics') {
+                @defer (on immediate) {
+                    <app-cpe-diagnostics-tab-new [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-diagnostics-tab-new>
+                } @placeholder {
+                    <app-skeleton shape="rect" height="400px"></app-skeleton>
+                }
+            }
+
+            @if (activeTab === 'wifi-analysis') {
+                @defer (on immediate) {
+                    <app-cpe-wifi-analysis-tab [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-wifi-analysis-tab>
+                } @placeholder {
+                    <app-skeleton shape="rect" height="400px"></app-skeleton>
+                }
+            }
+
+            @if (activeTab === 'ai') {
+                @defer (on immediate) {
+                    <app-cpe-ai-tab [serialNumber]="serialNumber"></app-cpe-ai-tab>
+                } @placeholder {
+                    <app-skeleton shape="card" height="300px"></app-skeleton>
+                }
+            }
         </div>
     </ng-container>
 </div>

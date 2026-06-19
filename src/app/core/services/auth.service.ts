@@ -37,6 +37,11 @@ export class AuthService {
   logout(): void {
     localStorage.removeItem('jwt_token');
     this.authStatus.next(false);
+    // Fire and forget: notifica o backend para invalidar o cookie HTTP-Only
+    this.http.post(`${this.AUTH_URL}/logout`, {}, { withCredentials: true }).subscribe({
+      next: () => {},
+      error: () => {} // Ignora falhas silenciosamente se o servidor estiver fora do ar
+    });
   }
 
   /**
@@ -54,9 +59,57 @@ export class AuthService {
   }
 
   /**
+   * Solicita um novo Access Token usando o Refresh Token armazenado no cookie HTTP-Only.
+   */
+  refreshToken(): Observable<any> {
+    // withCredentials: true instrui o navegador a enviar o cookie HTTP-Only seguro.
+    return this.http.post<any>(`${this.AUTH_URL}/refresh`, {}, { withCredentials: true });
+  }
+
+  /**
+   * Atualiza o Access Token em memória/localStorage após uma renovação bem-sucedida.
+   */
+  setToken(token: string): void {
+    localStorage.setItem('jwt_token', token);
+    this.authStatus.next(true);
+  }
+
+  /**
    * Permite que os componentes assinem (subscribe) o estado de autenticação em tempo real.
    */
   isLoggedIn(): Observable<boolean> {
     return this.authStatus.asObservable();
+  }
+
+  /**
+   * Decodifica o payload do token JWT para extrair informações do usuário.
+   * @returns O payload decodificado ou null se o token for inválido/inexistente.
+   */
+  private getUserPayload(): { id: string; username: string; role: string } | null {
+    const token = this.getToken();
+    if (!token) {
+      return null;
+    }
+
+    try {
+      // O payload é a segunda parte do token JWT (header.payload.signature)
+      const payloadBase64Url = token.split('.')[1];
+      // Converte de Base64Url para Base64 padrão
+      const payloadBase64 = payloadBase64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const decodedPayload = JSON.parse(window.atob(payloadBase64));
+      return decodedPayload;
+    } catch (error) {
+      console.error('Erro ao decodificar token JWT:', error);
+      this.logout(); // O token é inválido, desloga o usuário
+      return null;
+    }
+  }
+
+  /**
+   * Obtém o nome de usuário (username) a partir do token JWT armazenado.
+   */
+  getUsername(): string | null {
+    const payload = this.getUserPayload();
+    return payload ? payload.username : null;
   }
 }
