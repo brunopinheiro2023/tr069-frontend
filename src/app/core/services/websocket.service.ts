@@ -22,6 +22,7 @@ export class WebSocketService {
 
     // SEGURANÇA: envia token JWT fresco e sessionId estático a cada (re)conexão
     this.socket = io(environment.wsUrl, {
+      transports: ['websocket'],
       auth: (cb) => {
         const token = localStorage.getItem('jwt_token');
         const username = localStorage.getItem('username') || 'unknown';
