@@ -2,7 +2,7 @@ import { Component, Input, OnInit, OnDestroy, OnChanges, SimpleChanges, DestroyR
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { filter, Subscription, interval, Subject, EMPTY, timer, timeout } from 'rxjs';
+import { filter, Subscription, interval, Subject, EMPTY, timer, timeout, take } from 'rxjs';
 import { exhaustMap, finalize, catchError, bufferTime } from 'rxjs/operators';
 import { ChartDataset, ChartOptions } from 'chart.js';
 import { NgChartsModule } from 'ng2-charts';
@@ -208,6 +208,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   analysisData: TelemetryAnalysis | null = null;
   analysisLoading = false;
   analysisError: string | null = null;
+  analysisUpdatedAt: Date | null = null;
 
   // ── Painéis suplementares (Health Score, Alertas, Incidente, Intervenção) ──
   healthScoreBreakdown: { total: number; components: Record<string, { score: number; weight: number }> } | null = null;
@@ -305,34 +306,38 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
       })
     ).subscribe({
       next: (response: any) => {
-        // VERIFICAÇÃO DE CACHE: Se o backend retornou dados em cache, atualiza a UI local na hora
-        if (response && response.source === 'cache') {
-          this.telemetryLoading = false; // Dupla garantia de encerramento do spinner
-          this.vitalsLoading = false;    // Desliga indicador de vitals
-
-          // Atualiza a variável local que renderiza os blocos de CPU/Memória na tela
-          this.telemetryData = response.telemetry;
-
-          // Toast informativo customizado
-          this.toastService.info(response.message || 'Exibindo dados armazenados em cache.');
-        } else if (response && response.source === 'network') {
-          // Coleta enfileirada no RabbitMQ — spinner continua até o WebSocket encerrar
-          const httpStatus = Number(response.status);
-          if (httpStatus === 202) {
-            this.toastService.info(response.message || 'Coleta já está em andamento. Aguarde a atualização na tela.');
-          } else {
-            this.toastService.success('A CPE está online. Coleta em tempo real iniciada via TR-069...');
+        // Source 'cache' ou 'mongodb_stale' = dado imediato, fecha spinner
+        if (response?.source === 'cache' || response?.source === 'mongodb_stale') {
+          this.telemetryLoading = false;
+          this.vitalsLoading = false;
+          if (response.telemetry || response.data) {
+            this.telemetryData = response.telemetry || response.data;
           }
-          // telemetryLoading já é true (setado no exhaustMap) — sem necessidade de reatribuir
-        } else {
-          // Fallback: source desconhecido ou ausente
-          const httpStatus = Number(response?.status);
-          if (httpStatus === 202) {
-            this.toastService.info(response.message || 'Coleta já está em andamento. Aguarde a atualização na tela.');
-          } else {
-            this.toastService.success('Telemetria iniciada com sucesso na CPE!');
-          }
+          const msg = response.source === 'mongodb_stale'
+            ? 'Dados do banco (Redis offline) — podem estar desatualizados.'
+            : (response.message || 'Exibindo dados armazenados em cache.');
+          this.toastService.info(msg);
+          this.cdr.markForCheck();
+          return;
         }
+
+        // Source 'in_progress' = coleta ativa em andamento (scheduler ou on-demand anterior)
+        // Mantém spinner true e aguarda WS — a coleta em andamento vai finalizar
+        if (response?.status === 'in_progress') {
+          this.toastService.info('Coleta em andamento. Aguardando dados via WebSocket...');
+          return; // telemetryLoading permanece true
+        }
+
+        // HTTP 202 aceito (idempotent bypass — lock ativo por outra requisição)
+        // A coleta ativa vai completar e enviar WS — mantém spinner por no máximo 120s
+        if (response?.status === 'accepted') {
+          this.toastService.info(response.message || 'Coleta já está em andamento. Aguarde a atualização na tela.');
+          return; // telemetryLoading permanece true — WS irá fechar
+        }
+
+        // Qualquer outra resposta = coleta enfileirada ou iniciada
+        this.toastService.success('CPE online. Coleta em tempo real iniciada via TR-069...');
+        // telemetryLoading permanece true até telemetry_update ou telemetry_complete
       }
     });
 
@@ -512,9 +517,9 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   get rxZone(): 'ok' | 'warning' | 'critical' | 'unknown' {
     const rx = this.safeExtractValue(this.telemetryData as any, 'opticalRx');
     if (rx == null) return 'unknown';
-    if (rx > -20) return 'ok';
-    if (rx >= -25) return 'warning';
-    return 'critical';
+    if (rx >= -22) return 'ok';       // padrão GPON TP-Link aceitável
+    if (rx >= -27) return 'warning';  // degradado mas funcional
+    return 'critical';                 // < -27 dBm = LOS iminente
   }
 
   get txZone(): 'ok' | 'warning' | 'critical' | 'unknown' {
@@ -587,8 +592,8 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     laserHealth:        'Saúde do Laser',
     memoryLeak:         'Vazamento de Memória',
     powerSupply:        'Fonte de Energia',
-    wifiQuality2g:      'Qualidade Wi-Fi 2.4GHz',
-    wifiQuality5g:      'Qualidade Wi-Fi 5GHz',
+    wifiQuality2g:      'Qualidade Wi-Fi 2.4 GHz',
+    wifiQuality5g:      'Qualidade Wi-Fi 5 GHz',
     gponLinkBudget:     'Margem Óptica GPON',
     transceiverAging:   'Envelhecimento do Laser',
   };
@@ -655,11 +660,11 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   // ── Getters legados (WAN, Óptica, Hardware) ────────────────────────────
   get isRxCritical(): boolean {
     const rxPower = this.safeExtractValue(this.telemetryData!, 'opticalRx');
-    return rxPower !== null && rxPower < -25;
+    return rxPower !== null && rxPower < -27; // alinhado com GPON threshold
   }
   get isRxGood(): boolean {
     const rxPower = this.safeExtractValue(this.telemetryData!, 'opticalRx');
-    return rxPower !== null && rxPower >= -25;
+    return rxPower !== null && rxPower >= -22;
   }
 
   /** Retorna label de cache (ex: "Atualizado há 12s · cache"). */
@@ -899,11 +904,16 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     ).subscribe({
       next: (response: any) => {
         this.vitalsLoading = false;
-        if (response.status === 'queued') {
+        if (response.source === 'cache' || response.source === 'mongodb_stale') {
+          this.toastService.info('Vitals: dados em cache (< 60s).');
+        } else if (response.status === 'accepted') {
+          this.toastService.info('Vitals já em andamento. Aguarde o WebSocket.');
+        } else if (response.status === 'queued') {
           this.toastService.info('Coleta vitals enfileirada. Aguarde atualização via WebSocket.');
         } else {
-          this.toastService.success('Telemetria vitals iniciada!');
+          this.toastService.success('Vitals iniciado na CPE.');
         }
+        this.cdr.markForCheck();
       }
     });
   }
@@ -917,6 +927,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
       .subscribe({
       next: (res) => {
         this.analysisData = res as TelemetryAnalysis;
+        this.analysisUpdatedAt = new Date(); // timestamp local do carregamento
         this.analysisLoading = false;
         this.cdr.markForCheck();
       },
@@ -1235,9 +1246,19 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
           // Roteamento por source: vitals vs standard
           if (event.source === 'vitals' || event.source === 'on-demand-vitals') {
-            // Atualiza APENAS os 10 campos vitais — não sobrescreve dados completos
-            const vitalsKeys = ['wanStatus', 'cpuUsage', 'memoryFree', 'memoryTotal', 'opticalRx', 'opticalTx',
-                                'gponStatus', 'wifi2gNoise', 'wifi5gNoise', 'hostCount'];
+            // Atualiza APENAS os campos vitais — não sobrescreve dados completos
+            const vitalsKeys = [
+              'wanStatus', 'cpuUsage', 'memoryFree', 'memoryTotal',
+              'opticalRx', 'opticalTx', 'gponStatus',
+              'upTime',              // tempo ligada — faltava
+              'opticalTemperature',  // temperatura do transceptor — faltava
+              'biasCurrent',         // corrente de bias — faltava
+              'opticalVoltage',      // tensão da fonte — faltava
+              'wifi2gNoise', 'wifi5gNoise',
+              'wifi2gSnr', 'wifi5gSnr',        // SNR — faltava
+              'wifi2gSignalStrength', 'wifi5gSignalStrength', // sinal — faltava
+              'hostCount',
+            ];
             const vitalsData: Partial<TelemetryData> = {};
             if (event.data && typeof event.data === 'object') {
               for (const k of vitalsKeys) {
@@ -1306,8 +1327,8 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
         if (data.serialNumber === this.serialNumber) {
           this.ngZone.run(() => {
             // telemetry_complete carrega { serialNumber, timestamp, totalChunks, source }
-            // Fontes passivas (scheduler/bootstrap) não fecham o spinner on-demand
-            const isPassiveSource = data.source === 'standard';
+            // Fontes que NÃO devem fechar o spinner on-demand: scheduler e inform passivo
+            const isPassiveSource = data.source === 'standard' || data.source === 'scheduler';
             if (!isPassiveSource) {
               // on-demand (batch único) — fecha spinner principal
               this.telemetryLoading = false;
@@ -1315,6 +1336,18 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
               this.telemetryProgress = 0;
               this.completedChunks = 0;
               this.totalChunks = 0;
+
+              // Toast de conclusão — o único feedback explícito de "coleta finalizada"
+              if (data.partial) {
+                this.toastService.warning('Coleta parcial concluída — alguns parâmetros não responderam.');
+              } else {
+                this.toastService.success('Coleta de telemetria concluída com sucesso.');
+                // Recarrega análise com delay de 2s para garantir que cwmpController
+                // completou a persistência no MongoDB antes da query de análise rodar.
+                // Só dispara para coletas on-demand completas (não parciais nem passivas).
+                timer(2000).pipe(take(1), takeUntilDestroyed(this.destroyRef))
+                  .subscribe(() => this.loadAnalysis());
+              }
             }
             if (data.partial) {
               this.isPartialResult = true;

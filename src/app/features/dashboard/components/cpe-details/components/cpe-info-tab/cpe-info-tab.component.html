@@ -653,11 +653,29 @@
           <div *ngIf="entry.data.totalRxGb != null">RX: {{ entry.data.totalRxGb }} GB | TX: {{ entry.data.totalTxGb }} GB</div>
           <div *ngIf="entry.data.correlation != null">Correlação térmica: {{ entry.data.correlation }}</div>
           <div *ngIf="entry.data.latency?.measuredAt">Medido há {{ formatMeasuredAt(entry.data.latency.measuredAt) }}</div>
+          <!-- Wi-Fi Quality -->
           <div *ngIf="entry.data.snrAvg != null">SNR médio: {{ entry.data.snrAvg }} dB</div>
+          <div *ngIf="entry.data.snrMin != null">SNR mín: {{ entry.data.snrMin }} dB</div>
+          <div *ngIf="entry.data.noiseFloor != null">Piso de ruído: {{ entry.data.noiseFloor }} dBm</div>
           <div *ngIf="entry.data.clientCount != null">Clientes: {{ entry.data.clientCount }}</div>
+          <!-- Aviso de dados parciais — quando SNR não disponível -->
+          <div *ngIf="entry.data.dataSource === 'fallback'"
+               class="text-yellow-500 dark:text-yellow-400 mt-1">
+            ⚠ SNR indisponível — análise parcial por ruído/clientes
+          </div>
+          <!-- Timestamp de atualização — exibido apenas em cards Wi-Fi -->
+          <div *ngIf="(entry.key === 'wifiQuality2g' || entry.key === 'wifiQuality5g') && analysisUpdatedAt"
+               class="text-gray-400 dark:text-gray-500 mt-1 pt-1 border-t border-gray-100 dark:border-gray-700">
+            Análise: {{ analysisUpdatedAt | date:'HH:mm:ss' }}
+            <span *ngIf="entry.data.sampleCount != null"> · {{ entry.data.sampleCount }} amostras</span>
+          </div>
+          <!-- GPON Link Budget -->
           <div *ngIf="entry.data.rxMargin != null">Margem RX: {{ entry.data.rxMargin }} dB</div>
-          <div *ngIf="entry.data.biasSlopePerDay != null">Slope Bias: +{{ entry.data.biasSlopePerDay }} mA/dia</div>
-          <div *ngIf="entry.data.currentBias != null">Bias atual: {{ entry.data.currentBias }} µA</div>
+          <div *ngIf="entry.data.rxPower != null">Potência RX: {{ entry.data.rxPower }} dBm</div>
+          <div *ngIf="entry.data.txPower != null">Potência TX: {{ entry.data.txPower }} dBm</div>
+          <!-- Transceiver Aging -->
+          <div *ngIf="entry.data.currentBiasMa != null">Bias atual: {{ entry.data.currentBiasMa }} mA</div>
+          <div *ngIf="entry.data.biasSlopePerDay != null">Tendência: {{ entry.data.biasSlopePerDay > 0 ? '+' : '' }}{{ entry.data.biasSlopePerDay }} µA/dia</div>
         </div>
       </div>
     </ng-container>
