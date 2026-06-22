@@ -21,6 +21,7 @@ export class MetricPipe implements PipeTransform {
       unit?: string;
       fallback?: string;
       transform?: MetricTransform;
+      zeroAsNull?: boolean;
     }
   ): string {
     const fallback = options?.fallback ?? '—';
@@ -58,6 +59,7 @@ export class MetricPipe implements PipeTransform {
     // Extração padrão de métrica
     const value = this.getMetricValue(telemetryData, key);
     if (value === null) return fallback;
+    if (options?.zeroAsNull && value === 0) return fallback;
 
     return `${value}${options?.unit || ''}`.trim();
   }

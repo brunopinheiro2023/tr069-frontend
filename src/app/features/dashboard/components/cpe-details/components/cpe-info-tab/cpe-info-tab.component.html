@@ -491,10 +491,10 @@
       <div class="grid grid-cols-2 gap-x-4 gap-y-1">
         <div><span class="font-medium">Canal:</span> {{ telemetryData | metric : 'wifi2gChannel' : { fallback: 'Auto' } }}</div>
         <div><span class="font-medium">Clientes:</span> {{ telemetryData | metric : 'wifi2gClients' : { fallback: '0' } }}</div>
-        <div *ngIf="telemetryData?.['wifi2gNoise']"><span class="font-medium">Ruído:</span> {{ telemetryData | metric : 'wifi2gNoise' : { unit: ' dBm' } }}</div>
-        <div *ngIf="telemetryData?.['wifi2gSnr']"><span class="font-medium">SNR:</span> {{ telemetryData | metric : 'wifi2gSnr' : { unit: ' dB' } }}</div>
-        <div *ngIf="telemetryData?.['wifi2gSignalStrength']"><span class="font-medium">Sinal:</span> {{ telemetryData | metric : 'wifi2gSignalStrength' : { unit: ' dBm' } }}</div>
-        <div *ngIf="telemetryData?.['wifi2gUtilization']"><span class="font-medium">Uso do Canal:</span> {{ telemetryData | metric : 'wifi2gUtilization' : { unit: '%' } }}</div>
+        <div *ngIf="telemetryData?.['wifi2gNoise'] !== undefined"><span class="font-medium">Ruído:</span> {{ telemetryData | metric : 'wifi2gNoise' : { unit: ' dBm', zeroAsNull: true } }}</div>
+        <div *ngIf="telemetryData?.['wifi2gSnr'] !== undefined"><span class="font-medium">SNR:</span> {{ telemetryData | metric : 'wifi2gSnr' : { unit: ' dB', zeroAsNull: true } }}</div>
+        <div *ngIf="telemetryData?.['wifi2gSignalStrength'] !== undefined"><span class="font-medium">Sinal:</span> {{ telemetryData | metric : 'wifi2gSignalStrength' : { unit: ' dBm', zeroAsNull: true } }}</div>
+        <div *ngIf="telemetryData?.['wifi2gUtilization'] !== undefined"><span class="font-medium">Uso do Canal:</span> {{ telemetryData | metric : 'wifi2gUtilization' : { unit: '%' } }}</div>
       </div>
       <!-- Campos secundários colapsáveis -->
       <details class="mt-2 text-xs text-gray-500">
@@ -515,10 +515,10 @@
       <div class="grid grid-cols-2 gap-x-4 gap-y-1">
         <div><span class="font-medium">Canal:</span> {{ telemetryData | metric : 'wifi5gChannel' : { fallback: 'Auto' } }}</div>
         <div><span class="font-medium">Clientes:</span> {{ telemetryData | metric : 'wifi5gClients' : { fallback: '0' } }}</div>
-        <div *ngIf="telemetryData?.['wifi5gNoise']"><span class="font-medium">Ruído:</span> {{ telemetryData | metric : 'wifi5gNoise' : { unit: ' dBm' } }}</div>
-        <div *ngIf="telemetryData?.['wifi5gSnr']"><span class="font-medium">SNR:</span> {{ telemetryData | metric : 'wifi5gSnr' : { unit: ' dB' } }}</div>
-        <div *ngIf="telemetryData?.['wifi5gSignalStrength']"><span class="font-medium">Sinal:</span> {{ telemetryData | metric : 'wifi5gSignalStrength' : { unit: ' dBm' } }}</div>
-        <div *ngIf="telemetryData?.['wifi5gUtilization']"><span class="font-medium">Uso do Canal:</span> {{ telemetryData | metric : 'wifi5gUtilization' : { unit: '%' } }}</div>
+        <div *ngIf="telemetryData?.['wifi5gNoise'] !== undefined"><span class="font-medium">Ruído:</span> {{ telemetryData | metric : 'wifi5gNoise' : { unit: ' dBm', zeroAsNull: true } }}</div>
+        <div *ngIf="telemetryData?.['wifi5gSnr'] !== undefined"><span class="font-medium">SNR:</span> {{ telemetryData | metric : 'wifi5gSnr' : { unit: ' dB', zeroAsNull: true } }}</div>
+        <div *ngIf="telemetryData?.['wifi5gSignalStrength'] !== undefined"><span class="font-medium">Sinal:</span> {{ telemetryData | metric : 'wifi5gSignalStrength' : { unit: ' dBm', zeroAsNull: true } }}</div>
+        <div *ngIf="telemetryData?.['wifi5gUtilization'] !== undefined"><span class="font-medium">Uso do Canal:</span> {{ telemetryData | metric : 'wifi5gUtilization' : { unit: '%' } }}</div>
       </div>
       <details class="mt-2 text-xs text-gray-500">
         <summary class="cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">Ver métricas avançadas</summary>
@@ -621,6 +621,13 @@
     Analisando dados dos últimos 7 dias...
   </div>
 
+  <!-- Erro de carregamento -->
+  <div *ngIf="analysisError && !analysisLoading"
+       class="flex items-center gap-2 text-sm text-red-500 py-4">
+    <span class="material-symbols-rounded">error</span>
+    {{ analysisError }}
+  </div>
+
   <!-- Cards priorizados por severidade -->
   <div *ngIf="!analysisLoading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
     <ng-container *ngFor="let entry of sortedAnalysisEntries">
@@ -646,6 +653,11 @@
           <div *ngIf="entry.data.totalRxGb != null">RX: {{ entry.data.totalRxGb }} GB | TX: {{ entry.data.totalTxGb }} GB</div>
           <div *ngIf="entry.data.correlation != null">Correlação térmica: {{ entry.data.correlation }}</div>
           <div *ngIf="entry.data.latency?.measuredAt">Medido há {{ formatMeasuredAt(entry.data.latency.measuredAt) }}</div>
+          <div *ngIf="entry.data.snrAvg != null">SNR médio: {{ entry.data.snrAvg }} dB</div>
+          <div *ngIf="entry.data.clientCount != null">Clientes: {{ entry.data.clientCount }}</div>
+          <div *ngIf="entry.data.rxMargin != null">Margem RX: {{ entry.data.rxMargin }} dB</div>
+          <div *ngIf="entry.data.biasSlopePerDay != null">Slope Bias: +{{ entry.data.biasSlopePerDay }} mA/dia</div>
+          <div *ngIf="entry.data.currentBias != null">Bias atual: {{ entry.data.currentBias }} µA</div>
         </div>
       </div>
     </ng-container>

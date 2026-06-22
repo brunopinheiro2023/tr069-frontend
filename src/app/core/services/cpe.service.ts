@@ -391,7 +391,7 @@ export class CpeService {
   getTelemetryAnalysis(serialNumber: string): Observable<TelemetryAnalysis> {
     return this.http.get<TelemetryAnalysis>(
       `${environment.apiUrl}/api/cpe/${serialNumber}/telemetry/analysis`
-    );
+    ).pipe(timeout(30_000));
   }
 
   // ── Consultas históricas (Time-Series) ────────────────────────────────────

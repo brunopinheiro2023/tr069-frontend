@@ -709,6 +709,38 @@ export interface TopDestination {
   percent: number;
 }
 
+/** Análise de Qualidade Wi-Fi (2.4GHz e 5GHz). */
+export interface WifiQualityAnalysis {
+  band: '2g' | '5g';
+  snrAvg: number | null;
+  noiseFloor: number | null;
+  clientCount: number | null;
+  severity: 'ok' | 'warning' | 'critical';
+  alert: boolean;
+  message: string;
+}
+
+/** Análise de Margem Óptica GPON. */
+export interface GponLinkBudgetAnalysis {
+  rxPower: number;
+  txPower: number | null;
+  rxMargin: number;
+  severity: 'ok' | 'warning' | 'critical';
+  alert: boolean;
+  message: string;
+}
+
+/** Análise de Envelhecimento do Transceiver (30 dias). */
+export interface TransceiverAgingAnalysis {
+  days: number;
+  sampleCount: number;
+  biasSlopePerDay: number;
+  currentBias: number;
+  severity: 'ok' | 'warning' | 'critical';
+  alert: boolean;
+  message: string;
+}
+
 /** Resposta completa da análise avançada de telemetria. */
 export interface TelemetryAnalysis {
   serialNumber: string;
@@ -742,6 +774,10 @@ export interface TelemetryAnalysis {
     laserHealth?: any;
     memoryLeak?: any;
     powerSupply?: any;
+    wifiQuality2g?: WifiQualityAnalysis;
+    wifiQuality5g?: WifiQualityAnalysis;
+    gponLinkBudget?: GponLinkBudgetAnalysis;
+    transceiverAging?: TransceiverAgingAnalysis;
   };
 }
 

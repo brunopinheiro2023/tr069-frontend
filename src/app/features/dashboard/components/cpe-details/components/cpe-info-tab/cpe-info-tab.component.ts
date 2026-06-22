@@ -587,6 +587,10 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     laserHealth:        'Saúde do Laser',
     memoryLeak:         'Vazamento de Memória',
     powerSupply:        'Fonte de Energia',
+    wifiQuality2g:      'Qualidade Wi-Fi 2.4GHz',
+    wifiQuality5g:      'Qualidade Wi-Fi 5GHz',
+    gponLinkBudget:     'Margem Óptica GPON',
+    transceiverAging:   'Envelhecimento do Laser',
   };
 
   getAnalysisInfo(key: string): string {
