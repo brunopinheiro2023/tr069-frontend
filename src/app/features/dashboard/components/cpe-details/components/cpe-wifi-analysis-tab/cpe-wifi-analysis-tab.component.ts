@@ -5,6 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CpeService } from '../../../../../../core/services/cpe.service';
 import { WebSocketService } from '../../../../../../core/services/websocket.service';
 import { NeighborScanCardComponent } from '../cpe-diagnostics-tab-new/components/neighbor-scan-card/neighbor-scan-card.component';
+import { WifiNeighborScanEntry } from '../../../../../../core/models';
 
 @Component({
   selector: 'app-cpe-wifi-analysis-tab',
@@ -20,7 +21,6 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
   isLoading: boolean = false;
   neighborScanData: any = null;
   neighborScanInProgress: boolean = false;
-  neighborScanHistory: any[] = [];
   diagnosticsError: boolean = false;
   private neighborScanFailsafe?: ReturnType<typeof setTimeout>;
   private wsSubscription?: Subscription;
@@ -31,7 +31,7 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
   wifiHostsSummary: any = null;
 
   // ── Histórico de scans ──────────────────────────────────────────────────
-  scanHistory: any[] = [];
+  scanHistory: WifiNeighborScanEntry[] = [];
   historyLoading = false;
   showHistory = false; // toggle para expandir seção histórico
 
@@ -39,6 +39,11 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
   applyInProgress = false;
   applyError: string | null = null;
   applySuccess: string | null = null;
+  private applySuccessTimer?: ReturnType<typeof setTimeout>;
+  private applyErrorTimer?: ReturnType<typeof setTimeout>;
+
+  // ── Loading Coordenado ────────────────────────────────────────────────────
+  private loadingCount = 0;
 
   private destroyRef = inject(DestroyRef);
   private cdr = inject(ChangeDetectorRef);
@@ -52,9 +57,12 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
     // Validação de entrada: serialNumber deve ser uma string não vazia
     if (!this.isValidSerialNumber(this.serialNumber)) {
       console.error('[WifiAnalysisTab] Serial number inválido:', this.serialNumber);
-      this.isLoading = false;
+      this.diagnosticsError = true;
       return;
     }
+
+    // Inscreve-se na sala da CPE para receber eventos WebSocket específicos
+    this.wsService.subscribeToCpe(this.serialNumber);
 
     this.loadAllData();
     this.setupWebSocketListeners();
@@ -62,9 +70,13 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.wsSubscription?.unsubscribe();
+    // Cancela inscrição na sala da CPE ao destruir o componente
+    this.wsService.unsubscribeFromCpe(this.serialNumber);
     if (this.neighborScanFailsafe) {
       clearTimeout(this.neighborScanFailsafe);
     }
+    if (this.applySuccessTimer) clearTimeout(this.applySuccessTimer);
+    if (this.applyErrorTimer)   clearTimeout(this.applyErrorTimer);
   }
 
   /**
@@ -113,11 +125,9 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
    */
   loadAllData(): void {
     if (!this.isValidSerialNumber(this.serialNumber)) {
-      this.isLoading = false;
       return;
     }
 
-    this.isLoading = true;
     this.loadNeighborScanData();
     this.loadNeighborScanHistory();
     this.loadWifiInsights();
@@ -125,11 +135,13 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
 
   loadNeighborScanData(): void {
     if (!this.isValidSerialNumber(this.serialNumber)) {
-      this.isLoading = false;
       return;
     }
 
-    this.cpeService.getWifiDiagnostics(this.serialNumber).subscribe({
+    this.startLoading();
+    this.cpeService.getWifiDiagnostics(this.serialNumber)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
       next: (data) => {
         // Validação: dados devem ser um objeto válido
         if (data && typeof data === 'object') {
@@ -139,12 +151,12 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
           console.warn('[WifiAnalysisTab] Dados de diagnóstico inválidos recebidos:', data);
           this.neighborScanData = null;
         }
-        this.isLoading = false;
+        this.stopLoading();
       },
       error: (err) => {
         console.error('[WifiAnalysisTab] Erro ao carregar dados de diagnóstico WiFi:', err);
         this.diagnosticsError = true; // Mantém last known data visível, mas avisa que está desatualizado
-        this.isLoading = false;
+        this.stopLoading();
       }
     });
   }
@@ -153,18 +165,23 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
    * Carrega o histórico de varreduras de vizinhos.
    */
   loadNeighborScanHistory(): void {
-    if (!this.isValidSerialNumber(this.serialNumber)) return;
+    if (!this.isValidSerialNumber(this.serialNumber)) {
+      return;
+    }
     this.historyLoading = true;
+    this.startLoading();
     this.cpeService.getWifiNeighborHistory(this.serialNumber, 10)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (history) => {
-          this.scanHistory = Array.isArray(history) ? history.slice(0, 10) : [];
+        next: (response) => {
+          this.scanHistory = response?.data ?? [];
           this.historyLoading = false;
+          this.stopLoading();
           this.cdr.detectChanges();
         },
         error: () => {
           this.historyLoading = false;
+          this.stopLoading();
           this.cdr.detectChanges();
         }
       });
@@ -174,8 +191,11 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
    * Carrega insights Wi-Fi do endpoint /wifi-hosts.
    */
   private loadWifiInsights(): void {
-    if (!this.isValidSerialNumber(this.serialNumber)) return;
+    if (!this.isValidSerialNumber(this.serialNumber)) {
+      return;
+    }
     this.insightsLoading = true;
+    this.startLoading();
     this.cpeService.getWifiHosts(this.serialNumber) // retorna { hosts, insights, summary }
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -183,10 +203,12 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
           this.wifiInsights = (res?.insights || []).slice(0, 20);
           this.wifiHostsSummary = res?.summary || null;
           this.insightsLoading = false;
+          this.stopLoading();
           this.cdr.detectChanges();
         },
         error: () => {
           this.insightsLoading = false;
+          this.stopLoading();
           this.cdr.detectChanges();
         }
       });
@@ -197,7 +219,9 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
 
     this.neighborScanInProgress = true;
 
-    this.cpeService.triggerNeighborScan(this.serialNumber).subscribe({
+    this.cpeService.triggerNeighborScan(this.serialNumber)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
       next: () => {
         // Failsafe AUMENTADO para 60s — apenas rede de segurança, não o caminho normal
         this.neighborScanFailsafe = setTimeout(() => {
@@ -220,6 +244,16 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
         if (this.neighborScanFailsafe) {
           clearTimeout(this.neighborScanFailsafe);
         }
+        // Atualiza contagem imediatamente via evento WebSocket — não espera o endpoint
+        // recarregar. event.resultCount = freshResults.length (cwmpController L.2956).
+        // Evita que o card mostre "0 redes" se o cache do /wifi-diagnostics ainda não expirou.
+        if (typeof event.resultCount === 'number') {
+          this.neighborScanData = {
+            ...(this.neighborScanData || {}),
+            neighboringWiFiResultCount: event.resultCount,
+          };
+          this.cdr.detectChanges();
+        }
         this.loadNeighborScanData();
         this.loadWifiInsights();
         this.loadNeighborScanHistory();
@@ -228,84 +262,188 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Retorna a largura de banda atual do WiFi 2.4GHz do CPE.
-   * Valores válidos: 20MHz, 40MHz (baseado em parâmetros TR-181)
-   * Segurança: sanitiza o valor recebido do CPE.
+   * Normaliza o valor de largura de banda retornado pela CPE para formato canônico.
+   * CPEs retornam formatos variados: "20 MHz", "VHT80", "HE80", "20/40MHz", "80" (Intelbras), etc.
+   * Retorna null se o valor não puder ser normalizado para um formato reconhecido.
    */
-  get wifi2gBandwidth(): string {
-    const bandwidth = this.getParamValue('Device.WiFi.Radio.1.OperatingChannelBandwidth');
-    const validBandwidths = ['20MHz', '40MHz', '20MHz/40MHz'];
-    const sanitized = this.sanitizeString(bandwidth);
-    
-    return validBandwidths.includes(sanitized) ? sanitized : 'Desconhecido';
+  private normalizeBandwidth(raw: string | undefined): string | null {
+    if (!raw) return null;
+    const s = raw.trim().toUpperCase().replace(/\s+/g, '');
+    // Auto mode
+    if (s === 'AUTO' || s === '0') return 'Auto';
+    // Formatos numéricos com unidade: "20MHZ", "40MHZ", "80MHZ", "160MHZ"
+    const mhzMatch = s.match(/^(\d+)MHZ$/);
+    if (mhzMatch) return `${mhzMatch[1]}MHz`;
+    // Formatos compostos: "20/40MHZ", "40/80MHZ", "20MHZ/40MHZ", "40MHZ/80MHZ"
+    const compositeMatch = s.match(/^(\d+)(?:MHZ)?\/(\d+)MHZ$/);
+    if (compositeMatch) return `${compositeMatch[1]}MHz/${compositeMatch[2]}MHz`;
+    // Formatos 802.11 vendor: "VHT20", "VHT40", "VHT80", "VHT160", "HE20", "HE40", "HE80", "HE160"
+    const vhtHeMatch = s.match(/^(?:VHT|HE|EHT)(\d+)$/);
+    if (vhtHeMatch) return `${vhtHeMatch[1]}MHz`;
+    // Intelbras X_ITBS_BandWidth: só o número sem unidade ("20", "40", "80", "160")
+    const bareNum = s.match(/^(\d+)$/);
+    if (bareNum && ['20', '40', '80', '160'].includes(bareNum[1])) return `${bareNum[1]}MHz`;
+    return null;
   }
 
   /**
-   * Retorna a largura de banda atual do WiFi 5GHz do CPE.
-   * Valores válidos: 20MHz, 40MHz, 80MHz, 160MHz (baseado em parâmetros TR-181)
-   * Segurança: sanitiza o valor recebido do CPE.
+   * Retorna a largura de banda atual do WiFi 2.4GHz.
+   * Fonte primária: parametersCache (TR-181 Device.WiFi.Radio.1.OperatingChannelBandwidth).
+   * Fallback: cpe.wifi2g.bandwidth (campo estruturado persistido pelo wifiCollectorService).
+   * Normaliza formatos variados da CPE (VHT, HE, espaços, Intelbras sem unidade).
+   */
+  get wifi2gBandwidth(): string {
+    const fromCache = this.getParamValue('Device.WiFi.Radio.1.OperatingChannelBandwidth');
+    const fromStruct = this.cpe?.wifi2g?.bandwidth as string | undefined;
+    return this.normalizeBandwidth(fromCache) ?? this.normalizeBandwidth(fromStruct) ?? '—';
+  }
+
+  /**
+   * Retorna a largura de banda atual do WiFi 5GHz.
+   * Fonte primária: parametersCache (TR-181 Device.WiFi.Radio.2.OperatingChannelBandwidth).
+   * Fallback: cpe.wifi5g.bandwidth (campo estruturado persistido pelo wifiCollectorService).
    */
   get wifi5gBandwidth(): string {
-    const bandwidth = this.getParamValue('Device.WiFi.Radio.2.OperatingChannelBandwidth');
-    const validBandwidths = ['20MHz', '40MHz', '80MHz', '160MHz', '20MHz/40MHz', '40MHz/80MHz'];
-    const sanitized = this.sanitizeString(bandwidth);
-    
-    return validBandwidths.includes(sanitized) ? sanitized : 'Desconhecido';
+    const fromCache = this.getParamValue('Device.WiFi.Radio.2.OperatingChannelBandwidth');
+    const fromStruct = this.cpe?.wifi5g?.bandwidth as string | undefined;
+    return this.normalizeBandwidth(fromCache) ?? this.normalizeBandwidth(fromStruct) ?? '—';
   }
 
   /**
    * Retorna o canal atual do WiFi 2.4GHz.
-   * Segurança: valida que é um número válido na faixa 1-13.
+   * Detecta modo automático (canal=0 ou AutoChannelEnable=true) e exibe "Auto".
+   * Fonte primária: parametersCache. Fallback: cpe.wifi2g.channel (campo estruturado).
    */
   get wifi2gChannel(): string {
-    const channel = this.getParamValue('Device.WiFi.Radio.1.Channel');
-    const sanitizedChannel = this.sanitizeNumber(channel, 1, 13);
-    
-    return sanitizedChannel.toString();
+    const fromCache  = this.getParamValue('Device.WiFi.Radio.1.Channel');
+    const autoEnable = this.getParamValue('Device.WiFi.Radio.1.AutoChannelEnable');
+    const autoStruct = this.cpe?.wifi2g?.autoChannelEnable as boolean | null | undefined;
+    const channel    = fromCache ?? String(this.cpe?.wifi2g?.channel ?? '');
+    // Auto mode: canal='0'/'auto', AutoChannelEnable=true (cache ou campo estruturado)
+    if (channel === '0' || String(channel).toLowerCase() === 'auto' ||
+        autoEnable === 'true' || autoStruct === true) return 'Auto';
+    if (!channel || channel === 'undefined') return '—';
+    const num = Number(channel);
+    // Fora do range 2.4GHz (1-13) → '—' em vez de exibir valor inválido/lixo da CPE
+    if (isNaN(num) || num < 1 || num > 13) return '—';
+    return num.toString();
   }
 
   /**
    * Retorna o canal atual do WiFi 5GHz.
-   * Segurança: valida que é um número válido na faixa 36-165.
+   * Detecta modo automático (canal=0 ou AutoChannelEnable=true) e exibe "Auto".
+   * Fonte primária: parametersCache. Fallback: cpe.wifi5g.channel (campo estruturado).
    */
   get wifi5gChannel(): string {
-    const channel = this.getParamValue('Device.WiFi.Radio.2.Channel');
-    const sanitizedChannel = this.sanitizeNumber(channel, 36, 165);
-    
-    return sanitizedChannel.toString();
+    const fromCache  = this.getParamValue('Device.WiFi.Radio.2.Channel');
+    const autoEnable = this.getParamValue('Device.WiFi.Radio.2.AutoChannelEnable');
+    const autoStruct = this.cpe?.wifi5g?.autoChannelEnable as boolean | null | undefined;
+    const channel    = fromCache ?? String(this.cpe?.wifi5g?.channel ?? '');
+    if (channel === '0' || String(channel).toLowerCase() === 'auto' ||
+        autoEnable === 'true' || autoStruct === true) return 'Auto';
+    if (!channel || channel === 'undefined') return '—';
+    const num = Number(channel);
+    // Fora do range 5GHz válido (36-165, UNII-1/2/3 sem extensões exóticas) → '—'
+    if (isNaN(num) || num < 36 || num > 165) return '—';
+    return num.toString();
+  }
+
+  /**
+   * Indica se o rádio 2.4GHz está em modo automático de canal.
+   * Verifica parametersCache e campo estruturado cpe.wifi2g.autoChannelEnable.
+   */
+  get wifi2gAutoMode(): boolean {
+    const channel    = this.getParamValue('Device.WiFi.Radio.1.Channel');
+    const autoEnable = this.getParamValue('Device.WiFi.Radio.1.AutoChannelEnable');
+    const autoStruct = this.cpe?.wifi2g?.autoChannelEnable as boolean | null | undefined;
+    return channel === '0' || String(channel).toLowerCase() === 'auto' ||
+           autoEnable === 'true' || autoStruct === true;
+  }
+
+  /**
+   * Indica se o rádio 5GHz está em modo automático de canal.
+   * Verifica parametersCache e campo estruturado cpe.wifi5g.autoChannelEnable.
+   */
+  get wifi5gAutoMode(): boolean {
+    const channel    = this.getParamValue('Device.WiFi.Radio.2.Channel');
+    const autoEnable = this.getParamValue('Device.WiFi.Radio.2.AutoChannelEnable');
+    const autoStruct = this.cpe?.wifi5g?.autoChannelEnable as boolean | null | undefined;
+    return channel === '0' || String(channel).toLowerCase() === 'auto' ||
+           autoEnable === 'true' || autoStruct === true;
   }
 
   /**
    * Retorna a potência de transmissão do WiFi 2.4GHz.
-   * Segurança: valida que é um número válido na faixa 0-100%.
+   * Fonte primária: parametersCache. Fallback: cpe.wifi2g.txPower (campo estruturado).
    */
   get wifi2gPower(): string {
-    const power = this.getParamValue('Device.WiFi.Radio.1.TransmitPower');
-    const sanitizedPower = this.sanitizeNumber(power, 0, 100);
-    
-    return `${sanitizedPower}%`;
+    const fromCache  = this.getParamValue('Device.WiFi.Radio.1.TransmitPower');
+    const fromStruct = this.cpe?.wifi2g?.txPower;
+    const raw = fromCache ?? (fromStruct != null ? String(fromStruct) : undefined);
+    if (raw === undefined) return '—';
+    const num = this.sanitizeNumber(raw, 0, 100);
+    return num > 0 ? `${num}%` : '—';
   }
 
   /**
    * Retorna a potência de transmissão do WiFi 5GHz.
-   * Segurança: valida que é um número válido na faixa 0-100%.
+   * Fonte primária: parametersCache. Fallback: cpe.wifi5g.txPower (campo estruturado).
    */
   get wifi5gPower(): string {
-    const power = this.getParamValue('Device.WiFi.Radio.2.TransmitPower');
-    const sanitizedPower = this.sanitizeNumber(power, 0, 100);
-    
-    return `${sanitizedPower}%`;
+    const fromCache  = this.getParamValue('Device.WiFi.Radio.2.TransmitPower');
+    const fromStruct = this.cpe?.wifi5g?.txPower;
+    const raw = fromCache ?? (fromStruct != null ? String(fromStruct) : undefined);
+    if (raw === undefined) return '—';
+    const num = this.sanitizeNumber(raw, 0, 100);
+    return num > 0 ? `${num}%` : '—';
   }
 
   /**
    * Valida se o CPE tem dados WiFi suficientes para análise.
-   * Segurança: verifica se parâmetros essenciais existem e são válidos.
+   * Aceita tanto parametersCache quanto campos estruturados (cpe.wifi2g/wifi5g).
    */
   get hasValidWifiData(): boolean {
-    const has2g = this.getParamValue('Device.WiFi.Radio.1.Channel') !== undefined;
-    const has5g = this.getParamValue('Device.WiFi.Radio.2.Channel') !== undefined;
+    return this.hasLive2gData || this.hasLive5gData;
+  }
 
-    return has2g || has5g;
+  /**
+   * Verifica se há dados ao vivo para a banda 2.4GHz.
+   * Fonte: parametersCache (mais recente) ou cpe.wifi2g.channel (persistido).
+   */
+  get hasLive2gData(): boolean {
+    const fromCache  = this.getParamValue('Device.WiFi.Radio.1.Channel');
+    const fromStruct = this.cpe?.wifi2g?.channel;
+    return fromCache !== undefined || (fromStruct != null && fromStruct !== '');
+  }
+
+  /**
+   * Verifica se há dados ao vivo para a banda 5GHz.
+   * Fonte: parametersCache (mais recente) ou cpe.wifi5g.channel (persistido).
+   */
+  get hasLive5gData(): boolean {
+    const fromCache  = this.getParamValue('Device.WiFi.Radio.2.Channel');
+    const fromStruct = this.cpe?.wifi5g?.channel;
+    return fromCache !== undefined || (fromStruct != null && fromStruct !== '');
+  }
+
+  /**
+   * Inicia o loading coordenado.
+   */
+  private startLoading(): void {
+    this.loadingCount++;
+    this.isLoading = true;
+  }
+
+  /**
+   * Finaliza o loading coordenado.
+   * Só desliga isLoading quando todas as requisições completarem.
+   */
+  private stopLoading(): void {
+    if (--this.loadingCount <= 0) {
+      this.loadingCount = 0;
+      this.isLoading = false;
+      this.cdr.detectChanges();
+    }
   }
 
   /**
@@ -327,13 +465,13 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
         next: () => {
           this.applyInProgress = false;
           this.applySuccess = `Otimização "${band}" enviada para a CPE.`;
-          setTimeout(() => { this.applySuccess = null; this.cdr.detectChanges(); }, 5000);
+          this.applySuccessTimer = setTimeout(() => { this.applySuccess = null; this.cdr.detectChanges(); }, 5000);
           this.cdr.detectChanges();
         },
         error: (err: any) => {
           this.applyInProgress = false;
           this.applyError = err?.error?.error || 'Erro ao aplicar otimização.';
-          setTimeout(() => { this.applyError = null; this.cdr.detectChanges(); }, 8000);
+          this.applyErrorTimer = setTimeout(() => { this.applyError = null; this.cdr.detectChanges(); }, 8000);
           this.cdr.detectChanges();
         }
       });
