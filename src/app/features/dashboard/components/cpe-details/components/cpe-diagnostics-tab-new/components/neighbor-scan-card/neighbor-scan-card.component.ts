@@ -5,10 +5,130 @@ import { ButtonComponent } from '@app/core/components/button/button.component';
 export interface NeighborScanResult {
   serialNumber?: string;
   neighboringWiFiResultCount?: number;
-  channelSaturation?: any;
-  bands?: any;
-  summary?: any;
+  channelSaturation?: ChannelSaturation;
+  bands?: WifiBands;
+  summary?: WifiSummary;
   timestamp?: string;
+}
+
+/** Estrutura de saturação de canal retornada pelo backend (wifiNeighborScanService). */
+export interface ChannelSaturation {
+  serialNumber?: string;
+  manufacturer?: string;
+  profile?: string;
+  isRealData?: boolean;
+  timestamp?: string;
+  bands?: {
+    '2.4GHz'?: BandSaturation;
+    '5GHz'?: BandSaturation;
+    [key: string]: BandSaturation | undefined;
+  };
+}
+
+/** Saturação de uma banda (2.4GHz ou 5GHz). */
+export interface BandSaturation {
+  band: string;
+  channels: Record<number, ChannelEntry>;
+  totalNeighbors?: number;
+  timestamp?: string;
+  demo?: boolean;
+  suggestion?: ChannelSuggestion;
+  maxInterferenceScore?: number;
+  bandwidthSuggestion?: string | null;
+  bandwidthSuggestionReason?: string | null;
+}
+
+/** Entrada de canal na tabela de saturação. */
+export interface ChannelEntry {
+  channel: number;
+  neighborCount: number;
+  interferenceScore?: number;
+  avgRssi?: number | null;
+  noiseLevel?: number;
+  congestionLevel?: string;
+}
+
+/** Sugestão de mudança de canal. */
+export interface ChannelSuggestion {
+  bestChannel: number;
+  currentChannel: number;
+  currentScore: number;
+  bestScore: number;
+  improvement: number;
+  shouldChange: boolean;
+  reason: string;
+  parameterPath?: string;
+}
+
+/** Dados de bandas Wi-Fi do wifiAnalyzerService. */
+export interface WifiBands {
+  '2.4GHz'?: BandData;
+  '5GHz'?: BandData;
+  [key: string]: BandData | undefined;
+}
+
+/** Dados de uma banda do wifiAnalyzerService. */
+export interface BandData {
+  radio?: RadioData;
+  congestion?: CongestionData;
+  channelSuggestion?: {
+    shouldChange: boolean;
+    currentChannel: number;
+    suggestedChannel: number;
+    reason: string;
+    source: string;
+  };
+  clientAnalysis?: ClientAnalysisEntry[];
+  qualityDistribution?: Record<string, number>;
+  totalClients?: number;
+}
+
+/** Dados de rádio brutos da CPE. */
+export interface RadioData {
+  channel?: number | null;
+  status?: string | null;
+  rssi?: number | null;
+  snr?: number | null;
+  noise?: number | null;
+  utilization?: number | null;
+  bandwidth?: string | null;
+  autoChannelEnable?: boolean | null;
+  txRate?: number | null;
+  rxRate?: number | null;
+  txPower?: number | null;
+  bytesSent?: number | null;
+  bytesReceived?: number | null;
+  packetsSent?: number | null;
+  packetsReceived?: number | null;
+  errorsSent?: number | null;
+  errorsReceived?: number | null;
+  discardSent?: number | null;
+  discardReceived?: number | null;
+}
+
+/** Dados de congestionamento de canal. */
+export interface CongestionData {
+  isCongested: boolean;
+  severity: string;
+  errorRate: number;
+  discardRate: number;
+  message: string;
+}
+
+/** Entrada de análise de cliente. */
+export interface ClientAnalysisEntry {
+  macAddress: string | null;
+  ipAddress: string | null;
+  quality: string;
+  rssi: number | null;
+  recommendation: string;
+}
+
+/** Sumário de diagnóstico Wi-Fi. */
+export interface WifiSummary {
+  totalClients?: number;
+  hasCongestion?: boolean;
+  criticalClients?: number;
 }
 
 /**
@@ -16,12 +136,13 @@ export interface NeighborScanResult {
  * Todos os campos são opcionais pois dependem das capacidades do firmware.
  */
 export interface RadioQuality {
-  bandwidth: string | null;       // OperatingChannelBandwidth: ex. "20MHz", "80MHz"
+  bandwidth: string | null;       // OperatingChannelBandwidth: ex. "20MHz", "80MHz", "Auto"
   snr: number | null;             // SNR em dB (proprietary X_TP_SNR - TP-Link)
   noise: number | null;           // Ruído de fundo em dBm
   utilization: number | null;     // Utilização do canal em % (X_TP_Utilization - TP-Link)
   txPower: number | null;         // Potência de transmissão em %
-  channel: number | null;         // Canal atual
+  channel: number | null;         // Canal atual (0 = auto mode)
+  autoChannelEnable: boolean | null; // true quando CPE gerencia canal (modo automático)
   rssi: number | null;            // RSSI do rádio
   bandwidthSuggestion: string | null;  // Sugestão de largura de banda baseada em dados reais
   bandwidthSuggestionReason: string | null;  // Razão da sugestão
@@ -179,11 +300,14 @@ export class NeighborScanCardComponent {
 
     if (!radio || typeof radio !== 'object') {
       return { bandwidth: null, snr: null, noise: null, utilization: null,
-               txPower: null, channel: null, rssi: null,
+               txPower: null, channel: null, autoChannelEnable: null, rssi: null,
                bandwidthSuggestion: null, bandwidthSuggestionReason: null };
     }
 
     const bandwidth    = typeof radio.bandwidth === 'string' && radio.bandwidth.length > 0 ? radio.bandwidth : null;
+
+    // AutoChannelEnable: true quando a CPE gerencia o canal (modo automático)
+    const autoChannelEnable = typeof radio.autoChannelEnable === 'boolean' ? radio.autoChannelEnable : null;
 
     // SNR: CPEs TP-Link retornam "0" quando X_TP_SNR não é suportado pelo firmware.
     // SNR 0 dB (sinal = ruído) é fisicamente impossível num rádio funcional — descarta como inválido.
@@ -199,133 +323,33 @@ export class NeighborScanCardComponent {
     const utilization  = radio.utilization != null ? this.sanitizeNumber(radio.utilization, 0, 100) : null;
     const txPower      = (radio.txPower != null && Number(radio.txPower) > 0) ? this.sanitizeNumber(radio.txPower, 1, 100) : null;
 
-    // Canal: 0 significa parâmetro não preenchido pela CPE — descarta.
+    // Canal: 0 em auto mode (AutoChannelEnable=true) é válido — manter 0.
+    // 0 sem auto mode = parâmetro não preenchido — descarta (null).
     // Para 5GHz o menor canal válido é 36; para 2.4GHz é 1.
     const channelRaw = Number(radio.channel);
     const channelMin = band === '5GHz' ? 36 : 1;
     const channelMax = band === '5GHz' ? 165 : 13;
-    const channel = (radio.channel != null && !isNaN(channelRaw) && channelRaw >= channelMin) ? this.sanitizeNumber(channelRaw, channelMin, channelMax) : null;
+    let channel: number | null = null;
+    if (radio.channel != null && !isNaN(channelRaw)) {
+      if (channelRaw === 0 && autoChannelEnable === true) {
+        channel = 0; // auto mode — manter 0
+      } else if (channelRaw >= channelMin) {
+        channel = this.sanitizeNumber(channelRaw, channelMin, channelMax);
+      }
+    }
 
     const rssiRaw = Number(radio.rssi);
     const rssi = (radio.rssi != null && !isNaN(rssiRaw) && rssiRaw < 0) ? this.sanitizeNumber(rssiRaw, -120, -1) : null;
 
-    // Score de interferência máximo desta banda (pior canal) — dados reais da varredura
+    // Sugestão de largura de banda: lê diretamente do payload do backend
+    // (wifiNeighborScanService.collectChannelSaturation → bands[band].bandwidthSuggestion).
+    // Antes esta lógica era duplicada no frontend — agora o backend é a fonte única.
     const channelSatBand = this.channelSaturation?.bands?.[band];
-    const maxScore = this.getMaxInterferenceScore(channelSatBand);
-    const hasRealScan = this.hasRealData;
+    const bandwidthSuggestion = channelSatBand?.bandwidthSuggestion ?? null;
+    const bandwidthSuggestionReason = channelSatBand?.bandwidthSuggestionReason ?? null;
 
-    const { suggestion: bandwidthSuggestion, reason: bandwidthSuggestionReason } =
-      this.calcBandwidthSuggestion(band, bandwidth, maxScore, hasRealScan);
-
-    return { bandwidth, snr, noise, utilization, txPower, channel, rssi,
+    return { bandwidth, snr, noise, utilization, txPower, channel, autoChannelEnable, rssi,
              bandwidthSuggestion, bandwidthSuggestionReason };
-  }
-
-  /**
-   * Retorna o maior interferenceScore entre todos os canais de uma banda.
-   * Usado para avaliar o ambiente geral da banda, não apenas o canal atual.
-   */
-  private getMaxInterferenceScore(bandSaturation: any): number {
-    if (!bandSaturation?.channels || typeof bandSaturation.channels !== 'object') return 0;
-    const scores = Object.values(bandSaturation.channels)
-      .map((ch: any) => (typeof ch?.interferenceScore === 'number' ? ch.interferenceScore : 0));
-    return scores.length > 0 ? Math.max(...scores) : 0;
-  }
-
-  /**
-   * Calcula sugestão de largura de banda baseada em dados REAIS.
-   * NÃO sugere "automático" — apenas recomendações manuais com justificativa.
-   * Retorna null quando não há dados suficientes para recomendar.
-   *
-   * Fontes dos dados usados:
-   *  - bandwidth: OperatingChannelBandwidth (parâmetro TR-181 real da CPE)
-   *  - maxScore: score ponderado calculado pelo wifiNeighborScanService (dados reais de scan)
-   */
-  private calcBandwidthSuggestion(
-    band: string, bandwidth: string | null, maxScore: number, hasRealScan: boolean
-  ): { suggestion: string | null; reason: string | null } {
-
-    // Sem scan real não temos dados do ambiente para recomendar
-    if (!hasRealScan) {
-      return { suggestion: null, reason: 'Acione a varredura para obter recomendação de largura de banda' };
-    }
-
-    if (band === '2.4GHz') {
-      // 2.4GHz: espectro estreito (83,5 MHz total para 11/13 canais)
-      if (bandwidth === '40MHz' || bandwidth === '20MHz/40MHz') {
-        if (maxScore > 1.0) {
-          // 40MHz ocupa 2 canais não sobrepostos (ex: CH1+CH5) — em ambiente saturado é prejudicial
-          return {
-            suggestion: 'Reduzir para 20MHz',
-            reason: `40MHz em 2.4GHz ocupa espectro de 2 canais. Score de interferência do ambiente: ${maxScore.toFixed(1)} — acima de 1.0. Reduzir para 20MHz melhora coexistência com vizinhos.`
-          };
-        }
-        return {
-          suggestion: null,
-          reason: `40MHz adequado para o ambiente atual (score ${maxScore.toFixed(1)} ≤ 1.0 — baixa interferência).`
-        };
-      }
-      if (bandwidth === '20MHz') {
-        if (maxScore <= 0.5) {
-          return {
-            suggestion: null,
-            reason: `20MHz está adequado. Ambiente com pouca interferência (score ${maxScore.toFixed(1)}) — 40MHz poderia ser considerado, mas alterações manuais devem ser avaliadas pelo técnico.`
-          };
-        }
-        return {
-          suggestion: null,
-          reason: `20MHz correto para este ambiente (score ${maxScore.toFixed(1)} — interferência detectada).`
-        };
-      }
-    }
-
-    if (band === '5GHz') {
-      if (bandwidth === '160MHz') {
-        if (maxScore > 0.5) {
-          return {
-            suggestion: 'Reduzir para 80MHz',
-            reason: `160MHz requer 8 canais contíguos livres. Score de interferência: ${maxScore.toFixed(1)} — ambiente com vizinhos ativos. 80MHz oferece melhor equilíbrio entre velocidade e estabilidade.`
-          };
-        }
-        return {
-          suggestion: null,
-          reason: `160MHz adequado — ambiente com baixa interferência (score ${maxScore.toFixed(1)} ≤ 0.5).`
-        };
-      }
-      if (bandwidth === '80MHz' || bandwidth === '40MHz/80MHz') {
-        if (maxScore > 3.0) {
-          return {
-            suggestion: 'Considerar 40MHz',
-            reason: `Score de interferência ${maxScore.toFixed(1)} está alto (> 3.0). Em ambientes muito saturados, 40MHz pode oferecer melhor estabilidade. Avalie com o técnico.`
-          };
-        }
-        return {
-          suggestion: null,
-          reason: `80MHz adequado para o ambiente atual (score ${maxScore.toFixed(1)}).`
-        };
-      }
-      if (bandwidth === '40MHz') {
-        if (maxScore <= 1.0) {
-          return {
-            suggestion: null,
-            reason: `40MHz em ambiente com baixa interferência (score ${maxScore.toFixed(1)}). 80MHz poderia ser avaliado pelo técnico para maior throughput.`
-          };
-        }
-        return {
-          suggestion: null,
-          reason: `40MHz adequado dado o nível de interferência (score ${maxScore.toFixed(1)}).`
-        };
-      }
-      if (bandwidth === '20MHz') {
-        return {
-          suggestion: null,
-          reason: `20MHz em 5GHz limita o throughput significativamente. Avalie ampliar para 40MHz ou 80MHz se o ambiente permitir (score atual: ${maxScore.toFixed(1)}).`
-        };
-      }
-    }
-
-    // Largura de banda desconhecida ou não lida pela CPE
-    return { suggestion: null, reason: null };
   }
 
   /**
@@ -495,11 +519,16 @@ export class NeighborScanCardComponent {
   getNonOverlappingChannels(band: string): number[] {
     // Segurança: valida band parameter
     if (band === '2.4GHz') {
-      return [1, 6, 11]; // Canais não sobrepostos em 2.4GHz
+      // Canais não sobrepostos em 2.4GHz (IEEE 802.11-2020, espaçamento 25 MHz)
+      return [1, 6, 11];
     } else if (band === '5GHz') {
-      return [36, 44, 52, 60, 149, 157]; // Canais não sobrepostos em 5GHz (DFS)
+      // Canais preferenciais SEM DFS (UNII-1 + UNII-3) — mesma lista do backend
+      // (wifiConstants.js PREFERRED_5G_NO_DFS). Canal 165 incluído (UNII-3, sem DFS).
+      // Antes esta lista era [36, 44, 52, 60, 149, 157] — divergia do backend e
+      // incluía canais DFS (52, 60) que o backend evita.
+      return [36, 40, 44, 48, 149, 153, 157, 161, 165];
     }
-    
+
     // Segurança: retorna array vazio para banda inválida
     return [];
   }
