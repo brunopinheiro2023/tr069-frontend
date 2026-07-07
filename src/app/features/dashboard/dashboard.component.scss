@@ -367,53 +367,90 @@
     width: 100%;
 }
 
-.vmoas-viewport {
-    height: calc(100vh - 350px);
-    min-height: 400px;
-    width: 100%;
-    @include mixins.custom-scrollbar(transparent, var(--text-secondary), 6px);
+.refilter-bar {
+    height: 2px;
+    background: rgba(99, 102, 241, 0.15);
+    overflow: hidden;
+
+    .refilter-progress {
+        height: 100%;
+        background: #6366f1;
+        animation: refilter-slide 1.2s ease-in-out infinite;
+    }
 }
 
-.vmoas-table {
-    width: 100%;
-    border-collapse: collapse;
-    text-align: left;
+@keyframes refilter-slide {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.vmoas-grid-table {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.vmoas-grid-header, .vmoas-grid-row {
+  display: grid;
+  // Checkbox | Status | Serial | Modelo | IP WAN | PPPoE | Sinal Rx | Saúde | Ações
+  grid-template-columns: 48px 110px minmax(110px, 1.2fr) minmax(110px, 1.2fr) minmax(110px, 1.1fr) minmax(120px, 1.3fr) 110px 80px 220px;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+}
+
+.vmoas-grid-header {
+  height: 56px;
+  background-color: var(--bg-surface-elevated);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border-color);
+  z-index: 2;
+  
+  // Garante alinhamento horizontal pixel-por-pixel impecável com as linhas que possuem scrollbar
+  scrollbar-gutter: stable;
+}
+
+.vmoas-viewport {
+  height: calc(100vh - 350px);
+  min-height: 400px;
+  width: 100%;
+  @include mixins.custom-scrollbar(transparent, var(--text-secondary), 6px);
+  
+  // Reserva o espaço físico do scroll nativamente para evitar desalinhamento do header
+  scrollbar-gutter: stable;
+}
+
+.vmoas-grid-row {
+  height: 70px !important; // Tamanho vertical travado idêntico ao itemSize do CDK
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background-color: var(--bg-body);
+  }
 }
 
 .col-checkbox { width: 48px; text-align: center; }
 
-.vmoas-table th {
-    /* Sticky Header - Mantém o cabeçalho fixo no topo ao rolar os 6000 clientes */
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background-color: var(--bg-surface-elevated);
-    padding: 16px 24px;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    /* Usa box-shadow em vez de border-bottom para que não role com o scroll */
-    box-shadow: inset 0 -1px 0 var(--border-color);
-}
-
-.vmoas-table td {
-    padding: 16px 24px;
-    font-size: 14px;
-    border-bottom: 1px solid var(--border-color);
-    color: var(--text-primary);
-    vertical-align: middle;
-}
-
 .table-row-clickable {
     cursor: pointer;
-    transition: background-color 0.15s ease;
-    &:hover { background-color: var(--bg-body); }
 }
 
 .bold-text { font-weight: 600; }
 .text-muted { color: var(--text-secondary); }
+
+.empty-state-row {
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 /* Badges de Status (Online/Offline) */
 .status-badge {
@@ -564,6 +601,26 @@
 .modal-body { padding: 24px; max-height: 65vh; overflow-y: auto; }
 .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; }
 
+.confirm-input {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-body);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s ease;
+
+  &:focus {
+    border-color: var(--accent-primary);
+  }
+
+  &::placeholder {
+    color: var(--text-muted);
+  }
+}
+
 .ai-loading {
     display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 40px; color: var(--text-secondary);
     .material-symbols-rounded { font-size: 48px; color: #8b5cf6; }
@@ -645,3 +702,34 @@
 }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+// Badges de largura de banda Wi-Fi (2.4GHz / 5GHz)
+// Exibidos na coluna Modelo da tabela do dashboard
+.wifi-bw-badges {
+  display: flex;
+  gap: 4px;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
+
+.bw-badge {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+
+  &.bw-2g {
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+  }
+
+  &.bw-5g {
+    background: rgba(16, 185, 129, 0.12);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+  }
+}

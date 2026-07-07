@@ -86,7 +86,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let host of devicesData?.wifiDevices">
+          <tr *ngFor="let host of devicesData?.wifiDevices; trackBy: trackByMac">
             <td class="cell-host">
               <div class="host-name">{{ host.hostName }}</div>
               <div *ngIf="host.clientType" class="host-client-type">{{ host.clientType }}</div>
@@ -162,7 +162,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let dev of devicesData?.ethernetDevices">
+          <tr *ngFor="let dev of devicesData?.ethernetDevices; trackBy: trackByMac">
             <td class="cell-host">
               <div class="host-name">{{ dev.hostName }}</div>
               <div *ngIf="dev.clientType" class="host-client-type">{{ dev.clientType }}</div>

@@ -37,7 +37,7 @@ export class MetricPipe implements PipeTransform {
     }
 
     if (options?.transform === 'uptimeHours') {
-      const up = this.getMetricValue(telemetryData, 'upTime');
+      const up = this.getMetricValue(telemetryData, 'uptime');
       if (up === null || up < 0) return fallback;
       const hours = Math.floor(up / 3600);
       return `${hours}${options?.unit || 'h'}`;

@@ -1,0 +1,99 @@
+<div class="vmoas-card radio-band-card" [class.is-disabled]="!isEnabled">
+  <!-- Header do card -->
+  <div class="radio-header">
+    <div class="radio-title-group">
+      <div class="icon-wrapper">
+        <span class="material-symbols-rounded">{{ bandIcon }}</span>
+      </div>
+      <div>
+        <h3>Rádio {{ bandLabel }}</h3>
+        <div class="badge-group">
+          <span class="band-badge">{{ bandLabel }}</span>
+          <span class="protocol-badge">{{ protocolLabel }}</span>
+          <span class="status-badge"
+                [class.status-up]="status === 'Up' || status === 'Enabled'"
+                [class.status-down]="status === 'Down' || status === 'Disabled'">
+            {{ status }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toggle de habilitação -->
+    <label class="vmoas-switch" [class.disabled-toggle]="isSaving">
+      <input type="checkbox" [formControl]="$any(bandForm.get('enable'))" [attr.disabled]="isSaving ? '' : null">
+      <span class="vmoas-slider"></span>
+    </label>
+  </div>
+
+  <div class="radio-body">
+    <!-- Canal (Auto + canais fixos no mesmo select — AutoChannelEnable derivado no builder) -->
+    <div class="input-group" [class.field-dirty]="bandForm.get('channel')?.dirty">
+      <label>Canal</label>
+      <div class="input-wrapper">
+        <span class="material-symbols-rounded input-icon">settings_input_antenna</span>
+        <select class="vmoas-input" [formControl]="$any(bandForm.get('channel'))" [attr.disabled]="isSaving || !isEnabled ? '' : null">
+          <option value="Auto">Automático (CPE escolhe o melhor canal)</option>
+          <option *ngFor="let ch of channelOptions" [value]="ch">{{ ch }}</option>
+        </select>
+      </div>
+      <small class="field-hint" *ngIf="band === '5GHz'">
+        Canais DFS (52-144) não listados — podem causar interferência com radar.
+      </small>
+    </div>
+
+    <!-- Largura de banda -->
+    <div class="input-group" [class.field-dirty]="bandForm.get('bandwidth')?.dirty">
+      <label>Largura de Banda</label>
+      <div class="input-wrapper">
+        <span class="material-symbols-rounded input-icon">swap_horiz</span>
+        <select class="vmoas-input" [formControl]="$any(bandForm.get('bandwidth'))" [attr.disabled]="isSaving || !isEnabled ? '' : null">
+          <option value="">Selecionar largura</option>
+          <option *ngFor="let bw of bandwidthOptions" [value]="bw">{{ bw }} MHz</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Potência de transmissão -->
+    <div class="input-group" [class.field-dirty]="bandForm.get('power')?.dirty">
+      <label>
+        Potência de Transmissão (%)
+        <app-help-toggle
+          *ngIf="!isTR181"
+          title="Potência em Percentual (Intelbras TR-098)"
+          description="Intelbras TR-098 usa valores percentuais (15-100%). 100% = potência máxima do hardware.">
+        </app-help-toggle>
+        <app-help-toggle
+          *ngIf="isTR181"
+          title="Potência em Percentual (TP-Link TR-181)"
+          description="TP-Link TR-181 usa percentual (0-100%). Os valores aceitos são definidos pela própria CPE via TransmitPowerSupported. 100% = potência máxima do hardware.">
+        </app-help-toggle>
+      </label>
+      <div class="input-wrapper">
+        <span class="material-symbols-rounded input-icon">signal_cellular_alt</span>
+        <select class="vmoas-input" [formControl]="$any(bandForm.get('power'))" [attr.disabled]="isSaving || !isEnabled ? '' : null">
+          <option value="">Selecionar potência</option>
+          <option *ngFor="let p of powerOptions" [value]="p">{{ p }}%</option>
+        </select>
+      </div>
+      <small class="field-hint field-hint-info" *ngIf="isTR181 && !txPowerSupported">
+        <span class="material-symbols-rounded" style="font-size:13px;vertical-align:middle">info</span>
+        Opções estimadas — valores reais serão coletados no próximo Inform da CPE.
+      </small>
+    </div>
+
+    <!-- Botão salvar individual -->
+    <div class="card-actions">
+      <app-button
+        variant="primary"
+        size="sm"
+        iconLeft="save"
+        [loading]="isSaving"
+        [disabled]="bandForm.invalid || isSaving || !hasChanges"
+        (clicked)="onSave()"
+      >
+        Salvar Rádio {{ bandLabel }}
+      </app-button>
+    </div>
+  </div>
+</div>

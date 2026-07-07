@@ -35,5 +35,15 @@
       <span class="material-symbols-rounded">devices</span>
       <span class="nav-label">Equipamentos (CPEs)</span>
     </li>
+    <li
+      *ngIf="isAdmin"
+      class="nav-item"
+      routerLink="/provider-config"
+      routerLinkActive="active"
+      (click)="onNavClick()"
+    >
+      <span class="material-symbols-rounded">admin_panel_settings</span>
+      <span class="nav-label">Config. Provedor</span>
+    </li>
   </ul>
 </aside>

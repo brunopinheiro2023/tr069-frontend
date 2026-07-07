@@ -112,4 +112,19 @@ export class AuthService {
     const payload = this.getUserPayload();
     return payload ? payload.username : null;
   }
+
+  /**
+   * Obtém o role do usuário a partir do token JWT armazenado.
+   */
+  getRole(): string | null {
+    const payload = this.getUserPayload();
+    return payload ? payload.role : null;
+  }
+
+  /**
+   * Verifica se o usuário tem role de admin.
+   */
+  isAdmin(): boolean {
+    return this.getRole() === 'admin';
+  }
 }

@@ -1,0 +1,315 @@
+# Windsurf Rules — TR-069 Angular Frontend
+# Agente: SWE-1.6 | Angular 17 + Tailwind CSS + RxJS | Standalone Components
+
+exclude: [node_modules/, .git/, dist/, .angular/, coverage/]
+
+---
+
+## REGRA 0 — FLUXO OBRIGATÓRIO ANTES DE QUALQUER EDIÇÃO
+
+**Execute na ordem — nunca pule etapas:**
+
+1. **Leia** `src/app/core/models/index.ts` antes de criar ou consumir tipos
+2. **Verifique** se o serviço HTTP já existe em `src/app/core/services/` antes de criar um novo
+3. **Leia** o trecho com contexto (pelo menos 15 linhas antes e depois do ponto de edição)
+4. **Edite** cirurgicamente — nunca reescreva arquivo inteiro para mudança pontual
+5. **Confirme** lendo o resultado após a edição
+
+> `dashboard.component.ts` e `models/index.ts` têm 1000+ linhas. Sempre confirme via busca textual antes de editar — números de linha mudam.
+
+---
+
+## REGRA 1 — ARQUITETURA: STANDALONE-ONLY (sem NgModule)
+
+Angular 17.3 — **todos os components são standalone**. Nunca usar NgModule.
+
+```typescript
+// ✅ Correto
+@Component({
+  selector: 'app-feature',
+  standalone: true,
+  imports: [CommonModule, FormsModule, ButtonComponent],
+  templateUrl: './feature.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class FeatureComponent {}
+
+// ❌ NUNCA fazer
+@NgModule({ declarations: [...] })
+```
+
+**Estrutura de diretórios — onde cada coisa vai:**
+```
+src/app/
+├── core/
+│   ├── components/    ← Design system (button, skeleton, toast, header, sidebar)
+│   ├── guards/        ← auth.guard.ts, guest.guard.ts
+│   ├── interceptors/  ← auth, loading, retry
+│   ├── models/        ← index.ts — TODAS as interfaces neste único arquivo
+│   ├── pipes/         ← pipes puros e standalone
+│   ├── services/      ← serviços HTTP + state (BehaviorSubject)
+│   └── validators/    ← schemas.ts — schemas Zod
+└── features/
+    └── <feature>/     ← components smart por feature
+```
+
+**Novas features:** `features/<nome>/` + rota lazy em `app.routes.ts`
+**Novos types:** adicionar em `core/models/index.ts` (nunca criar arquivo separado de models)
+**Novos serviços HTTP:** `core/services/<nome>.service.ts` com `providedIn: 'root'`
+**Novos schemas Zod:** `core/validators/schemas.ts`
+**Novos componentes UI reutilizáveis:** `core/components/<nome>/`
+
+---
+
+## REGRA 2 — CHANGE DETECTION: OnPush SEMPRE
+
+```typescript
+// ✅ Todos os components novos usam OnPush
+@Component({ changeDetection: ChangeDetectionStrategy.OnPush })
+export class MinhaFeatureComponent {
+  constructor(private cdr: ChangeDetectorRef) {}
+
+  onDataArrived(data: MinhaInterface): void {
+    this.data = data;
+    this.cdr.markForCheck(); // ← OBRIGATÓRIO após update de estado fora do template
+  }
+}
+```
+
+**Quando chamar `markForCheck()`:**
+- Após update de propriedade via callback, Promise ou Observable (sem async pipe)
+- Após eventos WebSocket que atualizam o estado
+- **Não** é necessário dentro do async pipe — Angular faz automaticamente
+
+---
+
+## REGRA 3 — RXJS: SUBSCRIPTIONS E CLEANUP
+
+**NUNCA** deixar subscription vazar. Padrão obrigatório:
+
+```typescript
+// ✅ Padrão moderno Angular 16+ (preferido)
+export class MinhaFeatureComponent {
+  private destroyRef = inject(DestroyRef);
+
+  ngOnInit(): void {
+    this.wsService.onCpeUpdated()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(data => {
+        this.data = data;
+        this.cdr.markForCheck();
+      });
+  }
+}
+
+// ✅ Alternativa com Subscription (components com muitas subscriptions)
+private subs = new Subscription();
+ngOnDestroy(): void { this.subs.unsubscribe(); }
+```
+
+**Operadores obrigatórios para busca:**
+```typescript
+searchSubject.pipe(
+  debounceTime(400),
+  distinctUntilChanged(),
+  switchMap(term => this.service.search(term)),
+  takeUntilDestroyed(this.destroyRef),
+)
+```
+
+**Regras RxJS:**
+- Serviços devem **retornar Observable**, nunca fazer `subscribe()` internamente
+- Use `share()` em observables WebSocket com múltiplos ouvintes
+- Use `switchMap` para busca (cancela anterior), `mergeMap` para paralelos independentes
+- **Não misturar `async/await` dentro de pipes RxJS** — use `switchMap` + `catchError`
+
+---
+
+## REGRA 4 — STATE MANAGEMENT: BEHAVIORSUBJECT (sem NgRx, sem Signals)
+
+```typescript
+@Injectable({ providedIn: 'root' })
+export class MinhaFeatureService {
+  private _estado$ = new BehaviorSubject<MinhaInterface | null>(null);
+  readonly estado$ = this._estado$.asObservable();
+
+  updateEstado(data: MinhaInterface): void {
+    this._estado$.next(data);
+  }
+}
+```
+
+**Não introduzir:** NgRx, Akita, NGXS, Angular Signals — o projeto usa BehaviorSubject deliberadamente.
+
+---
+
+## REGRA 5 — HTTP: SERVIÇOS E CACHING
+
+```typescript
+@Injectable({ providedIn: 'root' })
+export class MinhaFeatureService {
+  private readonly BASE_URL = `${environment.apiUrl}/minha-feature`;
+  private cache = new Map<string, { data: any; timestamp: number }>();
+  private readonly CACHE_TTL = 30_000;
+
+  constructor(private http: HttpClient) {}
+
+  getItems(): Observable<PaginatedResponse<MeuItem>> {
+    return this.http.get<PaginatedResponse<MeuItem>>(this.BASE_URL);
+  }
+}
+```
+
+**Padrão de resposta paginada (já existe em `core/models/index.ts`):**
+```typescript
+PaginatedResponse<T> = { data: T[]; pagination: { total, totalPages, currentPage, limit } }
+```
+
+**Regras HTTP:**
+- Nunca adicionar `Authorization` header manualmente — `auth.interceptor.ts` injeta automaticamente
+- Erros 401 são tratados globalmente pelo interceptor (refresh token automático)
+- Timeout para operações longas (speed test, diagnóstico): `pipe(timeout(60000))`
+- `withCredentials: true` apenas no `refreshToken()` em AuthService — não usar por padrão
+
+---
+
+## REGRA 6 — ROTAS: LAZY LOADING + GUARDS
+
+```typescript
+// app.routes.ts — padrão obrigatório para novas features
+{
+  path: 'minha-feature',
+  loadComponent: () =>
+    import('./features/minha-feature/minha-feature.component')
+      .then(m => m.MinhaFeatureComponent),
+  canActivate: [authGuard],
+},
+```
+
+**Guards disponíveis (não criar novos sem necessidade):**
+- `authGuard` — redireciona para `/login` se não autenticado
+- `guestGuard` — redireciona para `/dashboard` se já autenticado
+
+**Controle por role:** usar `authService.getRole()` ou `authService.isAdmin()` no component — não criar guard de role.
+```typescript
+// Métodos disponíveis em AuthService:
+// authService.getRole()    → string com o role ('admin', 'tecnico', 'supervisor')
+// authService.isAdmin()    → boolean
+// authService.getUsername() → string
+// ❌ NUNCA: authService.getCurrentUser() — método não existe
+```
+
+---
+
+## REGRA 7 — MODELOS E VALIDAÇÃO
+
+**Interfaces:** SEMPRE em `src/app/core/models/index.ts` — nunca criar outro arquivo de types.
+
+```typescript
+// Usar interface (não type alias) para extensibilidade futura
+export interface MeuNovoModel {
+  _id?: string;
+  campo: string;
+  campoOpcional?: string | null;
+}
+```
+
+**Zod — para validação de formulários (`core/validators/schemas.ts`):**
+```typescript
+export const meuFormSchema = z.object({
+  nome: z.string().min(1).max(64),
+  senha: z.string().min(8).max(128),
+});
+export type MeuFormInput = z.infer<typeof meuFormSchema>;
+```
+
+---
+
+## REGRA 8 — COMPONENTES E TEMPLATES
+
+**Feedback ao usuário — sempre via `ToastService`:**
+```typescript
+this.cpeService.rebootCpe(serial).subscribe({
+  next: () => this.toastService.success('CPE reiniciada com sucesso'),
+  error: () => this.toastService.error('Falha ao reiniciar CPE'),
+});
+```
+
+**Loading state — usar `SkeletonComponent`:**
+```html
+<app-skeleton *ngIf="loading" shape="card" [count]="3" />
+<div *ngIf="!loading && data">...</div>
+```
+
+**Null safety no template:**
+```html
+<span *ngIf="cpe?.wifi2g?.channel">{{ cpe.wifi2g.channel }}</span>
+```
+
+---
+
+## REGRA 9 — PERFORMANCE
+
+**Listas > 100 itens:** usar `cdk-virtual-scroll-viewport`
+```html
+<cdk-virtual-scroll-viewport itemSize="50" style="height: 600px;">
+  <div *cdkVirtualFor="let item of items">{{ item.nome }}</div>
+</cdk-virtual-scroll-viewport>
+```
+
+**Filtros pesados:** delegar a Web Worker (ver `dashboard/cpe-filter.worker.ts` como referência)
+
+**WebSocket — buffer anti-flood (padrão do dashboard):**
+```typescript
+this.wsService.onCpeUpdated().pipe(
+  bufferTime(500),
+  filter(updates => updates.length > 0),
+  takeUntilDestroyed(this.destroyRef),
+).subscribe(updates => {
+  this.applyUpdates(updates);
+  this.cdr.markForCheck();
+});
+```
+
+**Eventos de telemetria completa (`telemetry_complete`):**
+- Interface `TelemetryCompleteEvent` em `core/models/index.ts` inclui campo `message?: string`
+- Campo `partial: true` indica coleta parcial — alguns parâmetros não responderam
+- Campo `source` distingue fontes: 'on-demand', 'scheduler', 'standard'
+- Handler deve desligar `vitalsLoading` e `telemetryLoading` para liberar UI
+
+**Charts (Chart.js):** sempre `animation: false` em dashboards com dados em tempo real.
+
+---
+
+## NUNCA FAZER
+
+```
+❌ Criar NgModule
+❌ Injetar HttpClient diretamente no component — usar serviço
+❌ Chamar subscribe() dentro de service — retornar Observable
+❌ Esquecer unsubscribe — sempre takeUntilDestroyed ou subs.unsubscribe()
+❌ Usar ChangeDetectionStrategy.Default em component novo
+❌ Adicionar Authorization header manualmente — interceptor já faz
+❌ Criar arquivo de models separado — tudo em core/models/index.ts
+❌ Usar NgRx, signals ou outro state manager
+❌ Acessar localStorage fora de AuthService
+❌ console.log em produção — remover antes de commit
+❌ Modificar auth.interceptor.ts sem entender o fluxo de refresh token
+```
+
+---
+
+## GLOSSÁRIO
+
+| Padrão | Significado |
+|---|---|
+| `standalone: true` | Componente sem NgModule — obrigatório em todos |
+| `OnPush` | Change detection manual — `markForCheck()` após updates |
+| `takeUntilDestroyed(destroyRef)` | Cleanup automático de subscriptions |
+| `BehaviorSubject` | Estado reativo em services — não usar NgRx |
+| `loadComponent: () => import(...)` | Lazy loading de rota — obrigatório |
+| `PaginatedResponse<T>` | Wrapper de response paginada da API |
+| `authGuard` | Guard funcional — protege rotas privadas |
+| `authInterceptor` | Injeta JWT + trata 401/refresh globalmente |
+| `ToastService` | Feedback visual — success/error/warning/info |
+| `environment.apiUrl` | Base URL da API — relativo (proxy Nginx em prod) |

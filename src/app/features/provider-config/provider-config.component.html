@@ -1,0 +1,119 @@
+<div class="page-wrapper">
+  <header class="page-header">
+    <span class="material-symbols-rounded">admin_panel_settings</span>
+    <div>
+      <h1>Configurações do Provedor</h1>
+      <p>Credenciais globais aplicadas automaticamente em todos os equipamentos após factory reset.</p>
+    </div>
+  </header>
+
+  <div *ngIf="loading" class="skeleton-block"></div>
+
+  <ng-container *ngIf="!loading">
+    <section class="card status-card">
+      <h2>Status atual</h2>
+      <div class="status-grid">
+        <div class="status-item">
+          <span class="material-symbols-rounded" [class.ok]="config?.hasAdminPassword" [class.missing]="!config?.hasAdminPassword">
+            {{ config?.hasAdminPassword ? 'check_circle' : 'cancel' }}
+          </span>
+          <span>Senha Admin</span>
+        </div>
+        <div class="status-item">
+          <span class="material-symbols-rounded" [class.ok]="config?.hasSuperAdminPassword" [class.missing]="!config?.hasSuperAdminPassword">
+            {{ config?.hasSuperAdminPassword ? 'check_circle' : 'cancel' }}
+          </span>
+          <span>Senha Super Admin</span>
+        </div>
+        <div class="status-item">
+          <span class="material-symbols-rounded" [class.ok]="config?.hasPppoePassword" [class.missing]="!config?.hasPppoePassword">
+            {{ config?.hasPppoePassword ? 'check_circle' : 'cancel' }}
+          </span>
+          <span>Senha PPPoE</span>
+        </div>
+      </div>
+      <div class="meta" *ngIf="config">
+        <span>Versão {{ config.version }}</span>
+        <span>Por <strong>{{ config.updatedBy }}</strong></span>
+        <span>{{ config.updatedAt | date:'dd/MM/yyyy HH:mm' }}</span>
+      </div>
+      <div class="meta" *ngIf="!config">
+        <span>Nenhuma configuração cadastrada ainda.</span>
+      </div>
+    </section>
+
+    <section class="card form-card" *ngIf="isAdmin">
+      <h2>Atualizar configurações</h2>
+      <p class="info-note">
+        <span class="material-symbols-rounded">info</span>
+        Campos de senha vazios não alteram o valor existente. Senhas armazenadas com AES-256-GCM.
+      </p>
+      <form [formGroup]="form" (ngSubmit)="save()">
+        <fieldset>
+          <legend>Índices de usuário (firmware TP-Link)</legend>
+          <div class="field-row">
+            <label>Índice Admin<input type="number" formControlName="adminUserIndex" min="1" max="10"></label>
+            <label>Índice Super Admin<input type="number" formControlName="superAdminUserIndex" min="1" max="10"></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Otimização automática de Wi-Fi</legend>
+          <p class="info-note">
+            <span class="material-symbols-rounded">wifi_tethering</span>
+            Liga uma varredura periódica de redes vizinhas (madrugada, 00h-06h) em toda a base de CPEs.
+            Se detectar interferência forte no canal atual, o sistema troca o canal automaticamente —
+            sem depender de um técnico. A troca de canal causa uma breve interrupção do Wi-Fi do
+            cliente (poucos segundos). Recomendado validar num piloto pequeno antes de deixar ligado
+            pra toda a base.
+          </p>
+          <label class="toggle-label">
+            <input type="checkbox" formControlName="autoWifiOptimizationEnabled">
+            Ativar otimização automática de canal Wi-Fi
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>Credenciais</legend>
+          <label class="pw-label">Senha Admin CPE
+            <div class="pw-input">
+              <input [type]="showAdminPw ? 'text' : 'password'" formControlName="adminPassword"
+                [placeholder]="config?.hasAdminPassword ? '••••••••' : 'Não configurada'">
+              <button type="button" class="icon-btn" (click)="showAdminPw = !showAdminPw">
+                <span class="material-symbols-rounded">{{ showAdminPw ? 'visibility_off' : 'visibility' }}</span>
+              </button>
+            </div>
+          </label>
+          <label class="pw-label">Senha Super Admin CPE
+            <div class="pw-input">
+              <input [type]="showSuperAdminPw ? 'text' : 'password'" formControlName="superAdminPassword"
+                [placeholder]="config?.hasSuperAdminPassword ? '••••••••' : 'Não configurada'">
+              <button type="button" class="icon-btn" (click)="showSuperAdminPw = !showSuperAdminPw">
+                <span class="material-symbols-rounded">{{ showSuperAdminPw ? 'visibility_off' : 'visibility' }}</span>
+              </button>
+            </div>
+          </label>
+          <label class="pw-label">Senha PPPoE (padrão do provedor)
+            <div class="pw-input">
+              <input [type]="showPppoePw ? 'text' : 'password'" formControlName="pppoePassword"
+                [placeholder]="config?.hasPppoePassword ? '••••••••' : 'Não configurada'">
+              <button type="button" class="icon-btn" (click)="showPppoePw = !showPppoePw">
+                <span class="material-symbols-rounded">{{ showPppoePw ? 'visibility_off' : 'visibility' }}</span>
+              </button>
+            </div>
+          </label>
+        </fieldset>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary" [disabled]="form.invalid || saving">
+            <span class="material-symbols-rounded">{{ saving ? 'hourglass_empty' : 'save' }}</span>
+            {{ saving ? 'Salvando…' : 'Salvar configurações' }}
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card readonly-notice" *ngIf="!isAdmin">
+      <span class="material-symbols-rounded">lock</span>
+      <p>Apenas administradores podem alterar estas configurações.</p>
+    </section>
+  </ng-container>
+</div>

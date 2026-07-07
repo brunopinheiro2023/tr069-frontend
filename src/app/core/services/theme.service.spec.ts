@@ -47,8 +47,8 @@ describe('ThemeService', () => {
    * Testa se o tema padrão é 'light' quando não há nada no localStorage.
    */
   it('should default to "light" theme if no preference is stored', () => {
-    // Força a reinicialização do serviço para ler o localStorage vazio.
-    service = new ThemeService();
+    // Reinjeta o serviço para ler o localStorage vazio.
+    service = TestBed.inject(ThemeService);
     expect(service.getCurrentTheme()).toBe('light');
   });
 

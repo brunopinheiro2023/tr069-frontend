@@ -1,6 +1,7 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { AuthService } from '../../services/auth.service';
 
 /**
  * Sidebar global do Design System.
@@ -23,6 +24,8 @@ export class SidebarComponent {
 
   /** Emite quando o utilizador clica no botão de fechar (mobile) ou num link */
   @Output() closeSidebar = new EventEmitter<void>();
+
+  readonly isAdmin = inject(AuthService).isAdmin();
 
   onNavClick(): void {
     // Em mobile, fecha a sidebar ao navegar para não bloquear a tela

@@ -31,8 +31,8 @@ export class CpeListComponent implements OnInit {
   constructor(private cpeService: CpeService) {}
 
   ngOnInit() {
-    this.cpeService.getAllCpes().subscribe(data => {
-      this.cpes = data;
+    this.cpeService.getAllCpes().subscribe(response => {
+      this.cpes = response.data;
     });
   }
 }

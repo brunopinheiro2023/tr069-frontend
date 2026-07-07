@@ -41,6 +41,9 @@
           <div class="config-card-header">
             <span class="material-symbols-rounded">wifi</span>
             <h5>2.4 GHz</h5>
+            <span *ngIf="wifi2gAutoMode" class="data-badge auto" title="Rádio em modo automático — a CPE gerencia o canal">Automático</span>
+            <span *ngIf="hasLive2gData && !wifi2gAutoMode" class="data-badge live">Dados ao vivo</span>
+            <span *ngIf="!hasLive2gData && !wifi2gAutoMode" class="data-badge unknown">Desconhecido</span>
           </div>
           <div class="config-details">
             <div class="config-item">
@@ -63,6 +66,9 @@
           <div class="config-card-header">
             <span class="material-symbols-rounded">wifi</span>
             <h5>5 GHz</h5>
+            <span *ngIf="wifi5gAutoMode" class="data-badge auto" title="Rádio em modo automático — a CPE gerencia o canal">Automático</span>
+            <span *ngIf="hasLive5gData && !wifi5gAutoMode" class="data-badge live">Dados ao vivo</span>
+            <span *ngIf="!hasLive5gData && !wifi5gAutoMode" class="data-badge unknown">Desconhecido</span>
           </div>
           <div class="config-details">
             <div class="config-item">
@@ -92,9 +98,9 @@
       <h3 class="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
         <span class="material-symbols-rounded text-lg">tips_and_updates</span>
         Insights Wi-Fi
-        <span *ngIf="wifiHostsSummary?.critical > 0"
+        <span *ngIf="(wifiHostsSummary?.insightsSummary?.critical ?? 0) > 0"
               class="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-          {{ wifiHostsSummary.critical }} crítico(s)
+          {{ wifiHostsSummary?.insightsSummary?.critical }} crítico(s)
         </span>
       </h3>
 
@@ -140,8 +146,24 @@
         <div *ngIf="insight.action && insight.actionable"
              class="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
           <span class="material-symbols-rounded text-xs">arrow_forward</span>
-          Mudar canal {{ insight.action.band }} para
-          <strong class="text-gray-700 dark:text-gray-300 ml-1">{{ insight.action.value }}</strong>
+          <ng-container [ngSwitch]="insight.action.type">
+            <ng-container *ngSwitchCase="'set_channel'">
+              Mudar canal {{ insight.action.band }} para
+              <strong class="text-gray-700 dark:text-gray-300 ml-1">{{ insight.action.value }}</strong>
+            </ng-container>
+            <ng-container *ngSwitchCase="'set_power'">
+              Ajustar potência {{ insight.action.band }} para
+              <strong class="text-gray-700 dark:text-gray-300 ml-1">{{ insight.action.value }}%</strong>
+            </ng-container>
+            <ng-container *ngSwitchCase="'set_bandwidth'">
+              Mudar largura {{ insight.action.band }} para
+              <strong class="text-gray-700 dark:text-gray-300 ml-1">{{ insight.action.value }}</strong>
+            </ng-container>
+            <ng-container *ngSwitchDefault>
+              Aplicar configuração em {{ insight.action.band }}:
+              <strong class="text-gray-700 dark:text-gray-300 ml-1">{{ insight.action.value }}</strong>
+            </ng-container>
+          </ng-container>
         </div>
       </div>
     </div>
@@ -159,8 +181,7 @@
         [readOnly]="false"
         [isSupported]="true"
         [isRunning]="neighborScanInProgress"
-        [result]="neighborScanData"
-        [history]="neighborScanHistory"
+        [result]="$any(neighborScanData)"
         (runScan)="triggerNeighborScan()">
       </app-neighbor-scan-card>
     </div>
@@ -214,28 +235,34 @@
               <div *ngIf="scan.results?.channelSaturation?.bands?.['2.4GHz'] as band24"
                    class="space-y-0.5">
                 <div class="font-medium text-gray-700 dark:text-gray-300">2.4 GHz</div>
-                <div>Canal: {{ band24.currentChannel || '—' }}</div>
+                <div>Canal: {{ band24.currentChannel === 0 ? 'Auto' : (band24.currentChannel || '—') }}</div>
                 <div *ngIf="band24.suggestedChannel">
                   Sugerido: <strong class="text-blue-600 dark:text-blue-400">{{ band24.suggestedChannel }}</strong>
                 </div>
-                <div [ngClass]="band24.saturationScore > 3 ? 'text-red-500' :
-                                band24.saturationScore > 1 ? 'text-yellow-500' : 'text-green-500'">
-                  Score: {{ band24.saturationScore?.toFixed(1) || '—' }}
+                <div [ngClass]="(band24.saturationScore ?? 0) > 3 ? 'text-red-500' :
+                                (band24.saturationScore ?? 0) > 1 ? 'text-yellow-500' : 'text-green-500'">
+                  Score: {{ band24.saturationScore != null ? band24.saturationScore.toFixed(1) : '—' }}
                 </div>
               </div>
               <!-- 5 GHz -->
               <div *ngIf="scan.results?.channelSaturation?.bands?.['5GHz'] as band5"
                    class="space-y-0.5">
                 <div class="font-medium text-gray-700 dark:text-gray-300">5 GHz</div>
-                <div>Canal: {{ band5.currentChannel || '—' }}</div>
+                <div>Canal: {{ band5.currentChannel === 0 ? 'Auto' : (band5.currentChannel || '—') }}</div>
                 <div *ngIf="band5.suggestedChannel">
                   Sugerido: <strong class="text-blue-600 dark:text-blue-400">{{ band5.suggestedChannel }}</strong>
                 </div>
-                <div [ngClass]="band5.saturationScore > 3 ? 'text-red-500' :
-                                band5.saturationScore > 1 ? 'text-yellow-500' : 'text-green-500'">
-                  Score: {{ band5.saturationScore?.toFixed(1) || '—' }}
+                <div [ngClass]="(band5.saturationScore ?? 0) > 3 ? 'text-red-500' :
+                                (band5.saturationScore ?? 0) > 1 ? 'text-yellow-500' : 'text-green-500'">
+                  Score: {{ band5.saturationScore != null ? band5.saturationScore.toFixed(1) : '—' }}
                 </div>
               </div>
+            </div>
+
+            <!-- Fallback quando não há dados de saturação de canal -->
+            <div *ngIf="!scan.results?.channelSaturation?.bands?.['2.4GHz'] && !scan.results?.channelSaturation?.bands?.['5GHz']"
+                 class="text-xs text-gray-400 italic">
+              Dados de saturação de canais não disponíveis para este scan.
             </div>
 
             <!-- Contador de vizinhos -->

@@ -105,7 +105,7 @@
           <div class="rq-card-header">
             <span class="material-symbols-rounded">wifi</span>
             <strong>2.4 GHz</strong>
-            <span class="rq-channel" *ngIf="radioQuality2g.channel">CH {{ radioQuality2g.channel }}</span>
+            <span class="auto-badge" *ngIf="radioQuality2g.autoChannelEnable === true" title="Rádio em modo automático — a CPE gerencia o canal">Automático</span>
           </div>
 
           <div class="rq-metrics">
@@ -131,10 +131,6 @@
                 <span class="quality-badge" [class]="'q-' + getUtilizationQuality(radioQuality2g.utilization)">{{ getUtilizationLabel(radioQuality2g.utilization) }}</span>
               </div>
             </div>
-            <div class="rq-metric" *ngIf="radioQuality2g.txPower !== null">
-              <span class="rq-label">Potência Tx</span>
-              <span class="rq-value">{{ radioQuality2g.txPower }}%</span>
-            </div>
           </div>
 
           <div class="rq-bw-suggestion" *ngIf="radioQuality2g.bandwidthSuggestionReason">
@@ -152,7 +148,7 @@
           <div class="rq-card-header">
             <span class="material-symbols-rounded">wifi</span>
             <strong>5 GHz</strong>
-            <span class="rq-channel" *ngIf="radioQuality5g.channel">CH {{ radioQuality5g.channel }}</span>
+            <span class="auto-badge" *ngIf="radioQuality5g.autoChannelEnable === true" title="Rádio em modo automático — a CPE gerencia o canal">Automático</span>
           </div>
 
           <div class="rq-metrics">
@@ -177,10 +173,6 @@
                 <span class="rq-value">{{ radioQuality5g.utilization }}%</span>
                 <span class="quality-badge" [class]="'q-' + getUtilizationQuality(radioQuality5g.utilization)">{{ getUtilizationLabel(radioQuality5g.utilization) }}</span>
               </div>
-            </div>
-            <div class="rq-metric" *ngIf="radioQuality5g.txPower !== null">
-              <span class="rq-label">Potência Tx</span>
-              <span class="rq-value">{{ radioQuality5g.txPower }}%</span>
             </div>
           </div>
 
@@ -287,32 +279,6 @@
               <span class="score-value" [style.color]="getCongestionColor(getCongestionLevel(channel.interferenceScore || 0))">{{ (channel.interferenceScore | number:'1.2-2') || '0.00' }}</span>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Histórico de Análises -->
-  <div *ngIf="history && history.length > 0" class="history-section">
-    <div class="history-header">
-      <span class="material-symbols-rounded">history</span>
-      <h5>Histórico de Análises</h5>
-    </div>
-    <div class="history-list">
-      <div *ngFor="let item of history | slice:0:5" class="history-item">
-        <div class="history-date">
-          <strong>{{ formatTimestamp(item.timestamp || '') }}</strong>
-        </div>
-        <div class="history-details">
-          <span class="history-detail">
-            <span class="material-symbols-rounded">router</span>
-            {{ item.neighboringWiFiResultCount || 0 }} redes
-          </span>
-          <span class="history-detail">
-            <span class="material-symbols-rounded" [class.status-ok]="!item.summary?.hasCongestion" [class.status-warning]="item.summary?.hasCongestion">
-              {{ item.summary?.hasCongestion ? 'warning' : 'check_circle' }}</span>
-            {{ item.summary?.hasCongestion ? 'Congestionado' : 'Otimizado' }}
-          </span>
         </div>
       </div>
     </div>

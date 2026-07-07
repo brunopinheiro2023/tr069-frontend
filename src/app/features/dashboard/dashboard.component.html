@@ -166,41 +166,46 @@
                 </div>
             </div>
 
+            <!-- Indicador de re-filtragem silenciosa (WS update em progresso) -->
+            <div class="refilter-bar" *ngIf="isRefiltering">
+                <div class="refilter-progress"></div>
+            </div>
+
             <div class="table-responsive">
-            <!-- CDK Virtual Scroll Viewport (Otimiza renderização de muitas linhas) -->
-            <cdk-virtual-scroll-viewport itemSize="70" class="vmoas-viewport">
-            <table class="vmoas-table">
-                <thead>
-                    <tr>
-                        <th class="col-checkbox">
-                            <input type="checkbox"
-                                   (change)="toggleSelectAll($event)"
-                                   [checked]="selectedCpes.size === cpes.length && cpes.length > 0" />
-                        </th>
-                        <th>Status</th>
-                        <th>Serial Number</th>
-                        <th>Modelo</th>
-                        <th>IP WAN</th>
-                        <th>PPPoE</th>
-                        <th>Sinal Óptico (Rx)</th>
-                        <th class="sortable-header" (click)="toggleHealthScoreSort()">
-                            Saúde
-                            <span class="material-symbols-rounded sort-icon" *ngIf="healthScoreSortDirection">
-                                {{ healthScoreSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
-                            </span>
-                        </th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
+            <div class="vmoas-grid-table">
+                <!-- Header Fixo Fora do Viewport de Rolagem -->
+                <div class="vmoas-grid-header">
+                    <div class="col-checkbox">
+                        <input type="checkbox"
+                               (change)="toggleSelectAll($event)"
+                               [checked]="isAllSelected"
+                               [indeterminate]="isIndeterminate" />
+                    </div>
+                    <div>Status</div>
+                    <div>Serial Number</div>
+                    <div>Modelo</div>
+                    <div>IP WAN</div>
+                    <div>PPPoE</div>
+                    <div>Sinal Óptico (Rx)</div>
+                    <div class="sortable-header" (click)="toggleHealthScoreSort()">
+                        Saúde
+                        <span class="material-symbols-rounded sort-icon" *ngIf="healthScoreSortDirection">
+                            {{ healthScoreSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+                        </span>
+                    </div>
+                    <div class="actions-header">Ações</div>
+                </div>
+
+                <!-- Viewport controla apenas as linhas de dados, mantendo a rolagem fluida e alinhada -->
+                <cdk-virtual-scroll-viewport itemSize="70" class="vmoas-viewport">
                     <!-- Alterado para cdkVirtualFor para suportar centenas de CPEs renderizadas sem travar -->
-                    <tr *cdkVirtualFor="let cpe of cpes; trackBy: trackByCpe" (click)="goToDetails(cpe.serialNumber)" class="table-row-clickable">
-                        <td class="col-checkbox" (click)="$event.stopPropagation()">
+                    <div *cdkVirtualFor="let cpe of cpes; trackBy: trackByCpe" (click)="goToDetails(cpe.serialNumber)" class="table-row-clickable vmoas-grid-row">
+                        <div class="col-checkbox" (click)="$event.stopPropagation()">
                             <input type="checkbox"
                                    [checked]="selectedCpes.has(cpe.serialNumber)"
                                    (change)="toggleSelection(cpe.serialNumber)" />
-                        </td>
-                        <td>
+                        </div>
+                        <div>
                             <span class="status-badge" [class.online]="cpe.isOnline" [class.offline]="!cpe.isOnline">
                                 {{ cpe.isOnline ? 'Online' : 'Offline' }}
                             </span>
@@ -208,14 +213,28 @@
                             <div class="time-ago">
                                 {{ getTimeAgo(cpe.lastInform) }}
                             </div>
-                        </td>
-                        <td class="bold-text">{{ cpe.serialNumber }}</td>
-                        <td>{{ cpe.productClass || cpe.manufacturer }}</td>
-                        <td>{{ cpe.wanIp || 'Aguardando...' }}</td>
-                        <td>
+                        </div>
+                        <div class="bold-text truncate" [title]="cpe.serialNumber">{{ cpe.serialNumber }}</div>
+                        <div class="truncate">
+                          <span class="model-name">{{ cpe.productClass || cpe.manufacturer }}</span>
+                          <div class="wifi-bw-badges" *ngIf="cpe._bw2g || cpe._bw5g">
+                            <span class="bw-badge bw-2g"
+                                  *ngIf="cpe._bw2g"
+                                  title="Largura de Banda 2.4GHz: {{ cpe._bw2g }}">
+                              2.4G {{ cpe._bw2g }}
+                            </span>
+                            <span class="bw-badge bw-5g"
+                                  *ngIf="cpe._bw5g"
+                                  title="Largura de Banda 5GHz: {{ cpe._bw5g }}">
+                              5G {{ cpe._bw5g }}
+                            </span>
+                          </div>
+                        </div>
+                        <div class="truncate" [title]="cpe.wanIp || 'Aguardando...'">{{ cpe.wanIp || 'Aguardando...' }}</div>
+                        <div class="truncate" [title]="cpe._pppoe">
                             <span class="pppoe-user">{{ cpe._pppoe }}</span>
-                        </td>
-                        <td>
+                        </div>
+                        <div>
                             <span class="rx-power" *ngIf="cpe._rx !== undefined; else noRx"
                                   [class.critical]="cpe._rx < -27"
                                   [class.good]="cpe._rx >= -27">
@@ -224,8 +243,8 @@
                             <ng-template #noRx>
                                 <span class="text-muted">N/D</span>
                             </ng-template>
-                        </td>
-                        <td>
+                        </div>
+                        <div>
                             <span class="health-score-badge"
                                   *ngIf="cpe.healthScore !== undefined && cpe.healthScore !== null; else noScore"
                                   [class.score-good]="cpe.healthScore >= 80"
@@ -236,45 +255,46 @@
                             <ng-template #noScore>
                                 <span class="text-muted">N/D</span>
                             </ng-template>
-                        </td>
-                        <td class="actions-cell">
+                        </div>
+                        <td class="actions-cell" (click)="$event.stopPropagation()">
                             <button class="action-btn"
-                                    (click)="wakeUpDevice(cpe.serialNumber); $event.stopPropagation()"
+                                    [disabled]="!cpe.isOnline"
+                                    (click)="wakeUpDevice(cpe.serialNumber)"
                                     title="Acordar CPE">
                                 <span class="material-symbols-rounded">bolt</span>
                             </button>
 
                             <button class="action-btn config"
-                                    (click)="openConfigModal(cpe); $event.stopPropagation()"
+                                    (click)="openConfigModal(cpe)"
                                     title="Configurar Wi-Fi">
                                 <span class="material-symbols-rounded">settings</span>
                             </button>
 
                             <button class="action-btn diagnostics"
-                                    (click)="goToDiagnostics(cpe.serialNumber); $event.stopPropagation()"
+                                    (click)="goToDiagnostics(cpe.serialNumber)"
                                     title="Diagnóstico Wi-Fi dedicado">
                                 <span class="material-symbols-rounded">analytics</span>
                             </button>
 
                             <button class="action-btn ai-btn"
-                                    (click)="runAiAnalysis(cpe); $event.stopPropagation()"
+                                    (click)="runAiAnalysis(cpe)"
                                     title="Análise Preditiva de Saúde (IA)">
                                 <span class="material-symbols-rounded" [class.rotating]="isAnalyzingAi && selectedCpeForAi?.serialNumber === cpe.serialNumber">smart_toy</span>
                             </button>
 
                             <button class="action-btn danger"
-                                    (click)="deleteCpe(cpe); $event.stopPropagation()"
+                                    *ngIf="authService.isAdmin()"
+                                    (click)="deleteCpe(cpe)"
                                     title="Excluir CPE do Sistema">
                                 <span class="material-symbols-rounded">delete</span>
                             </button>
                         </td>
-                    </tr>
-                    <tr *ngIf="cpes.length === 0">
-                        <td colspan="8" class="empty-state">Nenhuma CPE encontrada ou registrada no ACS.</td>
-                    </tr>
-                </tbody>
-            </table>
-            </cdk-virtual-scroll-viewport>
+                    </div>
+                    <div *ngIf="cpes.length === 0" class="empty-state-row">
+                        <div class="empty-state">Nenhuma CPE encontrada ou registrada no ACS.</div>
+                    </div>
+                </cdk-virtual-scroll-viewport>
+            </div>
         </div>
     </div>
 
@@ -329,6 +349,25 @@
 
             <div class="modal-footer">
                 <button class="page-btn active" (click)="closeAiModal()">Concluir Análise</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação de Bulk Reboot -->
+    <div class="modal-overlay" *ngIf="isBulkRebootConfirmOpen" (click)="cancelBulkReboot()">
+        <div class="modal-content" (click)="$event.stopPropagation()">
+            <div class="modal-header">
+                <h2>Confirmar Reinício em Lote</h2>
+                <button class="close-btn" (click)="cancelBulkReboot()"><span class="material-symbols-rounded">close</span></button>
+            </div>
+            <div class="modal-body">
+                <p>Isso irá reiniciar <strong>{{ selectedCpes.size }}</strong> equipamento(s) e derrubar a conexão dos clientes temporariamente.</p>
+                <p>Para confirmar, digite o número de equipamentos:</p>
+                <input type="number" [(ngModel)]="bulkRebootConfirmCount" class="confirm-input" [placeholder]="selectedCpes.size.toString()" />
+            </div>
+            <div class="modal-footer">
+                <button class="page-btn" (click)="cancelBulkReboot()">Cancelar</button>
+                <button class="page-btn active btn-danger" (click)="confirmBulkReboot()">Confirmar</button>
             </div>
         </div>
     </div>

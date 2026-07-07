@@ -26,6 +26,15 @@ const routes: Routes = [
     canActivate: [authGuard]
   },
 
+  // Rota de configurações do provedor (EP43)
+  {
+    path: 'provider-config',
+    loadComponent: () =>
+      import('./features/provider-config/provider-config.component')
+        .then(m => m.ProviderConfigComponent),
+    canActivate: [authGuard],
+  },
+
   // Rota fallback
   { path: '**', redirectTo: '/dashboard' }
 ];

@@ -4,29 +4,6 @@
   100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 
-.telemetry-card {
-  @apply bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700 transition-colors duration-300;
-
-  &.flash-update {
-    animation: pulse-highlight 2s ease-out;
-    border-color: #10b981; /* Verde esmeralda (Tailwind emerald-500) indicando atualização ao vivo */
-    background-color: rgba(16, 185, 129, 0.05); /* Fundo sutilmente esverdeado */
-  }
-
-  .card-header {
-    @apply flex items-center gap-2 text-gray-500 dark:text-gray-400;
-    .icon { @apply text-lg; }
-    .title { @apply text-sm font-medium; }
-  }
-
-  .card-body {
-    @apply mt-2;
-    .value {
-      @apply text-2xl font-bold text-gray-800 dark:text-gray-100;
-      small { @apply text-base font-medium text-gray-500 dark:text-gray-400 ml-1; }
-    }
-  }
-}
 
 .refresh-btn {
   @apply inline-flex items-center gap-2 px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed;
@@ -59,6 +36,11 @@
   .chart-title {
     @apply text-base font-semibold text-gray-700 dark:text-gray-300 mb-3;
   }
+}
+
+.chart-canvas-wrapper {
+  height: 220px;
+  position: relative;
 }
 
 .telemetry-progress-bar {

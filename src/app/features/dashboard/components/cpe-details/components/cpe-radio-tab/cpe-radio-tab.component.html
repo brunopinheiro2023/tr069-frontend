@@ -1,80 +1,115 @@
-<div class="radio-tab" [formGroup]="radioForm">
-  <div class="section-header">
-    <h3>Configuração de Rádio</h3>
-    <p>Altere parâmetros de 2.4GHz e 5GHz diretamente no ACS.</p>
+<!-- ── SKELETON: dados ainda carregando ────────────────────────────────────── -->
+<div *ngIf="!cpe" class="vmoas-skeleton-layout">
+  <app-skeleton shape="card" [count]="1" />
+  <div class="skeleton-grid">
+    <app-skeleton shape="card" [count]="1" />
+    <app-skeleton shape="card" [count]="1" />
+  </div>
+</div>
+
+<!-- ── GLOBAL LOADER: aplicando configuração de rádio ──────────────────────── -->
+<app-tab-loader
+  *ngIf="isSaving"
+  variant="overlay"
+  title="Aplicando Configuração de Rádio"
+  [subtitle]="isSavingBand ? 'Configurando rádio ' + isSavingBand + '...' : 'Configurando todos os rádios...'"
+/>
+
+<!-- ── ESTADO DE ERRO: falha ao salvar ─────────────────────────────────────── -->
+<div *ngIf="saveError && !isSaving && cpe" class="vmoas-empty-state">
+  <span class="material-symbols-rounded error-icon">wifi_off</span>
+  <h3>Falha ao Aplicar Configuração</h3>
+  <p>Não foi possível enviar os parâmetros de rádio para a CPE. Verifique se o equipamento está online e tente novamente.</p>
+  <app-button variant="secondary" iconLeft="refresh" (clicked)="retrySave()">
+    Tentar Novamente
+  </app-button>
+</div>
+
+<!-- ── ESTADO VAZIO: CPE sem dados de rádio ────────────────────────────────── -->
+<div *ngIf="cpe && !hasRadioData && !isSaving && !saveError" class="vmoas-empty-state">
+  <span class="material-symbols-rounded empty-icon">settings_input_antenna</span>
+  <h3>Configuração de Rádio Indisponível</h3>
+  <p>Não há dados de rádio Wi-Fi para esta CPE. O equipamento pode estar offline ou não suportar gerenciamento de rádio via TR-069.</p>
+</div>
+
+<!-- ── DASHBOARD PRINCIPAL ─────────────────────────────────────────────────── -->
+<div class="vmoas-radio-dashboard" *ngIf="cpe && hasRadioData && !isSaving && !saveError">
+
+  <!-- Card global: header + ação de salvar tudo -->
+  <div class="vmoas-card global-card">
+    <div class="card-header-global">
+      <div class="header-title-group">
+        <span class="material-symbols-rounded icon-glow">settings_input_antenna</span>
+        <div>
+          <h3 class="gradient-text">Configuração de Rádio Wi-Fi</h3>
+          <p class="subtitle">
+            Parâmetros físicos de rádio &middot; Protocolo {{ isTR181 ? 'TR-181 (TP-Link)' : 'TR-098 (Intelbras)' }}
+          </p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <app-button
+          variant="primary"
+          size="sm"
+          iconLeft="save"
+          [loading]="isSaving && isSavingBand === null"
+          [disabled]="isSaving || !hasAnyChanges"
+          (clicked)="saveAllRadioConfig()"
+        >
+          Salvar Tudo
+        </app-button>
+      </div>
+    </div>
+
+    <!-- Info banner por protocolo -->
+    <div class="info-banner">
+      <span class="material-symbols-rounded">info</span>
+      <div class="info-banner-text">
+        <strong>Como funciona:</strong>
+        Ajuste canal, largura de banda e potência de cada rádio independentemente.
+        Use <strong>Automático</strong> para a CPE escolher o melhor canal dinamicamente.
+        <span *ngIf="!isTR181">
+          <br><strong>Intelbras TR-098:</strong> Potência em percentual (15–100%).
+        </span>
+        <span *ngIf="isTR181">
+          <br><strong>TP-Link TR-181:</strong> Potência em percentual — opções reportadas pela própria CPE.
+          <span *ngIf="!txPowerSupported2g && !txPowerSupported5g" class="banner-warning">
+            &nbsp;<span class="material-symbols-rounded" style="font-size:14px;vertical-align:middle">warning</span>
+            Coletando opções de potência no próximo Inform.
+          </span>
+        </span>
+      </div>
+    </div>
   </div>
 
+  <!-- Grid de cards de rádio por banda -->
   <div class="radio-grid">
-    <div class="radio-card">
-      <h4>2.4GHz</h4>
-      <label>
-        Ativar
-        <input type="checkbox" formControlName="enable2g" />
-      </label>
-      <label>
-        Canal
-        <select class="select-field" formControlName="channel2g">
-          <option value="">Selecionar canal</option>
-          <option *ngFor="let channel of channelOptions2g" [value]="channel">{{ channel }}</option>
-        </select>
-      </label>
-      <label>
-        Largura de Banda
-        <select class="select-field" formControlName="bandwidth2g">
-          <option value="">Selecionar largura</option>
-          <option *ngFor="let bw of bandwidthOptions2g" [value]="bw">{{ bw }} MHz</option>
-        </select>
-      </label>
-      <label>
-        Potência (dBm)
-        <select class="select-field" formControlName="power2g">
-          <option value="">Selecionar potência</option>
-          <option *ngFor="let power of powerOptions" [value]="power">{{ power }} dBm</option>
-        </select>
-      </label>
-    </div>
+    <!-- Rádio 2.4GHz -->
+    <app-radio-band-card
+      [bandForm]="radio2gForm"
+      [band]="'2.4GHz'"
+      [isTR181]="isTR181"
+      [txPowerSupported]="txPowerSupported2g"
+      [isSaving]="isSaving && (isSavingBand === '2.4GHz' || isSavingBand === null)"
+      (save)="saveBandConfig($event)"
+    />
 
-    <div class="radio-card">
-      <h4>5GHz</h4>
-      <label>
-        Ativar
-        <input type="checkbox" formControlName="enable5g" />
-      </label>
-      <label>
-        Canal (sem DFS)
-        <select class="select-field" formControlName="channel5g">
-          <option value="">Selecionar canal</option>
-          <option *ngFor="let channel of channelOptions5g" [value]="channel">{{ channel }}</option>
-        </select>
-      </label>
-      <label>
-        Largura de Banda
-        <select class="select-field" formControlName="bandwidth5g">
-          <option value="">Selecionar largura</option>
-          <option *ngFor="let bw of bandwidthOptions5g" [value]="bw">{{ bw }} MHz</option>
-        </select>
-      </label>
-      <label>
-        Potência (dBm)
-        <select class="select-field" formControlName="power5g">
-          <option value="">Selecionar potência</option>
-          <option *ngFor="let power of powerOptions" [value]="power">{{ power }} dBm</option>
-        </select>
-      </label>
-    </div>
+    <!-- Rádio 5GHz -->
+    <app-radio-band-card
+      *ngIf="has5GHz"
+      [bandForm]="radio5gForm"
+      [band]="'5GHz'"
+      [isTR181]="isTR181"
+      [txPowerSupported]="txPowerSupported5g"
+      [isSaving]="isSaving && (isSavingBand === '5GHz' || isSavingBand === null)"
+      (save)="saveBandConfig($event)"
+    />
   </div>
 
-  <div class="actions-row">
-    <app-button
-      variant="primary"
-      size="md"
-      iconLeft="save"
-      [loading]="isSaving"
-      [disabled]="radioForm.invalid || isSaving"
-      (clicked)="saveRadioConfig()"
-    >
-      Salvar Configurações de Rádio
-    </app-button>
-    <div class="feedback" *ngIf="feedbackMessage">{{ feedbackMessage }}</div>
+  <!-- Aviso: CPE apenas com 2.4GHz -->
+  <div *ngIf="!has5GHz" class="vmoas-alert-info">
+    <span class="material-symbols-rounded">info</span>
+    <span>Esta CPE não possui rádio 5GHz detectado. Apenas o rádio 2.4GHz está disponível para configuração.</span>
   </div>
 </div>

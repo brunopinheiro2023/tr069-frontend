@@ -1,0 +1,299 @@
+/* ==========================================================================
+   RADIO BAND CARD — TEMA DARK/NAVY (consistente com cpe-wifi-tab)
+   ========================================================================== */
+:host {
+  --bg-card: #131B2F;
+  --bg-input: #060913;
+  --border-color: rgba(255, 255, 255, 0.10);
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-muted: #6B7280;
+  --accent-color: #7C3AED;
+  --success-color: #22C55E;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --transition: all 0.28s ease;
+}
+
+/* ── HOST: ocupa toda a célula do grid para altura igual entre cards ──── */
+:host {
+  display: block;
+  height: 100%;
+}
+
+/* ── CARD ─────────────────────────────────────────────────────────────── */
+.radio-band-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 26px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18);
+  transition: var(--transition);
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+
+  &.is-disabled {
+    opacity: 0.55;
+    filter: grayscale(70%);
+
+    /* Toggle de habilitação permanece interativo — usuário precisa poder reabilitar o rádio */
+    .vmoas-switch {
+      pointer-events: auto;
+    }
+  }
+}
+
+/* ── HEADER ───────────────────────────────────────────────────────────── */
+.radio-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.radio-title-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  .icon-wrapper {
+    width: 46px;
+    height: 46px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+  }
+
+  h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+}
+
+.badge-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+
+  .band-badge,
+  .protocol-badge,
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  .band-badge {
+    background-color: rgba(16, 185, 129, 0.12);
+    color: var(--success-color);
+  }
+
+  .protocol-badge {
+    background-color: rgba(124, 58, 237, 0.12);
+    color: var(--accent-color);
+  }
+
+  .status-badge {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+
+    &.status-up {
+      background-color: rgba(34, 197, 94, 0.14);
+      color: var(--success-color);
+    }
+
+    &.status-down {
+      background-color: rgba(239, 68, 68, 0.14);
+      color: #EF4444;
+    }
+  }
+}
+
+/* ── BODY ─────────────────────────────────────────────────────────────── */
+.radio-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1; /* expande para preencher o espaço restante do card */
+}
+
+/* ── INPUTS ───────────────────────────────────────────────────────────── */
+.input-group {
+  margin-bottom: 16px;
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+
+  /* Feedback visual: campo modificado (dirty) — borda accent suave */
+  &.field-dirty .vmoas-input {
+    border-color: rgba(124, 58, 237, 0.40);
+  }
+}
+
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  .input-icon {
+    position: absolute;
+    left: 14px;
+    color: var(--text-secondary);
+    font-size: 20px;
+    pointer-events: none;
+    z-index: 1;
+  }
+}
+
+/* ── VMOAS INPUT (dark theme) ─────────────────────────────────────────── */
+.vmoas-input {
+  width: 100%;
+  background-color: var(--bg-input);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  padding: 14px 14px 14px 44px;
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  outline: none;
+  transition: var(--transition);
+  box-sizing: border-box;
+
+  &:focus,
+  &:focus-visible {
+    border-color: rgba(124, 58, 237, 0.55);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.16);
+  }
+
+  &::placeholder {
+    color: var(--text-muted);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+/* Select — remove appearance padrão e adiciona seta customizada (dark theme) */
+select.vmoas-input {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+  padding-right: 40px;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 20px;
+
+  option {
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+    padding: 10px;
+  }
+}
+
+/* ── HINT ─────────────────────────────────────────────────────────────── */
+.field-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+
+  &.field-hint-info {
+    color: #38BDF8;
+    opacity: 0.85;
+  }
+}
+
+/* ── TOGGLE SWITCH (estilo iOS premium) ───────────────────────────────── */
+.vmoas-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 26px;
+  flex-shrink: 0;
+
+  input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+}
+
+.vmoas-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: rgba(255, 255, 255, 0.12);
+  transition: .35s;
+  border-radius: 999px;
+
+  &:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 4px;
+    bottom: 4px;
+    background-color: #fff;
+    border-radius: 50%;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
+    transition: .35s;
+  }
+}
+
+input:checked + .vmoas-slider {
+  background-color: var(--success-color);
+}
+
+input:checked + .vmoas-slider:before {
+  transform: translateX(24px);
+}
+
+.vmoas-switch.disabled-toggle {
+  opacity: 0.5;
+  cursor: not-allowed;
+
+  input {
+    pointer-events: none;
+  }
+}
+
+/* ── ACTIONS ──────────────────────────────────────────────────────────── */
+.card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto; /* empurra o botão para o fundo do card */
+  padding-top: 16px;
+}

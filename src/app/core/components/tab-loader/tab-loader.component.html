@@ -1,0 +1,29 @@
+<!-- ── OVERLAY: fullscreen — bloqueia toda a UI ──────────────────────────── -->
+<div *ngIf="variant === 'overlay'" class="tl-overlay">
+  <div class="tl-spinner"></div>
+  <h2 class="tl-title">{{ title }}</h2>
+  <p class="tl-subtitle">
+    <span class="tl-pulse-dot"></span>
+    {{ subtitle }}
+  </p>
+</div>
+
+<!-- ── CARD: inline — coleta com progresso opcional ──────────────────────── -->
+<div *ngIf="variant === 'card'" class="tl-card">
+  <div class="tl-spinner tl-spinner--sm"></div>
+  <h3 class="tl-card-title">{{ title }}</h3>
+  <p class="tl-card-subtitle">{{ subtitle }}</p>
+
+  <ng-container *ngIf="showProgress">
+    <div class="tl-progress-track">
+      <div class="tl-progress-bar" [style.width.%]="progress"></div>
+    </div>
+    <small *ngIf="progressHint" class="tl-progress-hint">{{ progressHint }}</small>
+  </ng-container>
+
+  <div *ngIf="cancelable" class="tl-actions">
+    <app-button variant="ghost" size="sm" iconLeft="close" (clicked)="onCancel()">
+      Cancelar
+    </app-button>
+  </div>
+</div>

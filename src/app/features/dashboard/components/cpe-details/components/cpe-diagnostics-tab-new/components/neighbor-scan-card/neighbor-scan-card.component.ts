@@ -1,16 +1,14 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ButtonComponent } from '@app/core/components/button/button.component';
-import { NON_OVERLAPPING_2G, PREFERRED_5G_NO_DFS } from '@app/core/constants/wifi.constants';
-
-export interface NeighborScanResult {
-  serialNumber?: string;
-  neighboringWiFiResultCount?: number;
-  channelSaturation?: ChannelSaturation;
-  bands?: WifiBands;
-  summary?: WifiSummary;
-  timestamp?: string;
-}
+import { NON_OVERLAPPING_2G, PREFERRED_5G_NO_DFS, CHANNEL_RANGE } from '@app/core/constants/wifi.constants';
+import { sanitizeNumber } from '@app/core/utils/sanitize';
+import {
+  ChannelSaturationBand as BandSaturation,
+  ChannelEntry,
+  ChannelSuggestion,
+  RadioQuality,
+} from '@app/core/models';
 
 /** Estrutura de saturação de canal retornada pelo backend (wifiNeighborScanService). */
 export interface ChannelSaturation {
@@ -24,41 +22,6 @@ export interface ChannelSaturation {
     '5GHz'?: BandSaturation;
     [key: string]: BandSaturation | undefined;
   };
-}
-
-/** Saturação de uma banda (2.4GHz ou 5GHz). */
-export interface BandSaturation {
-  band: string;
-  channels: Record<number, ChannelEntry>;
-  totalNeighbors?: number;
-  timestamp?: string;
-  demo?: boolean;
-  suggestion?: ChannelSuggestion;
-  maxInterferenceScore?: number;
-  bandwidthSuggestion?: string | null;
-  bandwidthSuggestionReason?: string | null;
-}
-
-/** Entrada de canal na tabela de saturação. */
-export interface ChannelEntry {
-  channel: number;
-  neighborCount: number;
-  interferenceScore?: number;
-  avgRssi?: number | null;
-  noiseLevel?: number;
-  congestionLevel?: string;
-}
-
-/** Sugestão de mudança de canal. */
-export interface ChannelSuggestion {
-  bestChannel: number;
-  currentChannel: number;
-  currentScore: number;
-  bestScore: number;
-  improvement: number;
-  shouldChange: boolean;
-  reason: string;
-  parameterPath?: string;
 }
 
 /** Dados de bandas Wi-Fi do wifiAnalyzerService. */
@@ -132,21 +95,13 @@ export interface WifiSummary {
   criticalClients?: number;
 }
 
-/**
- * Dados de qualidade de rádio estruturados para exibição.
- * Todos os campos são opcionais pois dependem das capacidades do firmware.
- */
-export interface RadioQuality {
-  bandwidth: string | null;       // OperatingChannelBandwidth: ex. "20MHz", "80MHz", "Auto"
-  snr: number | null;             // SNR em dB (proprietary X_TP_SNR - TP-Link)
-  noise: number | null;           // Ruído de fundo em dBm
-  utilization: number | null;     // Utilização do canal em % (X_TP_Utilization - TP-Link)
-  txPower: number | null;         // Potência de transmissão em %
-  channel: number | null;         // Canal atual (0 = auto mode)
-  autoChannelEnable: boolean | null; // true quando CPE gerencia canal (modo automático)
-  rssi: number | null;            // RSSI do rádio
-  bandwidthSuggestion: string | null;  // Sugestão de largura de banda baseada em dados reais
-  bandwidthSuggestionReason: string | null;  // Razão da sugestão
+export interface NeighborScanResult {
+  serialNumber?: string;
+  neighboringWiFiResultCount?: number;
+  channelSaturation?: ChannelSaturation;
+  bands?: WifiBands;
+  summary?: WifiSummary;
+  timestamp?: string;
 }
 
 @Component({
@@ -154,75 +109,98 @@ export interface RadioQuality {
   standalone: true,
   imports: [CommonModule, ButtonComponent],
   templateUrl: './neighbor-scan-card.component.html',
-  styleUrls: ['./neighbor-scan-card.component.scss']
+  styleUrls: ['./neighbor-scan-card.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class NeighborScanCardComponent {
   @Input() serialNumber: string = '';
   @Input() readOnly: boolean = false;
   @Input() isSupported: boolean = true;
   @Input() isRunning: boolean = false;
-  @Input() result: NeighborScanResult | null = null;
-  @Input() history: any[] = [];
+  @Input() history: NeighborScanResult[] = [];
+
+  // Setter memoiza channels e radioQuality quando result muda — evita recálculo a cada CD cycle
+  private _result: NeighborScanResult | null = null;
+  private _channels2g: ChannelEntry[] = [];
+  private _channels5g: ChannelEntry[] = [];
+  private _radioQuality2g: RadioQuality = this.emptyRadioQuality();
+  private _radioQuality5g: RadioQuality = this.emptyRadioQuality();
+
+  @Input() set result(value: NeighborScanResult | null) {
+    this._result = value;
+    this.recomputeMemoizedFields();
+  }
+  get result(): NeighborScanResult | null {
+    return this._result;
+  }
 
   @Output() runScan = new EventEmitter<void>();
 
+  /** Recalcula campos memoizados a partir do novo _result. Chamado apenas no setter. */
+  private recomputeMemoizedFields(): void {
+    const cs = this._result?.channelSaturation;
+    this._channels2g = this.extractChannels(cs, '2.4GHz');
+    this._channels5g = this.extractChannels(cs, '5GHz');
+    this._radioQuality2g = this.buildRadioQuality('2.4GHz');
+    this._radioQuality5g = this.buildRadioQuality('5GHz');
+  }
+
+  /** Extrai e ordena canais de uma banda a partir do channelSaturation. */
+  private extractChannels(cs: ChannelSaturation | null | undefined, band: '2.4GHz' | '5GHz'): ChannelEntry[] {
+    const channels = cs?.bands?.[band]?.channels;
+    if (!channels || typeof channels !== 'object') return [];
+    return Object.values(channels)
+      .filter((c): c is ChannelEntry => !!c && typeof c === 'object' && typeof c.channel === 'number')
+      .sort((a, b) => a.channel - b.channel);
+  }
+
   get hasRealData(): boolean {
     // Segurança: verifica se result existe e isRealData é estritamente true
-    return this.result?.channelSaturation?.isRealData === true;
+    return this._result?.channelSaturation?.isRealData === true;
   }
 
   get neighborCount(): number {
     // Segurança: sanitiza para garantir número não negativo
-    const count = this.result?.neighboringWiFiResultCount;
+    const count = this._result?.neighboringWiFiResultCount;
     return typeof count === 'number' && count >= 0 ? count : 0;
   }
 
   get hasSaturationData(): boolean {
     // Segurança: valida que channelSaturation é um objeto válido
-    return !!(this.result?.channelSaturation && typeof this.result.channelSaturation === 'object');
+    return !!(this._result?.channelSaturation && typeof this._result.channelSaturation === 'object');
   }
 
-  get channelSaturation(): any {
+  get channelSaturation(): ChannelSaturation | null {
     // Segurança: retorna null se não for um objeto válido
-    if (!this.result?.channelSaturation || typeof this.result.channelSaturation !== 'object') {
+    if (!this._result?.channelSaturation || typeof this._result.channelSaturation !== 'object') {
       return null;
     }
-    return this.result.channelSaturation;
+    return this._result.channelSaturation;
   }
 
   /**
+   * Canais 2.4GHz memoizados no setter de result — não recalcula a cada CD cycle.
    * Estrutura real do backend: result.channelSaturation.bands['2.4GHz'].channels
-   * channels é um OBJETO com chave = número do canal, valor = dados do canal.
-   * Ordena por canal para exibição consistente.
    */
-  get channels2g(): any[] {
-    const channels = this.channelSaturation?.bands?.['2.4GHz']?.channels;
-    if (!channels || typeof channels !== 'object') return [];
-    return (Object.values(channels) as any[])
-      .filter(c => c && typeof c === 'object' && typeof c.channel === 'number')
-      .sort((a, b) => a.channel - b.channel);
+  get channels2g(): ChannelEntry[] {
+    return this._channels2g;
   }
 
   /**
+   * Canais 5GHz memoizados no setter de result — não recalcula a cada CD cycle.
    * Estrutura real do backend: result.channelSaturation.bands['5GHz'].channels
-   * channels é um OBJETO com chave = número do canal, valor = dados do canal.
-   * Ordena por canal para exibição consistente.
    */
-  get channels5g(): any[] {
-    const channels = this.channelSaturation?.bands?.['5GHz']?.channels;
-    if (!channels || typeof channels !== 'object') return [];
-    return (Object.values(channels) as any[])
-      .filter(c => c && typeof c === 'object' && typeof c.channel === 'number')
-      .sort((a, b) => a.channel - b.channel);
+  get channels5g(): ChannelEntry[] {
+    return this._channels5g;
   }
 
-  get suggestion2g(): any {
+  get suggestion2g(): ChannelSuggestion | null {
     // Segurança: valida que suggestion é um objeto válido
     const suggestion = this.channelSaturation?.bands?.['2.4GHz']?.suggestion;
     return suggestion && typeof suggestion === 'object' ? suggestion : null;
   }
 
-  get suggestion5g(): any {
+  get suggestion5g(): ChannelSuggestion | null {
     // Segurança: valida que suggestion é um objeto válido
     const suggestion = this.channelSaturation?.bands?.['5GHz']?.suggestion;
     return suggestion && typeof suggestion === 'object' ? suggestion : null;
@@ -230,57 +208,65 @@ export class NeighborScanCardComponent {
 
   get totalClients2g(): number {
     // Segurança: sanitiza para garantir número não negativo
-    const clients = this.result?.bands?.['2.4GHz']?.totalClients;
+    const clients = this._result?.bands?.['2.4GHz']?.totalClients;
     return typeof clients === 'number' && clients >= 0 ? clients : 0;
   }
 
   get totalClients5g(): number {
     // Segurança: sanitiza para garantir número não negativo
-    const clients = this.result?.bands?.['5GHz']?.totalClients;
+    const clients = this._result?.bands?.['5GHz']?.totalClients;
     return typeof clients === 'number' && clients >= 0 ? clients : 0;
   }
 
   get hasCongestion(): boolean {
     // summary está na raiz da resposta (result.summary), não dentro de channelSaturation
-    return this.result?.summary?.hasCongestion === true;
+    return this._result?.summary?.hasCongestion === true;
   }
 
   get criticalClients(): number {
     // Segurança: sanitiza para garantir número não negativo
-    const clients = this.result?.summary?.criticalClients;
+    const clients = this._result?.summary?.criticalClients;
     return typeof clients === 'number' && clients >= 0 ? clients : 0;
   }
 
   get lastScanTimestamp(): string {
     // Segurança: valida que timestamp é uma string válida
-    const timestamp = this.result?.timestamp;
+    const timestamp = this._result?.timestamp;
     return typeof timestamp === 'string' && timestamp.length > 0 ? timestamp : '';
   }
 
   /**
-   * Extrai e estrutura os dados de qualidade do rádio 2.4GHz.
+   * Dados de qualidade do rádio 2.4GHz memoizados no setter de result.
    * Fonte: result.bands['2.4GHz'].radio (via wifiCollectorService → extractRadioDataTr181)
-   * Campos disponíveis confirmados nos parâmetros reais da CPE.
    */
   get radioQuality2g(): RadioQuality {
-    return this.buildRadioQuality('2.4GHz');
+    return this._radioQuality2g;
   }
 
   /**
-   * Extrai e estrutura os dados de qualidade do rádio 5GHz.
+   * Dados de qualidade do rádio 5GHz memoizados no setter de result.
    * Fonte: result.bands['5GHz'].radio (via wifiCollectorService → extractRadioDataTr181)
    */
   get radioQuality5g(): RadioQuality {
-    return this.buildRadioQuality('5GHz');
+    return this._radioQuality5g;
   }
 
   /**
    * Verifica se há dados de qualidade de rádio disponíveis (ao menos uma banda).
    */
   get hasRadioQualityData(): boolean {
-    const r2 = this.result?.bands?.['2.4GHz']?.radio;
-    const r5 = this.result?.bands?.['5GHz']?.radio;
+    const r2 = this._result?.bands?.['2.4GHz']?.radio;
+    const r5 = this._result?.bands?.['5GHz']?.radio;
     return !!(r2 && typeof r2 === 'object') || !!(r5 && typeof r5 === 'object');
+  }
+
+  /** Retorna um RadioQuality vazio para inicialização. */
+  private emptyRadioQuality(): RadioQuality {
+    return {
+      bandwidth: null, snr: null, noise: null, utilization: null,
+      txPower: null, channel: null, autoChannelEnable: null, rssi: null,
+      bandwidthSuggestion: null, bandwidthSuggestionReason: null,
+    };
   }
 
   /**
@@ -297,7 +283,7 @@ export class NeighborScanCardComponent {
    *    • Se score ≤ 1.0: 80MHz ou 160MHz são adequados
    */
   private buildRadioQuality(band: string): RadioQuality {
-    const radio = this.result?.bands?.[band]?.radio;
+    const radio = this._result?.bands?.[band]?.radio;
 
     if (!radio || typeof radio !== 'object') {
       return { bandwidth: null, snr: null, noise: null, utilization: null,
@@ -313,34 +299,35 @@ export class NeighborScanCardComponent {
     // SNR: CPEs TP-Link retornam "0" quando X_TP_SNR não é suportado pelo firmware.
     // SNR 0 dB (sinal = ruído) é fisicamente impossível num rádio funcional — descarta como inválido.
     const snrRaw = Number(radio.snr);
-    const snr = (radio.snr != null && !isNaN(snrRaw) && snrRaw > 0) ? this.sanitizeNumber(snrRaw, 1, 60) : null;
+    const snr = (radio.snr != null && !isNaN(snrRaw) && snrRaw > 0) ? sanitizeNumber(snrRaw, 1, 60) : null;
 
     // Noise: CPEs retornam "0" quando Stats.Noise não é suportado.
     // Valores válidos de ruído de fundo ficam tipicamente entre -100 e -50 dBm.
     // 0 ou positivo indica parâmetro não suportado — descarta.
     const noiseRaw = Number(radio.noise);
-    const noise = (radio.noise != null && !isNaN(noiseRaw) && noiseRaw < -10) ? this.sanitizeNumber(noiseRaw, -120, -10) : null;
+    const noise = (radio.noise != null && !isNaN(noiseRaw) && noiseRaw < -10) ? sanitizeNumber(noiseRaw, -120, -10) : null;
 
-    const utilization  = radio.utilization != null ? this.sanitizeNumber(radio.utilization, 0, 100) : null;
-    const txPower      = (radio.txPower != null && Number(radio.txPower) > 0) ? this.sanitizeNumber(radio.txPower, 1, 100) : null;
+    const utilization  = radio.utilization != null ? sanitizeNumber(radio.utilization, 0, 100) : null;
+    const txPower      = (radio.txPower != null && Number(radio.txPower) > 0) ? sanitizeNumber(radio.txPower, 1, 100) : null;
 
     // Canal: 0 em auto mode (AutoChannelEnable=true) é válido — manter 0.
     // 0 sem auto mode = parâmetro não preenchido — descarta (null).
-    // Para 5GHz o menor canal válido é 36; para 2.4GHz é 1.
+    // Ranges centralizados em wifi.constants.ts (CHANNEL_RANGE).
     const channelRaw = Number(radio.channel);
-    const channelMin = band === '5GHz' ? 36 : 1;
-    const channelMax = band === '5GHz' ? 165 : 13;
+    const range = CHANNEL_RANGE[band] || CHANNEL_RANGE['2.4GHz'];
+    const channelMin = range.min;
+    const channelMax = range.max;
     let channel: number | null = null;
     if (radio.channel != null && !isNaN(channelRaw)) {
       if (channelRaw === 0 && autoChannelEnable === true) {
         channel = 0; // auto mode — manter 0
       } else if (channelRaw >= channelMin) {
-        channel = this.sanitizeNumber(channelRaw, channelMin, channelMax);
+        channel = sanitizeNumber(channelRaw, channelMin, channelMax);
       }
     }
 
     const rssiRaw = Number(radio.rssi);
-    const rssi = (radio.rssi != null && !isNaN(rssiRaw) && rssiRaw < 0) ? this.sanitizeNumber(rssiRaw, -120, -1) : null;
+    const rssi = (radio.rssi != null && !isNaN(rssiRaw) && rssiRaw < 0) ? sanitizeNumber(rssiRaw, -120, -1) : null;
 
     // Sugestão de largura de banda: lê diretamente do payload do backend
     // (wifiNeighborScanService.collectChannelSaturation → bands[band].bandwidthSuggestion).
@@ -398,17 +385,6 @@ export class NeighborScanCardComponent {
     }
   }
 
-  /**
-   * Valida se um número é válido e está em uma faixa aceitável.
-   * Segurança: previne NaN, Infinity e valores fora de faixa.
-   */
-  private sanitizeNumber(value: any, min: number = 0, max: number = Number.MAX_SAFE_INTEGER): number {
-    if (value === null || value === undefined) return min;
-    const num = Number(value);
-    if (isNaN(num) || !isFinite(num)) return min;
-    return Math.max(min, Math.min(max, num));
-  }
-
   onRunScan(): void {
     // Segurança: não emite se readOnly está true
     if (!this.readOnly) {
@@ -423,7 +399,7 @@ export class NeighborScanCardComponent {
    * Também aceita contagem simples (demo data sem score).
    */
   getCongestionLevel(countOrScore: number): string {
-    const val = this.sanitizeNumber(countOrScore, 0, 1000);
+    const val = sanitizeNumber(countOrScore, 0, 1000);
     if (val === 0) return 'empty';
     if (val <= 1.0) return 'low';
     if (val <= 3.0) return 'medium';
@@ -463,8 +439,8 @@ export class NeighborScanCardComponent {
    * Para dados demo sem score, usa neighborCount com max = 10.
    */
   getCongestionWidth(score: number, max: number = 5): number {
-    const sanitizedScore = this.sanitizeNumber(score, 0, 1000);
-    const sanitizedMax   = this.sanitizeNumber(max, 1, 1000);
+    const sanitizedScore = sanitizeNumber(score, 0, 1000);
+    const sanitizedMax   = sanitizeNumber(max, 1, 1000);
     if (sanitizedMax === 0) return 0;
     return Math.min((sanitizedScore / sanitizedMax) * 100, 100);
   }
@@ -498,8 +474,8 @@ export class NeighborScanCardComponent {
     // Estrutura real do backend: { bestChannel, currentChannel, currentScore, bestScore,
     //                               improvement, shouldChange, reason, parameterPath }
     if (suggestion.shouldChange === false) {
-      const currentChannel = this.sanitizeNumber(suggestion.currentChannel, 1, 165);
-      const currentScore   = this.sanitizeNumber(suggestion.currentScore, 0, 1000);
+      const currentChannel = sanitizeNumber(suggestion.currentChannel, 1, 165);
+      const currentScore   = sanitizeNumber(suggestion.currentScore, 0, 1000);
       return `Canal ${currentChannel} já é o melhor disponível (score ${currentScore.toFixed(1)})`;
     }
 
@@ -509,12 +485,12 @@ export class NeighborScanCardComponent {
     }
 
     // Fallback com campos individuais sanitizados
-    const bestChannel    = this.sanitizeNumber(suggestion.bestChannel, 1, 165);
-    const currentChannel = this.sanitizeNumber(suggestion.currentChannel, 1, 165);
-    const bestScore      = this.sanitizeNumber(suggestion.bestScore, 0, 1000);
-    const improvement    = this.sanitizeNumber(suggestion.improvement, 0, 1000);
+    const bestChannel    = sanitizeNumber(suggestion.bestChannel, 1, 165);
+    const currentChannel = sanitizeNumber(suggestion.currentChannel, 1, 165);
+    const bestScore      = sanitizeNumber(suggestion.bestScore, 0, 1000);
+    const improvement    = sanitizeNumber(suggestion.improvement, 0, 1000);
     
-    return `Mudar canal ${currentChannel} → ${bestChannel} (redução de ${improvement.toFixed(1)} no score, de ${this.sanitizeNumber(suggestion.currentScore, 0, 1000).toFixed(1)} para ${bestScore.toFixed(1)})`;
+    return `Mudar canal ${currentChannel} → ${bestChannel} (redução de ${improvement.toFixed(1)} no score, de ${sanitizeNumber(suggestion.currentScore, 0, 1000).toFixed(1)} para ${bestScore.toFixed(1)})`;
   }
 
   getNonOverlappingChannels(band: string): number[] {
@@ -532,7 +508,7 @@ export class NeighborScanCardComponent {
 
   isNonOverlappingChannel(channel: number, band: string): boolean {
     // Segurança: valida channel e band antes de processar
-    const sanitizedChannel = this.sanitizeNumber(channel, 1, 165);
+    const sanitizedChannel = sanitizeNumber(channel, 1, 165);
     const validChannels = this.getNonOverlappingChannels(band);
     
     return validChannels.includes(sanitizedChannel);

@@ -121,6 +121,34 @@
             font-weight: 600;
             color: var(--text-primary);
           }
+
+          .data-badge {
+            margin-left: auto;
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+
+            &.live {
+              background-color: rgba(34, 197, 94, 0.1);
+              color: #22c55e;
+              border: 1px solid rgba(34, 197, 94, 0.2);
+            }
+
+            &.unknown {
+              background-color: rgba(107, 114, 128, 0.1);
+              color: #6b7280;
+              border: 1px solid rgba(107, 114, 128, 0.2);
+            }
+
+            &.auto {
+              background-color: rgba(217, 119, 6, 0.12);
+              color: #d97706;
+              border: 1px solid rgba(217, 119, 6, 0.25);
+            }
+          }
         }
 
         .config-details {

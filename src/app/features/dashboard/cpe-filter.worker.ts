@@ -23,7 +23,17 @@ addEventListener('message', ({ data }) => {
 
   try {
     // Função auxiliar para escapar caracteres especiais de Regex (Previne ReDoS)
-    const escapeRegex = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapeRegex = (str: string): string => {
+      if (typeof str !== 'string') return '';
+      return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    };
+
+    // Compila a RegExp uma única vez fora dos laços (loops)
+    let searchRegex: RegExp | null = null;
+    const searchString = String(filters.search || '').trim();
+    if (searchString) {
+      searchRegex = new RegExp(escapeRegex(searchString), 'i');
+    }
 
     // Chunking: processa em partes de 1000 para não travar o worker
     const CHUNK_SIZE = 1000;
@@ -31,36 +41,32 @@ addEventListener('message', ({ data }) => {
 
     for (let i = 0; i < cpes.length; i += CHUNK_SIZE) {
       const chunk = cpes.slice(i, i + CHUNK_SIZE);
-      const chunkFiltered = chunk.filter(cpe => {
-        // Aplica filtro de status
+      const chunkFiltered = chunk.filter((cpe: any) => {
+        // 1. Filtros mais baratos primeiro (comparações primitivas O(1))
         if (filters.isOnline !== undefined && cpe.isOnline !== filters.isOnline) {
           return false;
         }
-        // Aplica filtro de fabricante
         if (filters.manufacturer && cpe.manufacturer !== filters.manufacturer) {
           return false;
         }
-        // Aplica filtro de modelo
         if (filters.productClass && cpe.productClass !== filters.productClass) {
           return false;
         }
-        // Aplica filtro de firmware
         if (filters.softwareVersion && cpe.softwareVersion !== filters.softwareVersion) {
           return false;
         }
-        // Aplica filtro de GPON Crítico
         if (filters.isCriticalGpon && (cpe._rx === undefined || cpe._rx >= -27)) {
           return false;
         }
-        // Aplica filtro de busca por texto
-        if (filters.search) {
-          const searchRegex = new RegExp(escapeRegex(filters.search), 'i');
+
+        // 2. Validação de Busca Textual (Regex) com proteção contra valores null/undefined
+        if (searchRegex) {
           const matches =
-            searchRegex.test(cpe.serialNumber) ||
-            (cpe.wanIp && searchRegex.test(cpe.wanIp)) ||
-            (cpe.productClass && searchRegex.test(cpe.productClass)) ||
-            (cpe._pppoe && searchRegex.test(cpe._pppoe)) ||
-            (cpe.manufacturer && searchRegex.test(cpe.manufacturer));
+            (cpe.serialNumber && searchRegex.test(String(cpe.serialNumber))) ||
+            (cpe.wanIp && searchRegex.test(String(cpe.wanIp))) ||
+            (cpe.productClass && searchRegex.test(String(cpe.productClass))) ||
+            (cpe._pppoe && searchRegex.test(String(cpe._pppoe))) ||
+            (cpe.manufacturer && searchRegex.test(String(cpe.manufacturer)));
           if (!matches) return false;
         }
         return true;
@@ -72,11 +78,11 @@ addEventListener('message', ({ data }) => {
     postMessage(filteredCpes);
   } catch (error) {
     clearTimeout(timeoutId);
-    postMessage({ error: 'PROCESSING_ERROR', message: error?.message || 'Erro desconhecido no worker' });
+    postMessage({ error: 'PROCESSING_ERROR', message: (error as ErrorEvent)?.message || 'Erro desconhecido no worker' });
   }
 });
 
 // Error handler global para capturar erros não tratados
 addEventListener('error', (error) => {
-  postMessage({ error: 'WORKER_ERROR', message: error?.message || 'Erro fatal no worker' });
+  postMessage({ error: 'WORKER_ERROR', message: (error as ErrorEvent)?.message || 'Erro fatal no worker' });
 });

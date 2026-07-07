@@ -49,13 +49,53 @@ export interface CpeParameterCached {
 }
 
 /**
- * Dados de uma banda Wi-Fi (2.4GHz ou 5GHz) extraídos do Inform.
+ * Access Point Wi-Fi (sub-schema do novo schema MongoDB).
+ * Espelha AccessPointSchema em src/models/Cpe.js — manter sincronizado.
+ */
+export interface CpeAccessPoint {
+  index: number;
+  ssid?: string | null;
+  /** MAC Address do rádio Wi-Fi do AP (ex: 'AA:BB:CC:DD:EE:FF'). Coletado no wifi-bootstrap-probe. */
+  bssid?: string | null;
+  enable?: boolean | null;
+  status?: string | null;
+  apType?: string | null;
+  security?: string | null;
+  hidden?: boolean | null;
+  isolation?: boolean | null;
+  beamforming?: boolean | null;
+  lanAccess?: boolean | null;
+  tcEnable?: boolean | null;
+  tcMaxDown?: number | null;
+  tcMaxUp?: number | null;
+  usbAccess?: boolean | null;
+  wpsEnable?: boolean | null;
+  wmmEnable?: boolean | null;
+  utilization?: number | null;
+  tcMinDown?: number | null;
+  tcMinUp?: number | null;
+  atf?: boolean | null;
+  muMimo?: boolean | null;
+  ofdma?: boolean | null;
+  twt?: boolean | null;
+  /** BSS Color (802.11ax) — Device.WiFi.AccessPoint.{i}.BSSColorEnable. TP-Link TR-181 apenas. */
+  bssColor?: boolean | null;
+  /** MACs dos clientes atualmente associados a este AP. Populado pelo host-snapshot GPV. */
+  connectedMacs?: string[];
+}
+
+/**
+ * Dados de uma banda Wi-Fi (2.4GHz ou 5GHz) com sub-objetos aninhados.
  */
 export interface CpeWifiBand {
-  ssid?: string;
-  status?: string; // 'Up' | 'Down' | 'Enabled' | 'Lowerlayerdown' | etc.
-  channel?: number;
+  channel?: string; // String no schema Mongoose (ex: "6", "11") — consistente com handleInform
+  bandwidth?: string; // OperatingChannelBandwidth normalizado — ex: "20", "40", "80", "160"
+  txPower?: number;
+  txPowerSupported?: string; // CSV com valores aceitos, ex: "25,50,100" (TR-181 TransmitPowerSupported)
   enable?: boolean;
+  status?: string; // Status da banda (ex: "Up", "Down")
+  autoChannelEnable?: boolean; // true quando CPE gerencia canal automaticamente
+  accessPoints?: CpeAccessPoint[];
 }
 
 /**
@@ -72,21 +112,185 @@ export interface CpePendingTask {
 }
 
 /**
- * Documento completo de uma CPE, espelhando o schema MongoDB.
+ * Sub-objeto deviceInfo do novo schema MongoDB.
+ */
+export interface CpeDeviceInfo {
+  manufacturer?: string;
+  manufacturerCode?: string;
+  productClass?: string;
+  softwareVersion?: string;
+  hardwareVersion?: string;
+  uptime?: number;
+  memTotal?: number;
+  macAddress?: string;
+}
+
+/**
+ * Sub-objeto management do novo schema MongoDB.
+ */
+export interface CpeManagement {
+  connectionRequestURL?: string;
+  connectionRequestUsername?: string;
+  connectionRequestPassword?: string;
+  remoteHttpEnabled?: boolean;
+  remoteHttpsEnabled?: boolean;
+  remoteIcmpEnabled?: boolean;
+  remoteAccessEnable?: boolean | null;
+  remoteAccessPort?: number | null;
+  remoteAccessProtocol?: string | null;
+  remoteAccessHost?: string | null;
+  remoteAccessAll?: string | null;
+  sHttpRemoteEnabled?: boolean | null;
+  sHttpsRemoteEnabled?: boolean | null;
+  cpeId?: string | null;
+  gponSnType?: string | null;
+  boundIfName?: string | null;
+  connReqPort?: number | null;
+}
+
+/**
+ * Sub-objeto wan do novo schema MongoDB.
+ */
+export interface CpeWan {
+  ip?: string;
+  ipv6?: string;
+  subnetMask?: string;
+  gateway?: string;
+  dnsIsp?: string;
+  mtu?: number;
+  vlanId?: number;
+  pppoeUsername?: string;
+  status?: string;
+  updatedAt?: string;
+  wanIndex?: string;
+  ipWanIndex?: string;
+  vlanWanIndex?: string;
+  connType?: string | null;
+  serviceType?: string | null;
+  connectionTrigger?: string | null;
+  authProtocol?: string | null;
+}
+
+/**
+ * Sub-objeto wifiConfig do novo schema MongoDB.
+ */
+export interface CpeWifiConfig {
+  bandSteering?: boolean;
+}
+
+/**
+ * Configuração dinâmica de SSID usada pelo formulário do cpe-wifi-tab.
+ */
+export interface DynamicSsidConfig {
+  index: string;
+  name: string;
+  password: string;
+  securityMode: 'None' | 'WPA2' | 'WPA2-WPA3';
+  enable: boolean;
+  status: string;
+  isLockedByHardware: boolean;
+  atf: boolean;
+  muMimo: boolean;
+  ofdma: boolean;
+  twt: boolean;
+  bssColor: boolean;
+  band: '2.4GHz' | '5GHz';
+  isPrimary: boolean;
+  guestId: number;
+  uiVisible: boolean;
+  isTR181: boolean;
+
+  // Configurações avançadas do Access Point
+  hidden: boolean;
+  isolation: boolean;
+  beamforming: boolean;
+  wpsEnable: boolean;
+  wmmEnable: boolean;
+  lanAccess: boolean;
+  usbAccess: boolean;
+  tcEnable: boolean;
+  tcMaxDown: number | null;
+  tcMaxUp: number | null;
+  tcMinDown: number | null;
+  tcMinUp: number | null;
+
+  namePath: string;
+  passPath: string;
+  securityModePath: string;
+  enablePath: string;
+  atfPath: string;
+  muMimoPath: string;
+  ofdmaPath: string;
+  twtPath: string;
+  bssColorPath: string;
+  accessPointEnablePath?: string;
+
+  // Paths avançados do Access Point
+  hiddenPath: string;
+  isolationPath: string;
+  beamformingPath: string;
+  wpsEnablePath: string;
+  wmmEnablePath: string;
+  lanAccessPath: string;
+  usbAccessPath: string;
+  tcEnablePath: string;
+  tcMaxDownPath: string;
+  tcMaxUpPath: string;
+  tcMinDownPath: string;
+  tcMinUpPath: string;
+}
+
+/**
+ * Sub-objeto drift do novo schema MongoDB.
+ */
+export interface CpeDrift {
+  active?: boolean;
+  details?: string;
+  detectedAt?: string;
+}
+
+/**
+ * Documento completo de uma CPE, espelhando o schema MongoDB refatorado (EP 28).
  */
 export interface CpeDevice {
   _id?: string; // MongoDB ObjectId
   serialNumber: string;
   oui: string;
-  manufacturer: string;
-  productClass?: string;
+  manufacturerCode?: string; // Legacy fallback
+  manufacturer?: string; // Legacy fallback
+  productClass?: string; // Legacy fallback
 
-  // Dados de gerência
-  softwareVersion?: string;
+  // Campos de estado da CPE (raiz do schema backend)
+  isOnline?: boolean; // Status de conexão atual
+  lastInform?: string; // ISO 8601 — último Inform recebido
+
+  // Sub-objetos aninhados (novo schema EP 28)
+  deviceInfo?: CpeDeviceInfo;
+  management?: CpeManagement;
+  wan?: CpeWan;
+  wifiConfig?: CpeWifiConfig;
+  wifi2g?: CpeWifiBand;
+  wifi5g?: CpeWifiBand;
+  drift?: CpeDrift;
+  lan?: CpeLan;
+  nat?: CpeNat;
+  rebootSchedule?: CpeRebootSchedule;
+  ntp?: CpeNtp;
+
+  // Legacy fields para backward compatibility
+  softwareVersion?: string; // Legacy fallback
   hardwareVersion?: string;
-  connectionRequestURL?: string;
-  connectionRequestUsername?: string;
-  connectionRequestPassword?: string;
+  connectionRequestURL?: string; // Legacy fallback
+  connectionRequestUsername?: string; // Legacy fallback
+  connectionRequestPassword?: string; // Legacy fallback
+  wanIp?: string; // Legacy fallback
+  wanSubnetMask?: string;
+  wanGateway?: string;
+  wanDnsIsp?: string;
+  wanMtu?: number;
+  wanVlanId?: number;
+  pppoeUsername?: string; // Legacy fallback
+  wanConfigUpdatedAt?: string; // ISO 8601
 
   // Árvore de parâmetros TR-069 / TR-181
   parameters?: CpeParameter[];
@@ -96,29 +300,18 @@ export interface CpeDevice {
    * populado diretamente pelo endpoint getCpeDetails.
    */
   parametersCache?: CpeParameterCached[];
-  wanIp?: string;
-  wanSubnetMask?: string;
-  wanGateway?: string;
-  wanDnsIsp?: string;
-  wanDnsManual?: string[];
-  wanMtu?: number;
-  wanVlanId?: number;
-  pppoeUsername?: string;
-  wanConfigUpdatedAt?: string; // ISO 8601
-  isOnline?: boolean;
-  lastInform?: string; // ISO 8601
 
-  // Métricas ópticas GPON/EPON
-  opticalRx?: number; // dBm (ex: -23.5)
-  opticalTx?: number; // dBm (ex: 2.1)
+  // Métricas ópticas GPON/EPON (removidas do schema principal após EP 28)
+  // opticalRx?: number; // dBm (ex: -23.5)
+  // opticalTx?: number; // dBm (ex: 2.1)
 
   // Health Score calculado pelo backend a cada hora
   healthScore?: number;          // 0-100
   healthScoreUpdatedAt?: string; // ISO 8601
 
-  // Wi-Fi
-  wifi2g?: CpeWifiBand;
-  wifi5g?: CpeWifiBand;
+  // Largura de banda Wi-Fi — mirrors de top-level para acesso direto sem navegar em wifi2g/wifi5g
+  wifi2gBandwidth?: string; // Ex: "20" | "40" — OperatingChannelBandwidth 2.4GHz (legacy)
+  wifi5gBandwidth?: string; // Ex: "20" | "40" | "80" | "160" — OperatingChannelBandwidth 5GHz (legacy)
 
   // Fila de comandos
   pendingTasks?: CpePendingTask[];
@@ -126,6 +319,64 @@ export interface CpeDevice {
   // Timestamps do Mongoose
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface CpeLanDhcp {
+  enable?: boolean | null;
+  minAddress?: string | null;
+  maxAddress?: string | null;
+  leaseTime?: number | null;
+  gateway?: string | null;
+  dnsServers?: string | null;
+  domain?: string | null;
+  subnetMask?: string | null;
+}
+
+export interface CpeLan {
+  ip?: string | null;
+  subnetMask?: string | null;
+  secondIpEnable?: boolean | null;
+  igmpProxyEnable?: boolean | null;
+  dnsType?: string | null;
+  dnsServer1?: string | null;
+  dnsServer2?: string | null;
+  dhcp?: CpeLanDhcp;
+}
+
+export interface CpeNatInterfaceSetting {
+  ifIndex?: string | null;
+  fullConeEnable?: boolean | null;
+}
+
+export interface CpePortMapping {
+  description?: string | null;
+  externalPort?: number | null;
+  internalClient?: string | null;
+  internalPort?: number | null;
+  protocol?: string | null;
+  enable?: boolean | null;
+}
+
+export interface CpeNat {
+  dmzEnable?: boolean | null;
+  dmzIp?: string | null;
+  upnpEnable?: boolean | null;
+  interfaceSettings?: CpeNatInterfaceSetting[];
+  portMappings?: CpePortMapping[];
+}
+
+export interface CpeRebootSchedule {
+  enable?: boolean | null;
+  mode?: string | null;
+  day?: string | null;
+  hours?: number | null;
+  minutes?: number | null;
+}
+
+export interface CpeNtp {
+  server1?: string | null;
+  server2?: string | null;
+  timezone?: string | null;
 }
 
 /**
@@ -150,6 +401,7 @@ export interface WifiDiagnosticsData {
   manufacturer?: string;
   profile?: string;
   timestamp?: string;
+  neighboringWiFiResultCount?: number; // contagem de vizinhos do scan mais recente
 
   bands: {
     '2.4GHz': WifiBandDiagnostics;
@@ -184,8 +436,6 @@ export interface WifiDiagnosticsData {
   dnsLookupSuccessCount?: number;        // Lookups DNS com sucesso
   dnsLookupResultCount?: number;         // Resultados DNS retornados
   dnsDiagnosticsState?: string;          // Estado do diagnóstico DNS
-
-  neighboringWiFiResultCount?: number;   // Redes WiFi vizinhas detectadas
 
   // ── Estado dos diagnósticos (string retornada pela CPE) ──────────────────
   pingDiagnosticsState?: string;         // None | Requested | Complete | Error_*
@@ -308,6 +558,9 @@ export interface ChannelSaturationBand {
   totalNeighbors?: number;   // soma total de vizinhos na banda
   channels: Record<number, ChannelEntry>;
   suggestion?: ChannelSuggestion; // sugestão de troca de canal com aplicação automática
+  maxInterferenceScore?: number;  // score máximo de interferência na banda
+  bandwidthSuggestion?: string | null;       // sugestão de largura de banda (backend)
+  bandwidthSuggestionReason?: string | null; // razão da sugestão de largura
 }
 
 export interface ChannelEntry {
@@ -315,8 +568,8 @@ export interface ChannelEntry {
   neighborCount: number;
   interferenceScore?: number;   // score ponderado (RSSI + sobreposição + largura)
   avgRssi?: number | null;      // RSSI médio dos vizinhos diretos (dBm)
-  noiseLevel: number;           // dBm estimado
-  congestionLevel: 'Alto' | 'Médio' | 'Baixo';
+  noiseLevel?: number;          // dBm estimado
+  congestionLevel?: 'Alto' | 'Médio' | 'Baixo' | string;
 }
 
 export interface ChannelSuggestion {
@@ -327,7 +580,24 @@ export interface ChannelSuggestion {
   improvement: number;
   shouldChange: boolean;
   reason: string;
-  parameterPath: string;
+  parameterPath?: string;
+}
+
+/**
+ * Dados de qualidade de rádio estruturados para exibição no frontend.
+ * Todos os campos são opcionais pois dependem das capacidades do firmware.
+ */
+export interface RadioQuality {
+  bandwidth: string | null;              // OperatingChannelBandwidth: ex. "20MHz", "80MHz", "Auto"
+  snr: number | null;                    // SNR em dB (proprietary X_TP_SNR - TP-Link)
+  noise: number | null;                  // Ruído de fundo em dBm
+  utilization: number | null;            // Utilização do canal em % (X_TP_Utilization - TP-Link)
+  txPower: number | null;                // Potência de transmissão em %
+  channel: number | null;                // Canal atual (0 = auto mode)
+  autoChannelEnable: boolean | null;     // true quando CPE gerencia canal (modo automático)
+  rssi: number | null;                   // RSSI do rádio
+  bandwidthSuggestion: string | null;    // Sugestão de largura de banda baseada em dados reais
+  bandwidthSuggestionReason: string | null; // Razão da sugestão
 }
 
 /**
@@ -358,7 +628,7 @@ export interface WifiHost {
 
 /** Ação corretiva proposta por um insight (quando actionable=true). */
 export interface WifiInsightAction {
-  type: 'set_channel' | 'set_power' | 'enable_beamforming' | 'info';
+  type: 'set_channel' | 'set_power' | 'set_bandwidth' | 'enable_beamforming' | 'info';
   band: '2.4GHz' | '5GHz';
   parameter: string;  // caminho TR-181 para SetParameterValues
   value: string;
@@ -417,6 +687,13 @@ export interface ConnectedDevicesData {
   wifiDevices: WifiHost[];
   ethernetDevices: EthernetDevice[];
   totalDevices: number;
+  /** Paginação aplicada apenas a wifiDevices — ethernetDevices sempre vem completo. */
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
 }
 
 /**
@@ -494,7 +771,7 @@ export interface TelemetryMetric {
 
 // Subdocumentos modulares para telemetria estruturada
 export interface SystemTelemetry {
-  upTime: number;
+  uptime: number;
   cpuUsage: number;
   memoryFree: number;
   memoryTotal: number;
@@ -543,6 +820,11 @@ export interface WifiTelemetry {
 
 export interface LanTelemetry {
   hostCount?: number;
+  wiredCount?: number;
+  wirelessCount?: number;
+  count2g?: number;
+  count5g?: number;
+  activeCount?: number;
 }
 
 /**
@@ -591,15 +873,16 @@ export interface TelemetryCacheResponse {
 export interface TelemetrySnapshot {
   timestamp: string;
   cpuUsage?: number;
-  memoryUsage?: number;      // percentual calculado (legacy WebSocket cache)
+  memoryUsage?: number;      // % calculado (legacy WebSocket cache)
   memoryFree?: number;       // KB bruto (TelemetryVitals)
-  memoryTotal?: number;      // KB bruto (TelemetryVitals)
+  memoryTotal?: number;      // KB bruto
+  uptime?: number;           // segundos desde o boot (TelemetryVitals)
   opticalRx?: number;
-  opticalTx?: number;
-  wanStatus?: string;        // NOVO — disponível em TelemetryVitals
-  gponStatus?: string;       // NOVO — disponível em TelemetryVitals
-  hostCount?: number;        // NOVO — número de hosts conectados (TelemetryVitals)
-  source?: string;           // NOVO — 'vitals' | 'hourly' (para debug)
+  // opticalTx removido do schema TelemetryVitals — presente apenas em TelemetryRaw
+  wanStatus?: string;
+  gponStatus?: string;
+  hostCount?: number;
+  source?: string;           // 'vitals' | 'hourly'
 }
 
 /** Resposta para endpoints de séries temporais. */
@@ -711,10 +994,20 @@ export interface TopDestination {
 
 /** Análise de Qualidade Wi-Fi (2.4GHz e 5GHz). */
 export interface WifiQualityAnalysis {
+  serialNumber: string;
   band: '2g' | '5g';
+  sampleCount: number;
   snrAvg: number | null;
+  snrMin: number | null;
   noiseFloor: number | null;
   clientCount: number | null;
+  errorRateRx: number | null;       // erros RX por minuto (normalizado pelo intervalo)
+  errorRateTx: number | null;       // erros TX por minuto (normalizado pelo intervalo)
+  intervalMinutes: number | null;   // intervalo entre as duas coletas usadas para erro rate
+  thresholdWarn: number;            // limite inferior do warning (erros/min)
+  thresholdCritical: number;        // limite do critical (erros/min)
+  dataSource: 'snr' | 'fallback';
+  confidence: 'high' | 'medium' | 'low';
   severity: 'ok' | 'warning' | 'critical';
   alert: boolean;
   message: string;
@@ -722,9 +1015,11 @@ export interface WifiQualityAnalysis {
 
 /** Análise de Margem Óptica GPON. */
 export interface GponLinkBudgetAnalysis {
+  serialNumber: string;
   rxPower: number;
   txPower: number | null;
   rxMargin: number;
+  criticalThreshold: number;
   severity: 'ok' | 'warning' | 'critical';
   alert: boolean;
   message: string;
@@ -732,10 +1027,14 @@ export interface GponLinkBudgetAnalysis {
 
 /** Análise de Envelhecimento do Transceiver (30 dias). */
 export interface TransceiverAgingAnalysis {
+  serialNumber: string;
   days: number;
   sampleCount: number;
+  reliableModel: boolean;
+  r2: number;
   biasSlopePerDay: number;
   currentBias: number;
+  currentBiasMa: number;
   severity: 'ok' | 'warning' | 'critical';
   alert: boolean;
   message: string;
@@ -851,6 +1150,53 @@ export interface WifiNeighborResult {
   timestamp: string;
 }
 
+/** Saturação de canal calculada para uma banda (2.4GHz ou 5GHz). */
+export interface WifiChannelSaturationBand {
+  currentChannel: number | null;
+  suggestedChannel: number | null;
+  saturationScore: number | null;
+}
+
+/** Rede vizinha detectada dentro de uma execução de scan. */
+export interface WifiNeighborNetwork {
+  ssid: string;
+  bssid: string;
+  channel: number;
+  band: string;
+  rssi: number;
+  security: string;
+}
+
+/**
+ * Registro de UMA execução de WiFi Neighbor Scan, como persistido no model
+ * WiFiNeighborHistory (backend) — formato usado por getWifiNeighborHistory().
+ * Diferente de WifiNeighborResult (que representa uma rede vizinha individual
+ * dentro do endpoint genérico de diagnósticos).
+ */
+export interface WifiNeighborScanEntry {
+  serialNumber: string;
+  diagnosticsState: string;
+  results: {
+    neighborCount: number;
+    channelSaturation: {
+      bands: {
+        '2.4GHz'?: WifiChannelSaturationBand;
+        '5GHz'?: WifiChannelSaturationBand;
+      };
+    } | null;
+    neighbors: WifiNeighborNetwork[];
+  };
+  triggeredBy: string;
+  timestamp: string;
+}
+
+/** Resposta do endpoint de histórico de WiFi Neighbor Scan (getWifiNeighborHistory). */
+export interface WifiNeighborHistoryResponse {
+  success: boolean;
+  data: WifiNeighborScanEntry[];
+  count: number;
+}
+
 /** Entrada genérica no histórico de diagnósticos. */
 export type DiagnosticResult = PingResult | TraceRouteResult | SpeedTestResult | DNSLookupResult | UDPEchoResult | WifiNeighborResult;
 
@@ -859,4 +1205,32 @@ export interface DiagnosticHistoryResponse<T extends DiagnosticResult> {
   success: boolean;
   data: T[];
   count: number;
+}
+
+// =============================================================================
+// PROVIDER CONFIG (EP43)
+// =============================================================================
+
+export interface ProviderConfig {
+  _id?: string;
+  adminUserIndex: number;
+  superAdminUserIndex: number;
+  version: number;
+  updatedBy: string;
+  updatedAt?: string;
+  createdAt?: string;
+  hasAdminPassword: boolean;
+  hasSuperAdminPassword: boolean;
+  hasPppoePassword: boolean;
+  isActive: boolean;
+  autoWifiOptimizationEnabled: boolean;
+}
+
+export interface ProviderConfigUpdate {
+  adminUserIndex?: number;
+  superAdminUserIndex?: number;
+  adminPassword?: string | null;
+  superAdminPassword?: string | null;
+  pppoePassword?: string | null;
+  autoWifiOptimizationEnabled?: boolean;
 }

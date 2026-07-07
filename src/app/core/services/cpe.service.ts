@@ -5,7 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, of, throwError } from 'rxjs';
 import { tap, timeout, catchError } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
-import { CpeDevice, PaginatedResponse, WifiDiagnosticsData, WifiHostsData, ConnectedDevicesData, CpePrediction, CommandResponse, CpeParameterPayload, TelemetryCacheResponse, TelemetryAnalysis, TelemetryHistoryResponse, DiagnosticHistoryResponse, DiagnosticResult, PingResult, TraceRouteResult, SpeedTestResult, DNSLookupResult, UDPEchoResult, WifiNeighborResult, TelemetryAlert, TelemetrySnapshot } from '../models';
+import { CpeDevice, PaginatedResponse, WifiDiagnosticsData, WifiHostsData, ConnectedDevicesData, CpePrediction, CommandResponse, CpeParameterPayload, TelemetryCacheResponse, TelemetryAnalysis, TelemetryHistoryResponse, DiagnosticHistoryResponse, DiagnosticResult, PingResult, TraceRouteResult, SpeedTestResult, DNSLookupResult, UDPEchoResult, WifiNeighborHistoryResponse, TelemetryAlert, TelemetrySnapshot } from '../models';
 
 @Injectable({
   providedIn: 'root'
@@ -79,31 +79,34 @@ export class CpeService {
    * Caso contrário, faz requisição HTTP e armazena no cache.
    *
    * @param serialNumber - Número de série da CPE
+   * @param skipCache - Se true, ignora cache e força requisição HTTP fresca
    * @returns Observable com dados da CPE
    */
-  getCpeDetails(serialNumber: string): Observable<CpeDevice> {
+  getCpeDetails(serialNumber: string, skipCache: boolean = false): Observable<CpeDevice> {
     // Constrói chave de cache baseada no serialNumber
     const cacheKey = `cpe_${serialNumber}`;
 
-    // 1. Tenta recuperar da memória RAM (Ultra rápido)
-    let cached = this.cache.get(cacheKey);
+    if (!skipCache) {
+      // 1. Tenta recuperar da memória RAM (Ultra rápido)
+      let cached = this.cache.get(cacheKey);
 
-    // 2. Tenta recuperar do SessionStorage (Sobrevive a F5/Refresh)
-    if (!cached) {
-      const sessionData = sessionStorage.getItem(cacheKey);
-      if (sessionData) {
-        try {
-          cached = JSON.parse(sessionData);
-          if (cached) this.cache.set(cacheKey, cached); // Restaura na RAM
-        } catch (e) {
-          sessionStorage.removeItem(cacheKey);
+      // 2. Tenta recuperar do SessionStorage (Sobrevive a F5/Refresh)
+      if (!cached) {
+        const sessionData = sessionStorage.getItem(cacheKey);
+        if (sessionData) {
+          try {
+            cached = JSON.parse(sessionData);
+            if (cached) this.cache.set(cacheKey, cached); // Restaura na RAM
+          } catch (e) {
+            sessionStorage.removeItem(cacheKey);
+          }
         }
       }
-    }
 
-    // 3. Valida se o cache existe e ainda está dentro do tempo de vida útil (TTL)
-    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
-      return of(cached.data);
+      // 3. Valida se o cache existe e ainda está dentro do tempo de vida útil (TTL)
+      if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+        return of(cached.data);
+      }
     }
 
     // 4. Se não tem cache ou expirou, faz requisição HTTP e salva em ambos (RAM e Storage)
@@ -232,7 +235,7 @@ export class CpeService {
     payload: { type: string; band: string; value: string }
   ): Observable<{ status: string; message: string }> {
     return this.http.post<{ status: string; message: string }>(
-      `${this.API_URL}/${serialNumber}/wifi-diagnostics/apply`,
+      `${this.API_URL}/${serialNumber}/wifi-optimization`,
       payload
     ).pipe(timeout(30000));
   }
@@ -242,8 +245,8 @@ export class CpeService {
    * @param serialNumber - Número de série da CPE
    * @param limit - Quantidade máxima de registros (padrão: 20)
    */
-  getWifiNeighborHistory(serialNumber: string, limit = 20): Observable<any[]> {
-    return this.http.get<any[]>(
+  getWifiNeighborHistory(serialNumber: string, limit = 20): Observable<WifiNeighborHistoryResponse> {
+    return this.http.get<WifiNeighborHistoryResponse>(
       `${this.API_URL}/${serialNumber}/diagnostics/wifi-neighbor/history`,
       { params: { limit: String(limit) } }
     );
@@ -297,7 +300,7 @@ export class CpeService {
    * @param limit - Itens por página (padrão: 50, máximo: 200)
    */
   getConnectedDevices(serialNumber: string, page: number = 1, limit: number = 50): Observable<ConnectedDevicesData> {
-    const cacheKey = `connected_devices_${serialNumber}`;
+    const cacheKey = `connected_devices_${serialNumber}_${page}_${limit}`;
     let cached = this.cache.get(cacheKey);
 
     if (!cached) {
@@ -569,9 +572,13 @@ export class CpeService {
   /**
    * Envia um comando de reinicialização (Reboot) para a CPE alvo.
    * @param serialNumber - O número de série da CPE alvo.
+   * @param skipBeforeSnapshot - Skip before snapshot (default: false)
    */
-  rebootCpe(serialNumber: string): Observable<CommandResponse> {
-    return this.http.post<CommandResponse>(`${this.API_URL}/${serialNumber}/reboot`, {});
+  rebootCpe(serialNumber: string, skipBeforeSnapshot = false): Observable<CommandResponse> {
+    return this.http.post<CommandResponse>(
+      `${this.API_URL}/${serialNumber}/reboot`,
+      { skipBeforeSnapshot }
+    );
   }
 
   /**
@@ -580,18 +587,6 @@ export class CpeService {
    */
   deleteCpe(serialNumber: string): Observable<CommandResponse> {
     return this.http.delete<CommandResponse>(`${this.API_URL}/${serialNumber}`);
-  }
-
-  /**
-   * Busca histórico de WiFi Neighbor Scan da CPE.
-   * @param serialNumber - Número de série da CPE
-   * @param limit - Quantidade máxima de registros (padrão: 10)
-   */
-  getWiFiNeighborHistory(serialNumber: string, limit: number = 10): Observable<DiagnosticHistoryResponse<WifiNeighborResult>> {
-    return this.http.get<DiagnosticHistoryResponse<WifiNeighborResult>>(
-      `${environment.apiUrl}/api/cpe/${serialNumber}/diagnostics/wifi-neighbor/history`,
-      { params: { limit: String(limit) } }
-    );
   }
 
   /**

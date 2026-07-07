@@ -1,8 +1,9 @@
 // Caminho do arquivo: frontend/src/app/features/dashboard/components/cpe-details/components/cpe-devices-tab/cpe-devices-tab.component.ts
 
-import { Component, Input, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Subscription } from 'rxjs';
+import { Subscription, EMPTY, timer } from 'rxjs';
+import { switchMap, filter, take, timeout, retry, catchError } from 'rxjs/operators';
 import { CpeService } from '../../../../../../core/services/cpe.service';
 import { WebSocketService } from '../../../../../../core/services/websocket.service';
 import { ButtonComponent } from '../../../../../../core/components/button/button.component';
@@ -22,6 +23,7 @@ import { ConnectedDevicesData, WifiHost, EthernetDevice } from '../../../../../.
 @Component({
   selector: 'app-cpe-devices-tab',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, ButtonComponent, SkeletonComponent],
   templateUrl: './cpe-devices-tab.component.html',
   styleUrls: ['./cpe-devices-tab.component.scss']
@@ -62,11 +64,15 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
   /** Quantidade de retentativas realizadas na última rodada. */
   refreshRetryCount: number = 0;
 
-  // ── RETRY COM BACKOFF EXPONENCIAL ──────────────────────────────────────
-  /** Timeout de retry agendado (para poder cancelar em ngOnDestroy). */
-  private retryTimeout: any;
-  /** Timeout de failsafe para forçar fim do estado refreshing. */
-  private refreshFailsafeTimeout: any;
+  // ── RETRY COM BACKOFF EXPONENCIAL (pipeline RxJS) ──────────────────────
+  /** Subscription do pipeline de refresh+retry ativo (cancelável em ngOnDestroy). */
+  private refreshSub?: Subscription;
+  private readonly RETRY_BACKOFF_MS = [15_000, 30_000, 60_000];
+  private readonly RESPONSE_TIMEOUT_MS = 30_000;
+  private readonly MAX_RETRIES = 3;
+
+  /** Timeout do toast de feedback (para poder cancelar em ngOnDestroy). */
+  private feedbackTimeout: any;
 
   // Subscriptions
   private wsRefreshSub!: Subscription;
@@ -77,7 +83,8 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
 
   constructor(
     private cpeService: CpeService,
-    private wsService: WebSocketService
+    private wsService: WebSocketService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
@@ -96,8 +103,8 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
     this.stopHostsAutoRefresh();
     this.stopCountdownTimer();
     if (this.wsRefreshSub) this.wsRefreshSub.unsubscribe();
-    if (this.retryTimeout) { clearTimeout(this.retryTimeout); this.retryTimeout = null; }
-    if (this.refreshFailsafeTimeout) { clearTimeout(this.refreshFailsafeTimeout); this.refreshFailsafeTimeout = null; }
+    if (this.refreshSub) this.refreshSub.unsubscribe();
+    if (this.feedbackTimeout) { clearTimeout(this.feedbackTimeout); this.feedbackTimeout = null; }
   }
 
   // ── CARREGAMENTO DE DADOS ────────────────────────────────────────────────
@@ -114,13 +121,32 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
     this.cpeService.getConnectedDevices(this.serialNumber, this.currentPage, this.itemsPerPage).subscribe({
       next: (data) => {
         this.devicesData = data;
-        this.totalPages = (data as any).pagination?.pages || 1;
+        this.totalPages = data.pagination?.pages || 1;
         this.isLoading = false;
+        this.cdr.markForCheck();
       },
       error: () => {
         this.setFeedback('Erro ao carregar dispositivos conectados.', 'error');
         this.isLoading = false;
+        this.cdr.markForCheck();
       }
+    });
+  }
+
+  /**
+   * Recarrega os dados SEM acionar o skeleton de loading — usado quando o
+   * WebSocket avisa que a CPE respondeu, para atualizar a tabela em tempo
+   * real sem apagar a tabela já renderizada (evita flicker).
+   */
+  private reloadDevicesDataSilently(): void {
+    if (!this.serialNumber) return;
+    this.cpeService.getConnectedDevices(this.serialNumber, this.currentPage, this.itemsPerPage).subscribe({
+      next: (data) => {
+        this.devicesData = data;
+        this.totalPages = data.pagination?.pages || 1;
+        this.cdr.markForCheck();
+      },
+      error: () => { /* mantém os dados já exibidos em tela silenciosamente */ }
     });
   }
 
@@ -147,91 +173,67 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
   /**
    * Solicita leitura SOB DEMANDA dos parâmetros Wi-Fi diretamente na CPE.
    * O backend enfileira GetParameterValues e dispara Connection Request.
-   * Quando a CPE responder, o WebSocket wifi_data_refreshed atualiza a tabela.
+   * Quando a CPE responder, o WebSocket wifi_data_refreshed atualiza a tabela
+   * (via listenWifiDataRefreshed, que roda durante todo o ciclo de vida do componente).
    *
-   * LÓGICA DE GARANTIA:
+   * LÓGICA DE GARANTIA (pipeline RxJS único, cancelável via this.refreshSub):
    *   1. Sempre exibe os dados do MongoDB primeiro (fallback imediato).
    *   2. Dispara o refresh em background (não bloqueia a tabela).
-   *   3. Mede o tempo de resposta da CPE.
-   *   4. Se a CPE não responder em 30s, agenda retry com backoff (15s → 30s → 60s).
-   *   5. Após 3 tentativas, usa os dados do cache e informa o técnico.
+   *   3. Se a CPE não responder em 30s, o retry re-executa a chamada com backoff (15s → 30s → 60s).
+   *   4. Após 3 tentativas, desiste e informa o técnico — dados do cache continuam em exibição.
    */
   refreshDevicesData(): void {
     if (!this.serialNumber) return;
     if (this.refreshing || this.backgroundRefreshing) return;
 
-    this.doRefreshAttempt(0);
-  }
-
-  /**
-   * Executa uma tentativa de refresh com medição de tempo.
-   * @param attempt Número da tentativa (0 = primeira, 1 = retry 1, etc.)
-   */
-  private doRefreshAttempt(attempt: number): void {
-    if (!this.serialNumber) return;
-
     this.refreshing = true;
     this.backgroundRefreshing = true;
     this.refreshStartTime = Date.now();
-    this.refreshRetryCount = attempt;
+    this.refreshRetryCount = 0;
+    this.nextRefreshInSeconds = this.AUTO_REFRESH_MS / 1000; // reseta o countdown visível
     this.clearFeedback();
+    this.setFeedback('Atualização solicitada. Aguardando a CPE responder...', 'info');
 
-    // Cancela failsafe anterior se houver
-    if (this.refreshFailsafeTimeout) { clearTimeout(this.refreshFailsafeTimeout); }
-
-    // refreshWifiHosts é mais leve — não computa insights/congestionamento que esta aba não usa
-    this.cpeService.refreshWifiHosts(this.serialNumber).subscribe({
-      next: (res: any) => {
-        if (attempt === 0) {
-          this.setFeedback('Atualização solicitada. Aguardando a CPE responder...', 'info');
-        } else {
-          this.setFeedback(`Retentativa ${attempt}/3 solicitada. Aguardando CPE...`, 'info');
-        }
-
-        // Failsafe: se a CPE não responder em 30s, tenta novamente
-        this.refreshFailsafeTimeout = setTimeout(() => {
-          this.handleRefreshTimeout(attempt);
-        }, 30_000);
-      },
-      error: (err: any) => {
+    this.refreshSub?.unsubscribe();
+    this.refreshSub = this.cpeService.refreshWifiHosts(this.serialNumber).pipe(
+      // Erros da chamada HTTP inicial (ex: 409 já em andamento) não devem entrar no retry.
+      catchError((err: any) => {
         this.refreshing = false;
-        if (err.status === 409) {
+        this.backgroundRefreshing = false;
+        if (err?.status === 409) {
           this.setFeedback('Uma atualização já está em andamento na fila da CPE. Aguarde...', 'info');
-          this.backgroundRefreshing = false;
         } else {
           this.setFeedback('Erro ao solicitar atualização. Usando dados do cache.', 'error');
-          this.backgroundRefreshing = false;
         }
-      }
-    });
-  }
-
-  /**
-   * Chamado quando o failsafe de 30s dispara (CPE não respondeu).
-   * Agenda retry com backoff exponencial ou desiste após 3 tentativas.
-   */
-  private handleRefreshTimeout(attempt: number): void {
-    if (!this.refreshing) return; // já foi resolvido pelo WebSocket
-
-    const nextAttempt = attempt + 1;
-    if (nextAttempt > 3) {
-      // Desiste após 3 tentativas (total ~ 105s)
+        this.cdr.markForCheck();
+        return EMPTY;
+      }),
+      // Espera o evento WS específico desta CPE; timeout de 30s dispara o retry.
+      switchMap(() => this.wsService.onWifiDataRefreshed().pipe(
+        filter(evt => evt.serialNumber === this.serialNumber),
+        take(1),
+        timeout(this.RESPONSE_TIMEOUT_MS)
+      )),
+      retry({
+        count: this.MAX_RETRIES,
+        delay: (_err, retryCount) => {
+          this.refreshRetryCount = retryCount;
+          const delayMs = this.RETRY_BACKOFF_MS[retryCount - 1] ?? 60_000;
+          this.setFeedback(`CPE lenta. Nova tentativa ${retryCount}/${this.MAX_RETRIES} em ${delayMs / 1000}s...`, 'info');
+          this.cdr.markForCheck();
+          return timer(delayMs);
+        }
+      }),
+      catchError(() => {
+        this.setFeedback('A CPE não respondeu após 3 tentativas. Dados do cache em exibição.', 'error');
+        return EMPTY;
+      })
+    ).subscribe(() => {
+      // Sucesso: o próprio listenWifiDataRefreshed já tratou o reload dos dados.
       this.refreshing = false;
       this.backgroundRefreshing = false;
-      this.setFeedback('A CPE não respondeu após 3 tentativas. Dados do cache em exibição.', 'error');
-      return;
-    }
-
-    // Backoff: 15s, 30s, 60s
-    const backoffDelays = [15_000, 30_000, 60_000];
-    const delay = backoffDelays[attempt] || 60_000;
-
-    this.refreshing = false; // libera para nova tentativa
-    this.setFeedback(`CPE lenta. Nova tentativa em ${delay / 1000}s...`, 'info');
-
-    this.retryTimeout = setTimeout(() => {
-      this.doRefreshAttempt(nextAttempt);
-    }, delay);
+      this.cdr.markForCheck();
+    });
   }
 
   // ── AUTO-REFRESH (ON-DEMAND) ───────────────────────────────────────────
@@ -246,13 +248,16 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
   private startHostsAutoRefresh(): void {
     this.stopHostsAutoRefresh();
     this.hostsRefreshInterval = setInterval(() => {
-      if (!this.serialNumber || this.refreshing) return;
+      // backgroundRefreshing cobre a janela em que refreshing já foi liberado
+      // pelo pipeline de retry mas ainda há uma tentativa aguardando resposta da CPE.
+      if (!this.serialNumber || this.refreshing || this.backgroundRefreshing) return;
       // refreshWifiHosts é mais leve — não computa insights/congestionamento que esta aba não usa
       this.cpeService.refreshWifiHosts(this.serialNumber).subscribe({
         error: () => { /* ignora 409 e erros de rede sem exibir feedback */ }
       });
       // Reseta contador regressivo
-      this.nextRefreshInSeconds = 60;
+      this.nextRefreshInSeconds = this.AUTO_REFRESH_MS / 1000;
+      this.cdr.markForCheck();
     }, this.AUTO_REFRESH_MS);
   }
 
@@ -277,8 +282,9 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
     this.countdownInterval = setInterval(() => {
       this.nextRefreshInSeconds--;
       if (this.nextRefreshInSeconds <= 0) {
-        this.nextRefreshInSeconds = 60;
+        this.nextRefreshInSeconds = this.AUTO_REFRESH_MS / 1000;
       }
+      this.cdr.markForCheck();
     }, 1_000);
   }
 
@@ -302,10 +308,6 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
     this.wsRefreshSub = this.wsService.onWifiDataRefreshed().subscribe({
       next: (evt) => {
         if (evt.serialNumber === this.serialNumber) {
-          // Cancela failsafe e retry pendentes
-          if (this.refreshFailsafeTimeout) { clearTimeout(this.refreshFailsafeTimeout); this.refreshFailsafeTimeout = null; }
-          if (this.retryTimeout) { clearTimeout(this.retryTimeout); this.retryTimeout = null; }
-
           // Calcula tempo de resposta
           if (this.refreshStartTime) {
             this.lastRefreshDurationMs = Date.now() - this.refreshStartTime;
@@ -317,7 +319,8 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
 
           const durationSec = this.lastRefreshDurationMs ? (this.lastRefreshDurationMs / 1000).toFixed(1) : '?';
           this.setFeedback(`Dados atualizados em tempo real. Resposta da CPE: ${durationSec}s.`, 'success');
-          this.loadConnectedDevices();
+          this.reloadDevicesDataSilently();
+          this.cdr.markForCheck();
         }
       }
     });
@@ -326,13 +329,16 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
   // ── HELPERS DE FEEDBACK ─────────────────────────────────────────────────
 
   private setFeedback(message: string, type: 'success' | 'error' | 'info'): void {
+    if (this.feedbackTimeout) { clearTimeout(this.feedbackTimeout); }
     this.feedbackMessage = message;
     this.feedbackType = type;
-    setTimeout(() => this.clearFeedback(), 5_000);
+    this.cdr.markForCheck();
+    this.feedbackTimeout = setTimeout(() => this.clearFeedback(), 5_000);
   }
 
   private clearFeedback(): void {
     this.feedbackMessage = '';
+    this.cdr.markForCheck();
   }
 
   // ── HELPERS DE DADOS ────────────────────────────────────────────────────
@@ -358,5 +364,10 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
   get lastRefreshAtText(): string {
     if (!this.lastRefreshAt) return '';
     return this.lastRefreshAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  /** trackBy por MAC — evita recriar as linhas da tabela a cada refresh de 60s (OnPush + *ngFor). */
+  trackByMac(_index: number, item: WifiHost | EthernetDevice): string {
+    return item.macAddress;
   }
 }

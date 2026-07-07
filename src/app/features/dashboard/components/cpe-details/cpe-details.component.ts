@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
@@ -6,6 +6,7 @@ import { CpeService } from '../../../../core/services/cpe.service';
 import { WebSocketService } from '../../../../core/services/websocket.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { DataAgePipe } from '../../../../core/pipes/data-age.pipe';
+import { CpeDevice } from '../../../../core/models';
 
 // IMPORTAÇÃO DOS FILHOS STANDALONE
 import { CpeInfoTabComponent } from './components/cpe-info-tab/cpe-info-tab.component';
@@ -17,11 +18,11 @@ import { CpeWifiAnalysisTabComponent } from './components/cpe-wifi-analysis-tab/
 import { CpeAiTabComponent } from './components/cpe-ai-tab/cpe-ai-tab.component';
 import { ButtonComponent } from '../../../../core/components/button/button.component';
 import { SkeletonComponent } from '../../../../core/components/skeleton/skeleton.component';
-import { CpeDevice } from '../../../../core/models';
 
 @Component({
   selector: 'app-cpe-details',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   // REGISTRO DOS FILHOS NO ARRAY DE IMPORTS
   imports: [CommonModule, CpeInfoTabComponent, CpeWifiTabComponent, CpeRadioTabComponent, CpeDevicesTabComponent, CpeDiagnosticsTabNewComponent, CpeWifiAnalysisTabComponent, CpeAiTabComponent, ButtonComponent, SkeletonComponent, DataAgePipe],
   templateUrl: './cpe-details.component.html',
@@ -61,8 +62,9 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
       return;
     }
     
-    // ── Garante que o Angular só se inscreve na CPE se houver conexão estabelecida E se já não estiver inscrito ──
-    if (this.wsService['socket']?.connected && this.serialNumber) {
+    // Inscreve-se na sala da CPE. O WebSocketService enfileira a inscrição se ainda
+    // não estiver conectado e a envia automaticamente quando o socket conectar.
+    if (this.serialNumber) {
       this.wsService.subscribeToCpe(this.serialNumber);
     }
     
@@ -96,7 +98,7 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
     this.wsSubscriptions.add(
       this.wsService.onCpeUpdated().subscribe(updatedCpe => {
         if (updatedCpe.serialNumber === this.serialNumber) {
-          this.cpe = this.cpe ? { ...this.cpe, ...updatedCpe } : updatedCpe;
+          this.cpe = this.cpe ? this.mergeCpe(this.cpe, updatedCpe) : updatedCpe as CpeDevice;
           this.cdr.markForCheck();
         }
       })
@@ -141,16 +143,38 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
     );
 
     // cpe_batch_update: durante mass reboot, a CPE sendo visualizada pode estar no array
-    // Busca pelo serialNumber e faz merge idêntico ao que faria o cpe_updated individual
+    // Busca pelo serialNumber e faz merge profundo para preservar arrays/objetos aninhados.
     this.wsSubscriptions.add(
       this.wsService.onCpeBatchUpdate().subscribe(batch => {
         const item = batch.items.find((i: any) => i.serialNumber === this.serialNumber);
         if (!item) return;
-        this.cpe = this.cpe ? { ...this.cpe, ...item } : item;
+        this.cpe = this.cpe ? this.mergeCpe(this.cpe, item) : item as CpeDevice;
         if (batch.eventName === 'cpe_online') this.cpe!.isOnline = true;
         this.cdr.markForCheck();
       })
     );
+  }
+
+  /**
+   * Merge profundo entre o estado atual da CPE e um update parcial vindo do WebSocket.
+   * Arrays são substituídos (não mergeados) para evitar duplicatas e estados inconsistentes.
+   */
+  private mergeCpe(target: CpeDevice, source: Partial<CpeDevice>): CpeDevice {
+    if (!source) return target;
+    // Usa Record<string, unknown> para evitar erros TS strict em atribuições dinâmicas por chave.
+    const result = { ...target } as Record<string, unknown>;
+    for (const key of Object.keys(source)) {
+      const s = (source as Record<string, unknown>)[key];
+      const t = result[key];
+      if (Array.isArray(s)) {
+        result[key] = s;
+      } else if (s && typeof s === 'object' && t && typeof t === 'object') {
+        result[key] = this.mergeCpe(t as CpeDevice, s as Partial<CpeDevice>);
+      } else if (s !== undefined) {
+        result[key] = s;
+      }
+    }
+    return result as unknown as CpeDevice;
   }
 
   goBack(): void {

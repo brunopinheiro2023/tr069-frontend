@@ -1,0 +1,313 @@
+<div class="vmoas-card ssid-card" [class.is-locked]="isLocked" [class.is-guest]="!isPrimary">
+  <div class="ssid-header">
+    <div class="ssid-title-group">
+      <div class="icon-wrapper">
+        <span class="material-symbols-rounded">
+          {{ band === '5GHz' ? 'wifi_tethering' : 'wifi' }}
+        </span>
+      </div>
+      <div>
+        <h3>{{ isPrimary ? 'SSID Primário' : 'SSID Visitante' }} #{{ ssidIndex }} ({{ band }})</h3>
+        <div class="badge-group">
+          <span class="band-badge">{{ band }}</span>
+          <span class="protocol-badge">{{ isTR181 ? 'TR-181' : 'TR-098' }}</span>
+          <span class="status-badge" [class.status-up]="status === 'Up' || status === 'Enabled'">
+            {{ status }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <ng-container *ngIf="isLocked">
+      <div class="locked-badge"><span class="material-symbols-rounded">lock</span> Gerido pela CPE</div>
+    </ng-container>
+
+    <ng-container *ngIf="!isLocked">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label class="vmoas-switch" [class.hardware-locked]="isHardwareLocked">
+          <input type="checkbox" [formControl]="$any(ssidForm.get('enable'))"
+                 (change)="onToggle(ssidForm.get('enablePath')?.value, $event, 'xsd:boolean')">
+          <span class="vmoas-slider"></span>
+        </label>
+        <app-button
+          *ngIf="!isPrimary"
+          variant="ghost"
+          size="sm"
+          iconLeft="close"
+          [disabled]="isApplyingWifi"
+          (clicked)="onDisableGuest()"
+          title="Desabilitar e mover para SSIDs Disponíveis"
+        >
+        </app-button>
+      </div>
+    </ng-container>
+  </div>
+
+  <div class="ssid-body" [class.is-disabled]="isDisabled">
+    <div class="input-group">
+      <label>Nome da Rede (SSID)</label>
+      <div class="input-wrapper">
+        <span class="material-symbols-rounded input-icon">signal_cellular_alt</span>
+        <input type="text" class="vmoas-input" [formControl]="$any(ssidForm.get('name'))" [attr.disabled]="isLocked ? '' : null">
+      </div>
+    </div>
+
+    <div class="input-group">
+      <label>Segurança / Criptografia</label>
+      <div class="input-wrapper">
+        <span class="material-symbols-rounded input-icon">shield</span>
+        <select class="vmoas-input" [formControl]="$any(ssidForm.get('securityMode'))" [attr.disabled]="isLocked ? '' : null">
+          <option value="WPA2">WPA2 Personal (Recomendado)</option>
+          <option value="WPA2-WPA3">WPA2/WPA3 (Moderno Wi-Fi 6)</option>
+          <option value="None">Rede Aberta (Sem Senha)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="input-group">
+      <label>Senha da Rede</label>
+      <div class="input-wrapper">
+        <span class="material-symbols-rounded input-icon">key</span>
+        <input [type]="showPassword ? 'text' : 'password'" class="vmoas-input has-toggle" [formControl]="$any(ssidForm.get('password'))" [attr.disabled]="isLocked ? '' : null" placeholder="Mínimo 8 caracteres">
+        <button type="button" class="password-toggle" (click)="showPassword = !showPassword" [attr.aria-label]="showPassword ? 'Ocultar senha' : 'Mostrar senha'">
+          <span class="material-symbols-rounded">{{ showPassword ? 'visibility_off' : 'visibility' }}</span>
+        </button>
+      </div>
+    </div>
+
+    <div *ngIf="!isLocked" style="display: flex; justify-content: flex-end; margin-top: 15px;">
+      <app-button
+        variant="primary"
+        size="sm"
+        iconLeft="save"
+        [loading]="isApplyingWifi"
+        [disabled]="!ssidForm.get('enable')?.value || ssidForm.invalid"
+        (clicked)="onSave()"
+      >
+        Salvar Rede
+      </app-button>
+    </div>
+
+    <!-- Recursos Avançados de Rádio (TR-181) -->
+    <div *ngIf="isTR181 && hasCapability('advancedRadio')" class="ap-advanced-section">
+      <h4 class="section-divider">
+        Recursos Avançados de Rádio
+        <app-icon-tooltip
+          icon="help"
+          title="Recursos Avançados de Rádio"
+          description="Controles específicos do rádio Wi-Fi. Disponibilidade depende do modelo e firmware da CPE.">
+        </app-icon-tooltip>
+      </h4>
+
+      <div class="toggle-item minimal">
+        <app-help-toggle
+          title="Airtime Fairness (ATF)"
+          description="Distribui o tempo de transmissão de forma justa entre os clientes.">
+        </app-help-toggle>
+        <label class="vmoas-switch small">
+          <input type="checkbox" [formControl]="$any(ssidForm.get('atf'))" (change)="onToggle(ssidForm.get('atfPath')?.value, $event, 'xsd:boolean')">
+          <span class="vmoas-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-item minimal">
+        <app-help-toggle
+          title="MU-MIMO"
+          description="Permite comunicação simultânea com vários dispositivos.">
+        </app-help-toggle>
+        <label class="vmoas-switch small">
+          <input type="checkbox" [formControl]="$any(ssidForm.get('muMimo'))" (change)="onToggle(ssidForm.get('muMimoPath')?.value, $event, 'xsd:boolean')">
+          <span class="vmoas-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-item minimal">
+        <app-help-toggle
+          title="OFDMA"
+          description="Divide o canal em subportadoras para menor latência em IoT.">
+        </app-help-toggle>
+        <label class="vmoas-switch small">
+          <input type="checkbox" [formControl]="$any(ssidForm.get('ofdma'))" (change)="onToggle(ssidForm.get('ofdmaPath')?.value, $event, 'xsd:boolean')">
+          <span class="vmoas-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-item minimal">
+        <app-help-toggle
+          title="TWT (Target Wake Time)"
+          description="Permite que dispositivos IoT durmam mais bateria.">
+        </app-help-toggle>
+        <label class="vmoas-switch small">
+          <input type="checkbox" [formControl]="$any(ssidForm.get('twt'))" (change)="onToggle(ssidForm.get('twtPath')?.value, $event, 'xsd:boolean')">
+          <span class="vmoas-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-item minimal">
+        <app-help-toggle
+          title="BSS Color (802.11ax)"
+          description="Colorização de BSS para reduzir interferência co-canal em redes Wi-Fi 6.">
+        </app-help-toggle>
+        <label class="vmoas-switch small">
+          <input type="checkbox" [formControl]="$any(ssidForm.get('bssColor'))" (change)="onToggle(ssidForm.get('bssColorPath')?.value, $event, 'xsd:boolean')">
+          <span class="vmoas-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Configurações do Access Point (TR-181) -->
+    <div *ngIf="isTR181 && hasCapability('apConfig')" class="ap-advanced-section">
+      <h4 class="section-divider">
+        Configurações do Access Point
+        <app-icon-tooltip
+          icon="help"
+          title="Configurações do Access Point"
+          description="Comportamento da rede Wi-Fi (ocultar, isolamento, beamforming). Disponibilidade varia por fabricante.">
+        </app-icon-tooltip>
+      </h4>
+
+      <div class="toggle-item minimal">
+        <app-help-toggle
+          title="Rede Oculta (Hidden SSID)"
+          description="Oculta o nome da rede em buscas de dispositivos. Clientes precisam digitar o SSID manualmente.">
+        </app-help-toggle>
+        <label class="vmoas-switch small">
+          <input type="checkbox" [formControl]="$any(ssidForm.get('hidden'))" (change)="onToggle(ssidForm.get('hiddenPath')?.value, $event, 'xsd:boolean')">
+          <span class="vmoas-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-item minimal">
+        <app-help-toggle
+          title="Isolamento de Clientes"
+          description="Impede que dispositivos conectados se enxergem na mesma rede.">
+        </app-help-toggle>
+        <label class="vmoas-switch small">
+          <input type="checkbox" [formControl]="$any(ssidForm.get('isolation'))" (change)="onToggle(ssidForm.get('isolationPath')?.value, $event, 'xsd:boolean')">
+          <span class="vmoas-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-item minimal">
+        <app-help-toggle
+          title="Beamforming"
+          description="Foca o sinal na direção dos clientes para melhor alcance.">
+        </app-help-toggle>
+        <label class="vmoas-switch small">
+          <input type="checkbox" [formControl]="$any(ssidForm.get('beamforming'))" (change)="onToggle(ssidForm.get('beamformingPath')?.value, $event, 'xsd:boolean')">
+          <span class="vmoas-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- WPS e WMM (TR-181) -->
+    <div *ngIf="isTR181 && hasCapability('wpsWmm')" class="ap-advanced-section">
+      <h4 class="section-divider">
+        WPS e WMM
+        <app-icon-tooltip
+          icon="help"
+          title="WPS e WMM"
+          description="WPS: conexão rápida. WMM: prioriza voz/vídeo.">
+        </app-icon-tooltip>
+      </h4>
+
+      <div class="toggle-item minimal">
+        <app-help-toggle
+          title="WPS"
+          description="Permite conexão rápida por botão físico ou PIN.">
+        </app-help-toggle>
+        <label class="vmoas-switch small">
+          <input type="checkbox" [formControl]="$any(ssidForm.get('wpsEnable'))" (change)="onToggle(ssidForm.get('wpsEnablePath')?.value, $event, 'xsd:boolean')">
+          <span class="vmoas-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-item minimal">
+        <app-help-toggle
+          title="WMM"
+          description="Prioriza tráfego de voz/vídeo sobre dados comuns.">
+        </app-help-toggle>
+        <label class="vmoas-switch small">
+          <input type="checkbox" [formControl]="$any(ssidForm.get('wmmEnable'))" (change)="onToggle(ssidForm.get('wmmEnablePath')?.value, $event, 'xsd:boolean')">
+          <span class="vmoas-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Acesso LAN/USB (TR-181) -->
+    <div *ngIf="isTR181 && hasCapability('controlFunction')" class="ap-advanced-section">
+      <h4 class="section-divider">
+        Acesso à Rede
+        <app-icon-tooltip
+          icon="help"
+          title="Acesso à Rede"
+          description="Permite que clientes desta rede acessem dispositivos na LAN e USB.">
+        </app-icon-tooltip>
+      </h4>
+
+      <div class="toggle-item minimal">
+        <app-help-toggle
+          title="Acesso à LAN"
+          description="Permite que clientes desta rede acessem dispositivos na LAN.">
+        </app-help-toggle>
+        <label class="vmoas-switch small">
+          <input type="checkbox" [formControl]="$any(ssidForm.get('lanAccess'))" (change)="onToggle(ssidForm.get('lanAccessPath')?.value, $event, 'xsd:boolean')">
+          <span class="vmoas-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-item minimal">
+        <app-help-toggle
+          title="Acesso USB"
+          description="Permite acesso a dispositivos USB compartilhados na rede.">
+        </app-help-toggle>
+        <label class="vmoas-switch small">
+          <input type="checkbox" [formControl]="$any(ssidForm.get('usbAccess'))" (change)="onToggle(ssidForm.get('usbAccessPath')?.value, $event, 'xsd:boolean')">
+          <span class="vmoas-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Controle de Tráfego (TR-181) -->
+    <div *ngIf="isTR181 && hasCapability('trafficControl')" class="ap-advanced-section">
+      <h4 class="section-divider">
+        Controle de Tráfego
+        <app-icon-tooltip
+          icon="help"
+          title="Controle de Tráfego"
+          description="Limita a largura de banda máxima e mínima para clientes.">
+        </app-icon-tooltip>
+      </h4>
+
+      <div class="toggle-item minimal">
+        <app-help-toggle
+          title="Controle de Tráfego"
+          description="Limita a largura de banda máxima e mínima para clientes.">
+        </app-help-toggle>
+        <label class="vmoas-switch small">
+          <input type="checkbox" [formControl]="$any(ssidForm.get('tcEnable'))" (change)="onToggle(ssidForm.get('tcEnablePath')?.value, $event, 'xsd:boolean')">
+          <span class="vmoas-slider"></span>
+        </label>
+      </div>
+
+      <div *ngIf="ssidForm.get('tcEnable')?.value" class="tc-inputs">
+        <div class="input-group">
+          <label>Download Máximo (kbps)</label>
+          <input type="number" class="vmoas-input" [formControl]="$any(ssidForm.get('tcMaxDown'))" min="0" placeholder="0 = ilimitado">
+        </div>
+        <div class="input-group">
+          <label>Upload Máximo (kbps)</label>
+          <input type="number" class="vmoas-input" [formControl]="$any(ssidForm.get('tcMaxUp'))" min="0" placeholder="0 = ilimitado">
+        </div>
+        <div class="input-group">
+          <label>Download Mínimo (kbps)</label>
+          <input type="number" class="vmoas-input" [formControl]="$any(ssidForm.get('tcMinDown'))" min="0" placeholder="0 = sem mínimo">
+        </div>
+        <div class="input-group">
+          <label>Upload Mínimo (kbps)</label>
+          <input type="number" class="vmoas-input" [formControl]="$any(ssidForm.get('tcMinUp'))" min="0" placeholder="0 = sem mínimo">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

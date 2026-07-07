@@ -1,4 +1,4 @@
-import { Injectable, NgZone } from '@angular/core'; // IMPORTAR NgZone
+import { Injectable, NgZone } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
 import { Observable, share } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -10,11 +10,16 @@ import { Router } from '@angular/router';
 export class WebSocketService {
   private socket: Socket;
   private sessionId: string; // Identidade resiliente para tolerar reconexões
+  private activeRooms = new Set<string>();
+  private pendingRooms = new Set<string>(); // Salas solicitadas antes da conexão estabelecida
+
+  // Contagem de referências por sala: permite que múltiplos componentes compartilhem
+  // a mesma inscrição CPE sem que um ngOnDestroy filho destrua a sala para os outros.
+  private roomRefCount = new Map<string, number>();
 
   // Map para gerenciar Observables e evitar memory leaks reaproveitando conexões
   private observablesMap = new Map<string, Observable<any>>();
 
-  // INJETA O NgZone NO CONSTRUTOR
   constructor(private zone: NgZone, private router: Router) {
     // Gera sessionId único por instância (aba do navegador) usando fallback matemático
     // Funciona em HTTP sem TLS (Web Crypto API bloqueada fora de HTTPS)
@@ -32,6 +37,8 @@ export class WebSocketService {
 
     this.socket.on('connect', () => {
       console.log('Conectado ao WebSocket do Servidor ACS.');
+      // Reemite inscrições pendentes que foram solicitadas antes da conexão.
+      this.flushPendingRooms();
       // Reemite heartbeat imediatamente na reconexão para evitar perder lock
       this.reemitHeartbeatOnReconnect();
     });
@@ -64,9 +71,32 @@ export class WebSocketService {
 
   /** Reemite heartbeat para todas as CPEs ativas na reconexão */
   private reemitHeartbeatOnReconnect(): void {
-    // Implementação futura: rastrear CPEs ativas e reemitir heartbeat
-    // Por enquanto, log para debug
-    console.log('Reconexão detectada - heartbeat será reemitido pelo intervalo RxJS.');
+    if (this.activeRooms.size === 0) return;
+    for (const room of this.activeRooms) {
+      if (room === 'all_cpes') {
+        this.socket.emit('subscribe_all_cpes');
+      } else if (room.startsWith('cpe_')) {
+        this.socket.emit('subscribe_cpe', { serialNumber: room.slice(4) });
+      }
+    }
+  }
+
+  /**
+   * Envia inscrições pendentes que foram solicitadas antes do socket conectar.
+   * Isso evita que o técnico entre na tela de CPE antes do WS estar pronto e
+   * nunca receba eventos específicos da CPE (config_success, cpe_updated).
+   */
+  private flushPendingRooms(): void {
+    if (this.pendingRooms.size === 0) return;
+    for (const room of this.pendingRooms) {
+      this.activeRooms.add(room);
+      if (room === 'all_cpes') {
+        this.socket.emit('subscribe_all_cpes');
+      } else if (room.startsWith('cpe_')) {
+        this.socket.emit('subscribe_cpe', { serialNumber: room.slice(4) });
+      }
+    }
+    this.pendingRooms.clear();
   }
 
   /** Gera sessionId UUID v4 com fallback matemático (funciona em HTTP sem TLS) */
@@ -111,6 +141,12 @@ export class WebSocketService {
   onDownloadTestCompleted(): Observable<{ deviceId: string; direction: string; results?: any; timestamp: string }> { return this.on('download_test_completed'); }
   onDownloadTestError(): Observable<{ deviceId: string; direction: string; error: string; results?: any; timestamp: string }> { return this.on('download_test_error'); }
   onDiagnosticsComplete(): Observable<{ serialNumber: string; timestamp: string }> { return this.on('diagnostics_complete'); }
+  onAnalysisUpdate(): Observable<{ serialNumber: string; analysis: any; timestamp: string }> { return this.on('analysis_update'); }
+
+  /** Getter para verificar se socket está conectado sem expor campo privado */
+  get isConnected(): boolean {
+    return this.socket?.connected ?? false;
+  }
 
   /**
    * Método genérico para escutar eventos WebSocket usando Observables Reativos nativos.
@@ -164,6 +200,7 @@ export class WebSocketService {
    * Recebe eventos cpe_online e cpe_updated de qualquer CPE.
    */
   subscribeToAllCpes(): void {
+    this.activeRooms.add('all_cpes');
     this.socket.emit('subscribe_all_cpes');
   }
 
@@ -171,23 +208,51 @@ export class WebSocketService {
    * Cancela inscrição na sala global de CPEs.
    */
   unsubscribeFromAllCpes(): void {
+    this.activeRooms.delete('all_cpes');
     this.socket.emit('unsubscribe_all_cpes');
   }
 
   /**
    * Inscreve-se em atualizações de uma CPE específica.
    * O backend começa a monitorar esta CPE.
+   * Se o socket ainda não estiver conectado, a inscrição é enfileirada e enviada
+   * automaticamente quando a conexão for estabelecida.
    */
   subscribeToCpe(serialNumber: string): void {
-    this.socket.emit('subscribe_cpe', { serialNumber });
+    const room = `cpe_${serialNumber}`;
+    const currentCount = this.roomRefCount.get(room) || 0;
+    this.roomRefCount.set(room, currentCount + 1);
+
+    // Se já era >= 1, a sala já está ativa/pendente — não precisa reemitir.
+    if (currentCount > 0) return;
+
+    if (this.socket.connected) {
+      this.activeRooms.add(room);
+      this.socket.emit('subscribe_cpe', { serialNumber });
+    } else {
+      this.pendingRooms.add(room);
+    }
   }
 
   /**
    * Cancela inscrição em atualizações de uma CPE específica.
-   * O backend para de monitorar esta CPE.
+   * Usa contagem de referências: só emite unsubscribe_cpe para o backend quando
+   * o último interessado (ex: CpeDetailsComponent) destruir sua referência.
+   * Componentes filhos de aba podem chamar sem quebrar a sala para o pai.
    */
   unsubscribeFromCpe(serialNumber: string): void {
-    this.socket.emit('unsubscribe_cpe', { serialNumber });
+    const room = `cpe_${serialNumber}`;
+    const currentCount = this.roomRefCount.get(room) || 0;
+    if (currentCount <= 1) {
+      this.roomRefCount.delete(room);
+      this.activeRooms.delete(room);
+      this.pendingRooms.delete(room);
+      if (this.socket.connected) {
+        this.socket.emit('unsubscribe_cpe', { serialNumber });
+      }
+    } else {
+      this.roomRefCount.set(room, currentCount - 1);
+    }
   }
 
   /**

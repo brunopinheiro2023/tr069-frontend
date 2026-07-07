@@ -119,3 +119,17 @@ export const configPayloadSchema = z.object({
 });
 
 export type ConfigPayloadInput = z.infer<typeof configPayloadSchema>;
+
+// =============================================================================
+// 6. PROVIDER CONFIG (EP43)
+// =============================================================================
+
+export const providerConfigSchema = z.object({
+  adminUserIndex: z.number().int().min(1).max(10),
+  superAdminUserIndex: z.number().int().min(1).max(10),
+  adminPassword: z.string().min(6).max(128).optional().or(z.literal(null)),
+  superAdminPassword: z.string().min(6).max(128).optional().or(z.literal(null)),
+  pppoePassword: z.string().min(1).max(128).optional().or(z.literal(null)),
+});
+
+export type ProviderConfigFormInput = z.infer<typeof providerConfigSchema>;
