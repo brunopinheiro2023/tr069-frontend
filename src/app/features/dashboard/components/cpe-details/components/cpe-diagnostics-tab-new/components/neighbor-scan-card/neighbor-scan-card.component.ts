@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ButtonComponent } from '@app/core/components/button/button.component';
+import { NON_OVERLAPPING_2G, PREFERRED_5G_NO_DFS } from '@app/core/constants/wifi.constants';
 
 export interface NeighborScanResult {
   serialNumber?: string;
@@ -517,16 +518,12 @@ export class NeighborScanCardComponent {
   }
 
   getNonOverlappingChannels(band: string): number[] {
-    // Segurança: valida band parameter
+    // Fonte única no frontend: @app/core/constants/wifi.constants
+    // (espelho do backend src/utils/wifiConstants.js)
     if (band === '2.4GHz') {
-      // Canais não sobrepostos em 2.4GHz (IEEE 802.11-2020, espaçamento 25 MHz)
-      return [1, 6, 11];
+      return NON_OVERLAPPING_2G;
     } else if (band === '5GHz') {
-      // Canais preferenciais SEM DFS (UNII-1 + UNII-3) — mesma lista do backend
-      // (wifiConstants.js PREFERRED_5G_NO_DFS). Canal 165 incluído (UNII-3, sem DFS).
-      // Antes esta lista era [36, 44, 52, 60, 149, 157] — divergia do backend e
-      // incluía canais DFS (52, 60) que o backend evita.
-      return [36, 40, 44, 48, 149, 153, 157, 161, 165];
+      return PREFERRED_5G_NO_DFS;
     }
 
     // Segurança: retorna array vazio para banda inválida
