@@ -7,11 +7,14 @@
   <!-- Ações de coleta -->
   <div class="flex items-center gap-2 flex-wrap">
     <button (click)="requestTelemetry()"
-            [disabled]="isLoading || isViewOnly || isCpeBusy"
+            [disabled]="isLoading || isViewOnly || isCpeBusy || isRefreshInCooldown"
             class="refresh-btn flex items-center gap-1.5"
-            title="Coleta completa: 38 métricas (sinal óptico, WAN, Wi-Fi, CPU, memória, clientes). Duração: 5–10s.">
+            [class.opacity-60]="isRefreshInCooldown"
+            [title]="isRefreshInCooldown
+              ? 'Aguarde o contador regressivo para nova coleta (cache fresco por 60s).'
+              : 'Coleta completa: 38 métricas (sinal óptico, WAN, Wi-Fi, CPU, memória, clientes). Duração: 5–10s.'">
       <span class="material-symbols-rounded text-base" [class.animate-spin]="isLoading">sync</span>
-      Coletar Dados
+      {{ refreshButtonLabel }}
     </button>
     <button (click)="requestVitals()"
             [disabled]="vitalsLoading || isViewOnly || isCpeBusy"

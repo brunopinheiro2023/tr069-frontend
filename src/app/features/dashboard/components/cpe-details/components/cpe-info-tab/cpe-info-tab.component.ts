@@ -253,9 +253,29 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
   private userRequestedTelemetry = false; // Flag para distinguir coleta on-demand de scheduler passivo
 
+  // ── Contador regressivo do botão "Coletar Dados" (60s) ──────────────────────
+  // Após qualquer coleta (cache hit ou on-demand completa), o botão fica bloqueado
+  // por 60s com contador regressivo visível. Alinhado com TELEMETRY_CACHE_TTL (60s)
+  // do backend — evita spamming e respeita o TTL do cache on-demand.
+  refreshCountdownSeconds = 0; // 0 = botão liberado; >0 = contador regressivo ativo
+  private refreshCountdownId: ReturnType<typeof setInterval> | null = null;
+  private readonly REFRESH_COOLDOWN_SECONDS = 60;
+
   // ── Getter para debounce do botão (alias de telemetryLoading) ─────────────
   get isLoading(): boolean {
     return this.telemetryLoading;
+  }
+
+  // ── Getter: botão "Coletar Dados" bloqueado durante cooldown ──────────────
+  get isRefreshInCooldown(): boolean {
+    return this.refreshCountdownSeconds > 0;
+  }
+
+  // ── Getter: label dinâmico do botão durante o contador regressivo ─────────
+  get refreshButtonLabel(): string {
+    return this.refreshCountdownSeconds > 0
+      ? `Coletar Dados (${this.refreshCountdownSeconds}s)`
+      : 'Coletar Dados';
   }
 
   // ── Subject para controle de emissão com exhaustMap (prevenção de Efeito Eco) ──
@@ -389,6 +409,11 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
             ? 'Dados do banco (Redis offline) — podem estar desatualizados.'
             : (response.message || 'Exibindo dados armazenados em cache.');
           this.toastService.info(msg);
+          // Inicia contador regressivo de 60s (alinhado com TTL on-demand do backend).
+          // Para cache hit, usa cacheAgeMs para refletir o tempo restante real.
+          if (response.source === 'cache') {
+            this.startRefreshCooldown(response.cacheAgeMs ?? null);
+          }
           this.cdr.markForCheck();
           return;
         }
@@ -447,7 +472,10 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
       clearTimeout(this.telemetryTimeoutId);
       this.telemetryTimeoutId = null;
     }
-    
+
+    // Limpa contador regressivo do botão "Coletar Dados"
+    this.stopRefreshCooldown();
+
     // Limpa timers de flash visual
     this.clearAllFlashTimers();
     
@@ -960,10 +988,53 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   /** Timeout para desativar o spinner se a CPE não responder. */
   private telemetryTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
+  /**
+   * Inicia contador regressivo de 60s no botão "Coletar Dados".
+   * Chamado após:
+   *   - response source='cache' (cache hit — dados frescos, próximo on-demand só em 60s)
+   *   - evento WS telemetry_complete (coleta on-demand completou — novo cache fresco por 60s)
+   * Se receber cacheAgeMs do backend, subtrai da duração para refletir o tempo restante real.
+   */
+  private startRefreshCooldown(cacheAgeMs: number | null = null): void {
+    this.stopRefreshCooldown();
+    // Se o backend informou a idade do cache, o cooldown é o tempo restante até 60s
+    const remainingSeconds = (cacheAgeMs !== null && cacheAgeMs >= 0)
+      ? Math.max(0, this.REFRESH_COOLDOWN_SECONDS - Math.floor(cacheAgeMs / 1000))
+      : this.REFRESH_COOLDOWN_SECONDS;
+    this.refreshCountdownSeconds = remainingSeconds;
+    if (this.refreshCountdownSeconds <= 0) {
+      this.cdr.markForCheck();
+      return;
+    }
+    this.refreshCountdownId = setInterval(() => {
+      this.refreshCountdownSeconds--;
+      if (this.refreshCountdownSeconds <= 0) {
+        this.stopRefreshCooldown();
+      }
+      this.cdr.markForCheck();
+    }, 1000);
+    this.cdr.markForCheck();
+  }
+
+  /** Cancela o contador regressivo e libera o botão. */
+  private stopRefreshCooldown(): void {
+    if (this.refreshCountdownId) {
+      clearInterval(this.refreshCountdownId);
+      this.refreshCountdownId = null;
+    }
+    this.refreshCountdownSeconds = 0;
+  }
+
   /** Solicita telemetria sob demanda ao backend (botão de refresh manual). */
   requestTelemetry(): void {
     if (!isValidSerialNumber(this.serialNumber)) {
       this.toastService.error('Número de série inválido para solicitação de telemetria.');
+      return;
+    }
+
+    // Bloqueia clique durante cooldown do contador regressivo
+    if (this.isRefreshInCooldown) {
+      this.toastService.info(`Aguarde ${this.refreshCountdownSeconds}s para nova coleta.`);
       return;
     }
 
@@ -1504,6 +1575,9 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
           } else {
             this.toastService.success('Coleta de telemetria concluída com sucesso.');
           }
+
+          // Inicia contador regressivo de 60s — novo cache fresco (TTL 60s no backend)
+          this.startRefreshCooldown(null);
 
           // Recarrega gráfico completo após coleta on-demand para garantir dados consistentes
           this.loadHistory();
