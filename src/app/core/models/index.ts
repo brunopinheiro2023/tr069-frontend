@@ -628,7 +628,7 @@ export interface WifiHost {
 
 /** Ação corretiva proposta por um insight (quando actionable=true). */
 export interface WifiInsightAction {
-  type: 'set_channel' | 'set_power' | 'set_bandwidth' | 'enable_beamforming' | 'info';
+  type: 'set_channel' | 'change_channel' | 'set_power' | 'set_bandwidth' | 'enable_beamforming' | 'info';
   band: '2.4GHz' | '5GHz';
   parameter: string;  // caminho TR-181 para SetParameterValues
   value: string;
@@ -638,7 +638,7 @@ export interface WifiInsightAction {
 export interface WifiInsight {
   id: string;
   severity: 'info' | 'warning' | 'critical';
-  category: 'canal' | 'sinal' | 'qoe' | 'configuracao' | 'saturacao';
+  category: 'canal' | 'sinal' | 'qoe' | 'configuracao' | 'saturacao' | 'congestionamento';
   title: string;
   description: string;
   sourceParam: string;  // parâmetro TR-181 que originou o insight
