@@ -2,11 +2,12 @@ import { Component, Input, OnInit, OnDestroy, OnChanges, SimpleChanges, DestroyR
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { filter, Subscription, interval, Subject, EMPTY, timer, timeout, retry } from 'rxjs';
+import { filter, interval, Subject, EMPTY, timer, timeout, retry, switchMap } from 'rxjs';
 import { exhaustMap, catchError, bufferTime } from 'rxjs/operators';
 import { ChartDataset, ChartOptions } from 'chart.js';
 import { NgChartsModule } from 'ng2-charts';
 import { CpeDevice, TelemetryAlert, TelemetryAnalysis, TelemetryData, TelemetryMetric, TelemetrySnapshot } from '../../../../../../core/models';
+import { environment } from '../../../../../../../environments/environment';
 import { CpeService } from '../../../../../../core/services/cpe.service';
 import { WebSocketService } from '../../../../../../core/services/websocket.service';
 import { ToastService } from '../../../../../../core/services/toast.service';
@@ -53,6 +54,11 @@ const TELEMETRY_CONFIG = {
   VALUE_CHANGE_BUFFER_MS: 500,
 } as const;
 
+// ── Limites de listas e gráfico ──
+// Centralizados aqui para facilitar ajuste sem caçar magic numbers no código.
+const MAX_CHART_POINTS = 100;  // pontos máximos em tempo real no gráfico
+const MAX_ALERT_ENTRIES = 50;  // entradas máximas no array cpeAlerts
+
 // ── Thresholds ópticos (dBm) ──
 const RX_THRESHOLDS = {
   OK: -22,
@@ -87,14 +93,15 @@ const FLASH_VISIBLE_METRICS = new Set<string>([
 const LOG_PREFIX = '[CpeInfoTab]';
 
 function logInfo(message: string, data?: unknown): void {
-  console.log(`${LOG_PREFIX} ${message}`, data || '');
+  if (!environment.production) console.log(`${LOG_PREFIX} ${message}`, data || '');
 }
 
 function logWarn(message: string, data?: unknown): void {
-  console.warn(`${LOG_PREFIX} ${message}`, data || '');
+  if (!environment.production) console.warn(`${LOG_PREFIX} ${message}`, data || '');
 }
 
 function logError(message: string, error?: unknown): void {
+  // erros são sempre logados (inclusive em produção) para facilitar diagnóstico de incidentes
   console.error(`${LOG_PREFIX} ${message}`, error || '');
 }
 
@@ -171,7 +178,7 @@ const PARAM_MAP: ReadonlyArray<[string, string]> = [
   ['txpower', 'txPower'],
   ['transceivertemperature', 'temp'],
   ['temperature', 'temp'], // Mapeamento direto para temperatura do SoC
-  ['supplyvottage', 'voltage'],
+  ['supplyvottage', 'voltage'], // typo intencional do firmware TP-Link (SupplyVottage ≠ SupplyVoltage)
   ['supplyvoltage', 'voltage'],
   ['biascurrent', 'bias'],
   ['bytesreceived', 'bytesRx'],
@@ -285,7 +292,8 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   rawHistory: TelemetrySnapshot[] = [];
   historyLoading = false;
   selectedPeriodHours = 6; // Período padrão
-  private historySub?: Subscription;
+  // Subject que aciona loadHistory via switchMap — cancela request anterior automaticamente
+  private readonly historyTrigger$ = new Subject<number>();
   private readonly timeFormatter = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
   // ── Análise avançada agregada ──────────────────────────────────────────
@@ -444,6 +452,37 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     }
     this.loadFromFrontendCache();
     this.extractFallbackTelemetry(); // Fallback imediato de 0ms a partir do BD
+
+    // ── Barramento de histórico com switchMap (cancela request anterior automaticamente) ──
+    // Garante que mudanças rápidas de período não causam race condition de responses.
+    this.historyTrigger$.pipe(
+      takeUntilDestroyed(this.destroyRef),
+      switchMap((hours) => {
+        this.historyLoading = true;
+        logInfo('Carregando histórico de telemetria', { serialNumber: this.serialNumber, periodHours: hours });
+        return this.cpeService.getTelemetryVitalsHistory(this.serialNumber, hours).pipe(
+          timeout(30_000),
+          catchError((err) => {
+            logError('Erro ao carregar histórico de telemetria', err);
+            this.buildChart();
+            this.historyLoading = false;
+            this.cdr.detectChanges();
+            return EMPTY;
+          })
+        );
+      })
+    ).subscribe({
+      next: (res) => {
+        this.rawHistory = (res.data as TelemetrySnapshot[]) || [];
+        this.telemetryCacheService.saveHistory(this.serialNumber, this.selectedPeriodHours, this.rawHistory)
+          .catch(e => logError('Erro ao salvar histórico no cache local', e));
+        this.buildChart();
+        this.historyLoading = false;
+        logInfo('Histórico carregado com sucesso', { count: this.rawHistory.length });
+        this.cdr.detectChanges();
+      }
+    });
+
     // Registra listeners WebSocket antes das chamadas HTTP
     this.listenForTelemetryUpdates();
     this.listenForTelemetryProgress(); // Listener para progresso por chunk
@@ -454,7 +493,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     this.listenForAnalysisUpdates(); // Listener para atualização de análise em tempo real
     this.startHeartbeat(); // Inicia heartbeat para manter controle de Driver
     // Escalonamento das chamadas HTTP para evitar burst (429 Too Many Requests)
-    this.loadLatestVitals();       // NOVO: 0ms — carga imediata do snapshot TelemetryVitals
+    this.loadLatestVitals();       // 0ms — carga imediata do snapshot TelemetryVitals
     this.loadHistory();            // imediato — gráfico precisa de dados antes de qualquer update
     timer(150).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.loadFromCache());
     timer(300).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.loadAnalysis());
@@ -478,12 +517,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
     // Limpa timers de flash visual
     this.clearAllFlashTimers();
-    
-    // Cancela subscription de histórico se existir
-    if (this.historySub) {
-      this.historySub.unsubscribe();
-      this.historySub = undefined;
-    }
+    // historyTrigger$ é gerenciado por takeUntilDestroyed — sem cleanup manual necessário
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -510,10 +544,13 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   triggerFlash(metricKey: string): void {
     if (!metricKey || typeof metricKey !== 'string') return;
     
-    // Limita acumulação de timers em CPEs com muitas métricas ou alta frequência de chunks
+    // Quando o limite de timers é atingido, expulsa o mais antigo (FIFO)
+    // para liberar espaço em vez de silenciosamente descartar o novo flash.
     if (this.flashTimers.size >= TELEMETRY_CONFIG.MAX_FLASH_TIMERS) {
-      logWarn(`Limite de timers atingido (${TELEMETRY_CONFIG.MAX_FLASH_TIMERS}), ignorando flash para ${metricKey}`);
-      return;
+      const oldestKey = this.flashTimers.keys().next().value as string;
+      clearTimeout(this.flashTimers.get(oldestKey)!);
+      this.flashTimers.delete(oldestKey);
+      this.flashingMetrics.delete(oldestKey);
     }
     
     // Não recria timer já ativo para a mesma chave
@@ -777,7 +814,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
   // ── Getters legados (WAN, Óptica, Hardware) ────────────────────────────
   get isRxCritical(): boolean {
-    const rxPower = this.safeExtractValue(this.telemetryData!, 'opticalRx');
+    const rxPower = this.safeExtractValue(this.telemetryData as any, 'opticalRx');
     return rxPower !== null && rxPower < RX_THRESHOLDS.WARNING; // alinhado com RX_THRESHOLDS
   }
 
@@ -1311,7 +1348,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
           value: alert.value,
           triggeredAt: alert.timestamp,
           message: alert.message,
-        }, ...this.cpeAlerts].slice(0, 50);
+        }, ...this.cpeAlerts].slice(0, MAX_ALERT_ENTRIES);
         this.cdr.detectChanges();
       });
 
@@ -1343,7 +1380,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
             message: event.message,
           }));
         if (cpeAlerts.length > 0) {
-          this.cpeAlerts = [...cpeAlerts, ...this.cpeAlerts].slice(0, 50);
+          this.cpeAlerts = [...cpeAlerts, ...this.cpeAlerts].slice(0, MAX_ALERT_ENTRIES);
           this.cdr.detectChanges();
         }
       });
@@ -1649,7 +1686,8 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
    * @param key - Chave da métrica (ex: 'cpuUsage', 'memoryFree')
    * @returns Valor numérico ou null se inválido
    */
-  private safeExtractValue(data: TelemetryData, key: string): number | null {
+  private safeExtractValue(data: TelemetryData | null | undefined, key: string): number | null {
+    if (data == null) return null;
     const item = data[key];
     if (item === null || item === undefined) return null;
     
@@ -1702,41 +1740,14 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     this.loadHistory();
   }
 
-  /** Carrega raw history e monta datasets do Chart.js. */
+  /**
+   * Dispara o carregamento do histórico via historyTrigger$ (switchMap no ngOnInit).
+   * O switchMap cancela automaticamente qualquer request HTTP anterior em voo,
+   * eliminando a race condition de respostas fora de ordem ao trocar o período.
+   */
   private loadHistory(): void {
     if (!isValidSerialNumber(this.serialNumber)) return;
-    
-    this.historyLoading = true;
-    logInfo('Carregando histórico de telemetria', { serialNumber: this.serialNumber, periodHours: this.selectedPeriodHours });
-
-    if (this.historySub) {
-      this.historySub.unsubscribe();
-    }
-
-    this.historySub = this.cpeService.getTelemetryVitalsHistory(this.serialNumber, this.selectedPeriodHours)
-      .pipe(
-        takeUntilDestroyed(this.destroyRef),
-        timeout(30_000),
-        catchError((err) => {
-          logError('Erro ao carregar histórico de telemetria', err);
-          this.buildChart();
-          this.historyLoading = false;
-          this.cdr.detectChanges();
-          return EMPTY;
-        })
-      )
-      .subscribe({
-      next: (res) => {
-        this.rawHistory = (res.data as TelemetrySnapshot[]) || [];
-        // Fire-and-forget: não bloqueia renderização com await
-        this.telemetryCacheService.saveHistory(this.serialNumber, this.selectedPeriodHours, this.rawHistory)
-          .catch(e => logError('Erro ao salvar histórico no cache local', e));
-        this.buildChart();
-        this.historyLoading = false;
-        logInfo('Histórico carregado com sucesso', { count: this.rawHistory.length });
-        this.cdr.detectChanges();
-      }
-    });
+    this.historyTrigger$.next(this.selectedPeriodHours);
   }
 
   /** Extrai valor de documento TelemetryRaw (nested) ou evento WebSocket (flat) */
@@ -1848,8 +1859,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     if (this.opticalChartDatasets[0]) this.opticalChartDatasets[0].data.push(rxValue);
     if (this.opticalChartDatasets[1]) this.opticalChartDatasets[1].data.push(txValue);
 
-    const MAX_POINTS = 100;
-    if (this.chartLabels.length > MAX_POINTS) {
+    if (this.chartLabels.length > MAX_CHART_POINTS) {
       this.chartLabels.shift();
       this.opticalChartLabels.shift();
       this.chartDatasets.forEach(ds => ds.data.shift());
@@ -1877,8 +1887,8 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     this.telemetryCacheService.loadHistory(this.serialNumber, this.selectedPeriodHours)
       .then(currentHistory => {
         const updatedHistory = [...(currentHistory || []), newSnapshot];
-        if (updatedHistory.length > MAX_POINTS) {
-          updatedHistory.splice(0, updatedHistory.length - MAX_POINTS);
+        if (updatedHistory.length > MAX_CHART_POINTS) {
+          updatedHistory.splice(0, updatedHistory.length - MAX_CHART_POINTS);
         }
         return this.telemetryCacheService.saveHistory(this.serialNumber, this.selectedPeriodHours, updatedHistory);
       })
