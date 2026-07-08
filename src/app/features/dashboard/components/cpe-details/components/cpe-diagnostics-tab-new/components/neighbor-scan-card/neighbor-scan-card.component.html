@@ -58,18 +58,53 @@
   <!-- Dados de saturação e análise -->
   <div *ngIf="!isRunning && result && hasSaturationData" class="saturation-content">
     
-    <!-- Painel de Status para o Técnico -->
+    <!-- Painel de Status para o Técnico (inclui todos os insights/diagnósticos) -->
     <div class="status-dashboard">
-      <div class="status-item" [class.status-ok]="!hasCongestion" [class.status-warning]="hasCongestion">
-        <span class="material-symbols-rounded">speed</span>
-        <div>
-          <strong>{{ hasCongestion ? 'Congestionamento Detectado' : 'Rede Otimizada' }}</strong>
-          <span>{{ hasCongestion ? 'Recomenda-se ajuste de canal' : 'Nenhuma ação necessária' }}</span>
+      <div class="status-item" [class]="statusClass">
+        <!-- Header do status -->
+        <div class="status-header">
+          <span class="material-symbols-rounded status-icon">{{ statusIcon }}</span>
+          <div class="status-text">
+            <strong>{{ statusTitle }}</strong>
+            <span>{{ statusSubtitle }}</span>
+          </div>
+          <span *ngIf="hasInsights" class="status-badge">{{ insightsCount }}</span>
+        </div>
+
+        <!-- Todos os insights dentro do card (actionable com botão, não-actionable como diagnóstico) -->
+        <div *ngIf="hasInsights" class="status-suggestions">
+          <div *ngFor="let insight of allInsights"
+               class="suggestion-card"
+               [class]="insightSeverityClass(insight.severity)">
+            <div class="suggestion-header">
+              <span class="material-symbols-rounded suggestion-icon">{{ insightIcon(insight.severity) }}</span>
+              <span class="suggestion-title">{{ insight.title }}</span>
+              <span class="suggestion-category">{{ insightCategoryLabel(insight.category) }}</span>
+            </div>
+            <p class="suggestion-description">{{ insight.description }}</p>
+
+            <!-- Detalhe da ação + botão Aplicar (só para insights actionable) -->
+            <div class="suggestion-action" *ngIf="insight.actionable && insight.action">
+              <div class="suggestion-action-detail">
+                <span class="material-symbols-rounded">arrow_forward</span>
+                <strong>{{ insightActionLabel(insight) }}</strong>
+              </div>
+
+              <button (click)="onApplyRecommendation(insight, $event)"
+                      [disabled]="applyInProgress"
+                      class="suggestion-apply-btn">
+                <span class="material-symbols-rounded" [class.animate-spin]="applyInProgress">
+                  {{ applyInProgress ? 'progress_activity' : 'bolt' }}
+                </span>
+                Aplicar
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Resumo de otimização de canal -->
+    <!-- Resumo de otimização de canal (apenas texto — sugestões estão no status-dashboard acima) -->
     <div class="optimization-summary">
       <div class="summary-header">
         <span class="material-symbols-rounded">tune</span>

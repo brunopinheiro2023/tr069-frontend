@@ -88,93 +88,21 @@
       </div>
     </div>
 
-    <!-- ── SEÇÃO: Insights Wi-Fi ──────────────────────────────────────────────── -->
+    <!-- Loading insights — feedback visual enquanto carrega -->
     <div *ngIf="insightsLoading" class="flex items-center gap-2 text-sm text-gray-400 py-4 justify-center">
       <span class="material-symbols-rounded text-base animate-spin">progress_activity</span>
       Carregando insights...
     </div>
 
-    <div *ngIf="!insightsLoading && wifiInsights.length > 0" class="space-y-3">
-      <h3 class="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-        <span class="material-symbols-rounded text-lg">tips_and_updates</span>
-        Insights Wi-Fi
-        <span *ngIf="(wifiHostsSummary?.insightsSummary?.critical ?? 0) > 0"
-              class="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-          {{ wifiHostsSummary?.insightsSummary?.critical }} crítico(s)
-        </span>
-      </h3>
-
-      <!-- Apply feedback global -->
-      <div *ngIf="applySuccess" class="text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded p-3 border border-green-300">
-        ✅ {{ applySuccess }}
-      </div>
-      <div *ngIf="applyError" class="text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded p-3 border border-red-300">
-        ❌ {{ applyError }}
-      </div>
-
-      <!-- Cards de insight (ordenados por severidade pelo backend) -->
-      <div *ngFor="let insight of wifiInsights"
-           class="rounded-lg border p-4 transition-all"
-           [ngClass]="insightSeverityClass(insight.severity)">
-        <div class="flex items-start justify-between gap-3">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-1.5 mb-1">
-              <span class="text-base">{{ insightBadge(insight.severity) }}</span>
-              <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ insight.title }}</span>
-              <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                {{ insight.category }}
-              </span>
-            </div>
-            <p class="text-xs text-gray-600 dark:text-gray-300">{{ insight.description }}</p>
-          </div>
-
-          <!-- Botão aplicar — apenas para insights actionable -->
-          <button *ngIf="insight.actionable && insight.action"
-                  (click)="applyWifiRecommendation(insight)"
-                  [disabled]="applyInProgress"
-                  class="flex-shrink-0 text-xs px-3 py-1.5 rounded-md
-                         bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
-                         text-white font-medium transition-colors flex items-center gap-1">
-            <span class="material-symbols-rounded text-sm" [class.animate-spin]="applyInProgress">
-              {{ applyInProgress ? 'progress_activity' : 'tune' }}
-            </span>
-            Aplicar
-          </button>
-        </div>
-
-        <!-- Detalhes da ação -->
-        <div *ngIf="insight.action && insight.actionable"
-             class="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-          <span class="material-symbols-rounded text-xs">arrow_forward</span>
-          <ng-container [ngSwitch]="insight.action.type">
-            <ng-container *ngSwitchCase="'set_channel'">
-              Mudar canal {{ insight.action.band }} para
-              <strong class="text-gray-700 dark:text-gray-300 ml-1">{{ insight.action.value }}</strong>
-            </ng-container>
-            <ng-container *ngSwitchCase="'set_power'">
-              Ajustar potência {{ insight.action.band }} para
-              <strong class="text-gray-700 dark:text-gray-300 ml-1">{{ insight.action.value }}%</strong>
-            </ng-container>
-            <ng-container *ngSwitchCase="'set_bandwidth'">
-              Mudar largura {{ insight.action.band }} para
-              <strong class="text-gray-700 dark:text-gray-300 ml-1">{{ insight.action.value }}</strong>
-            </ng-container>
-            <ng-container *ngSwitchDefault>
-              Aplicar configuração em {{ insight.action.band }}:
-              <strong class="text-gray-700 dark:text-gray-300 ml-1">{{ insight.action.value }}</strong>
-            </ng-container>
-          </ng-container>
-        </div>
-      </div>
+    <!-- Apply feedback global — fica acima do card para visibilidade -->
+    <div *ngIf="applySuccess" class="text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded p-3 border border-green-300">
+      ✅ {{ applySuccess }}
+    </div>
+    <div *ngIf="applyError" class="text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded p-3 border border-red-300">
+      ❌ {{ applyError }}
     </div>
 
-    <!-- Empty state insights -->
-    <div *ngIf="!insightsLoading && wifiInsights.length === 0 && hasValidWifiData"
-         class="text-sm text-gray-400 text-center py-4">
-      Nenhum insight gerado — ambiente Wi-Fi sem alertas.
-    </div>
-
-    <!-- Card de Varredura de Redes Vizinhas -->
+    <!-- Card de Varredura de Redes Vizinhas (inclui TODOS os insights/diagnósticos) -->
     <div class="analysis-section">
       <app-neighbor-scan-card
         [serialNumber]="serialNumber"
@@ -182,7 +110,10 @@
         [isSupported]="true"
         [isRunning]="neighborScanInProgress"
         [result]="$any(neighborScanData)"
-        (runScan)="triggerNeighborScan()">
+        [insights]="wifiInsights"
+        [applyInProgress]="applyInProgress"
+        (runScan)="triggerNeighborScan()"
+        (applyRecommendation)="applyWifiRecommendation($event)">
       </app-neighbor-scan-card>
     </div>
 

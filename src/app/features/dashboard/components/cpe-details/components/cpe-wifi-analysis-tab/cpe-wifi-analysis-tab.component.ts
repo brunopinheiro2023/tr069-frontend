@@ -401,6 +401,15 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Filtra apenas insights NÃO-actionable (sinal, QoE, SNR, throughput, ruído).
+   * Insights actionable (canal, largura, potência) são exibidos no card de otimização
+   * (neighbor-scan-card) para centralizar as sugestões aplicáveis em um único lugar.
+   */
+  get nonActionableInsights(): WifiInsight[] {
+    return (this.wifiInsights || []).filter(i => !i?.actionable);
+  }
+
+  /**
    * Helpers para o template de insights.
    */
   insightSeverityClass(severity: string): string {

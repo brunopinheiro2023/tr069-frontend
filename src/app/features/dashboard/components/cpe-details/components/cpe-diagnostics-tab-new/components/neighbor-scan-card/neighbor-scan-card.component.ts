@@ -8,6 +8,7 @@ import {
   ChannelEntry,
   ChannelSuggestion,
   RadioQuality,
+  WifiInsight,
 } from '@app/core/models';
 
 /** Estrutura de saturação de canal retornada pelo backend (wifiNeighborScanService). */
@@ -118,6 +119,12 @@ export class NeighborScanCardComponent {
   @Input() isSupported: boolean = true;
   @Input() isRunning: boolean = false;
   @Input() history: NeighborScanResult[] = [];
+  /** Insights actionable vindos do wifi-analysis-tab (sugestões de otimização). */
+  @Input() insights: WifiInsight[] = [];
+  /** Estado de loading do apply (desabilita botões durante envio). */
+  @Input() applyInProgress: boolean = false;
+  /** Emite quando o usuário clica em "Aplicar" numa sugestão. */
+  @Output() applyRecommendation = new EventEmitter<WifiInsight>();
 
   // Setter memoiza channels e radioQuality quando result muda — evita recálculo a cada CD cycle
   private _result: NeighborScanResult | null = null;
@@ -389,6 +396,154 @@ export class NeighborScanCardComponent {
     // Segurança: não emite se readOnly está true
     if (!this.readOnly) {
       this.runScan.emit();
+    }
+  }
+
+  /**
+   * Todos os insights vindos do backend (actionable e não-actionable).
+   * O card exibe ambos: actionable com botão "Aplicar", não-actionable como diagnóstico.
+   * Ordenação: critical primeiro, depois warning, depois info.
+   * Dentro da mesma severidade, actionable primeiro (botão Aplicar tem prioridade visual).
+   */
+  get allInsights(): WifiInsight[] {
+    const order = { critical: 0, warning: 1, info: 2 };
+    return (this.insights || []).slice().sort((a, b) => {
+      const sa = order[a.severity] ?? 9;
+      const sb = order[b.severity] ?? 9;
+      if (sa !== sb) return sa - sb;
+      // Dentro da mesma severidade, actionable primeiro
+      const aa = a.actionable ? 0 : 1;
+      const ab = b.actionable ? 0 : 1;
+      return aa - ab;
+    });
+  }
+
+  /** Apenas insights actionable (com botão "Aplicar"). */
+  get actionableInsights(): WifiInsight[] {
+    return this.allInsights.filter(i => i?.actionable === true && i?.action);
+  }
+
+  /** Insights críticos (severity === 'critical'). */
+  get criticalInsights(): WifiInsight[] {
+    return this.allInsights.filter(i => i.severity === 'critical');
+  }
+
+  /** True quando há pelo menos 1 insight — expande o status-dashboard. */
+  get hasInsights(): boolean {
+    return this.allInsights.length > 0;
+  }
+
+  /** True quando há pelo menos 1 insight actionable. */
+  get hasActionableInsights(): boolean {
+    return this.actionableInsights.length > 0;
+  }
+
+  /** True quando há pelo menos 1 insight crítico. */
+  get hasCriticalInsights(): boolean {
+    return this.criticalInsights.length > 0;
+  }
+
+  /** Contagem total de insights — exibida no badge do status. */
+  get insightsCount(): number {
+    return this.allInsights.length;
+  }
+
+  /**
+   * Status dinâmico do card:
+   * - Com insights críticos → "Atenção Necessária" (vermelho)
+   * - Com insights actionable (sem críticos) → "Otimizações Disponíveis" (azul)
+   * - Com insights (só diagnósticos warning) → "Diagnósticos Wi-Fi" (amarelo)
+   * - Sem insights mas com congestionamento → "Congestionamento Detectado"
+   * - Sem insights e sem congestionamento → "Rede Otimizada"
+   */
+  get statusTitle(): string {
+    if (this.hasCriticalInsights) return 'Atenção Necessária';
+    if (this.hasActionableInsights) return 'Otimizações Disponíveis';
+    if (this.hasInsights) return 'Diagnósticos Wi-Fi';
+    return this.hasCongestion ? 'Congestionamento Detectado' : 'Rede Otimizada';
+  }
+
+  get statusSubtitle(): string {
+    if (this.hasCriticalInsights) {
+      const crit = this.criticalInsights.length;
+      const act = this.actionableInsights.length;
+      if (act > 0) return `${crit} alerta${crit > 1 ? 's' : ''} crítico${crit > 1 ? 's' : ''} e ${act} otimização${act > 1 ? 'ões' : ''} aplicável${act > 1 ? 'eis' : ''}`;
+      return `${crit} alerta${crit > 1 ? 's' : ''} crítico${crit > 1 ? 's' : ''} detectado${crit > 1 ? 's' : ''}`;
+    }
+    if (this.hasActionableInsights) {
+      const act = this.actionableInsights.length;
+      const total = this.insightsCount;
+      if (act === total) return `${act} otimização${act > 1 ? 'ões' : ''} aplicável${act > 1 ? 'eis' : ''}`;
+      return `${act} otimização${act > 1 ? 'ões' : ''} aplicável${act > 1 ? 'eis' : ''} em ${total} diagnóstico${total > 1 ? 's' : ''}`;
+    }
+    if (this.hasInsights) {
+      const n = this.insightsCount;
+      return `${n} diagnóstico${n > 1 ? 's' : ''} disponível${n > 1 ? 'veis' : ''}`;
+    }
+    return this.hasCongestion ? 'Recomenda-se ajuste de canal' : 'Nenhuma ação necessária';
+  }
+
+  /** Ícone Material Symbols do status (substitui emojis). */
+  get statusIcon(): string {
+    if (this.hasCriticalInsights) return 'error';
+    if (this.hasActionableInsights) return 'tune';
+    if (this.hasInsights) return 'tips_and_updates';
+    return this.hasCongestion ? 'warning' : 'check_circle';
+  }
+
+  /** Classe CSS do status-item baseada no estado. */
+  get statusClass(): string {
+    if (this.hasCriticalInsights) return 'status-critical';
+    if (this.hasActionableInsights) return 'status-action';
+    if (this.hasInsights) return 'status-warning';
+    return this.hasCongestion ? 'status-warning' : 'status-ok';
+  }
+
+  /** Emite o insight para o componente pai aplicar a otimização. */
+  onApplyRecommendation(insight: WifiInsight, event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.applyInProgress) return;
+    this.applyRecommendation.emit(insight);
+  }
+
+  /** Classe CSS do card de insight por severidade. */
+  insightSeverityClass(severity: string): string {
+    if (severity === 'critical') return 'insight-critical';
+    if (severity === 'warning') return 'insight-warning';
+    return 'insight-info';
+  }
+
+  /** Ícone Material Symbols do insight por severidade (sem emojis). */
+  insightIcon(severity: string): string {
+    if (severity === 'critical') return 'error';
+    if (severity === 'warning') return 'warning';
+    return 'info';
+  }
+
+  /** Label legível para a categoria do insight (PT-BR, sem underscores). */
+  insightCategoryLabel(category: string): string {
+    const labels: Record<string, string> = {
+      sinal: 'Sinal',
+      saturacao: 'Saturação',
+      congestionamento: 'Congestionamento',
+      configuracao: 'Configuração',
+      qoe: 'QoE',
+      throughput: 'Throughput',
+    };
+    return labels[category] || category || 'Info';
+  }
+
+  /** Texto curto da ação a ser aplicada (para o botão/detalhe). */
+  insightActionLabel(insight: WifiInsight): string {
+    const a = insight?.action;
+    if (!a) return '';
+    switch (a.type) {
+      case 'set_channel':    return `Canal ${a.band} → ${a.value}`;
+      case 'change_channel': return `Canal ${a.band} → ${a.value}`;
+      case 'set_power':      return `Potência ${a.band} → ${a.value}%`;
+      case 'set_bandwidth':  return `Largura ${a.band} → ${a.value}`;
+      default:               return `${a.band}: ${a.value}`;
     }
   }
 
