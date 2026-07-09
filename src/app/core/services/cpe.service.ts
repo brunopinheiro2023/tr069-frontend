@@ -298,8 +298,11 @@ export class CpeService {
    * @param serialNumber - Número de série da CPE
    * @param page - Página atual (padrão: 1)
    * @param limit - Itens por página (padrão: 50, máximo: 200)
+   * @param forceRefresh - Quando true, ignora o cache (usado após evento WS
+   *   wifi_data_refreshed para garantir dados frescos — sem isso o CACHE_TTL
+   *   de 30s serviria dados stale e a tabela "atualizada" não mudaria).
    */
-  getConnectedDevices(serialNumber: string, page: number = 1, limit: number = 50): Observable<ConnectedDevicesData> {
+  getConnectedDevices(serialNumber: string, page: number = 1, limit: number = 50, forceRefresh: boolean = false): Observable<ConnectedDevicesData> {
     const cacheKey = `connected_devices_${serialNumber}_${page}_${limit}`;
     let cached = this.cache.get(cacheKey);
 
@@ -315,7 +318,9 @@ export class CpeService {
       }
     }
 
-    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+    // forceRefresh bypassa o cache — usado pelo reloadDevicesDataSilently após
+    // o backend confirmar (via WS) que a CPE respondeu com dados novos.
+    if (!forceRefresh && cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
       return of(cached.data as ConnectedDevicesData);
     }
 

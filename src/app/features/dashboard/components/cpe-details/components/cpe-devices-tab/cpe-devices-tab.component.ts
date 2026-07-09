@@ -52,10 +52,15 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
 
   // Contador regressivo para próximo auto-refresh (exibido ao técnico)
   nextRefreshInSeconds: number = 60;
-  private countdownInterval: any;
+  private countdownInterval: ReturnType<typeof setInterval> | null = null;
 
   // ── MEDIÇÃO DE TEMPO DE RESPOSTA DA CPE ────────────────────────────────
-  /** Timestamp (ms) quando o refresh foi solicitado. */
+  /**
+   * Timestamp (ms) quando o refresh MANUAL foi solicitado.
+   * Resetado para null ao concluir/falhar — garante que o auto-refresh (que
+   * NÃO seta este campo) não compute duração errada baseada num refresh
+   * manual anterior. Apenas refreshs manuais medem tempo de resposta.
+   */
   private refreshStartTime: number | null = null;
   /** Duração da última resposta da CPE em milissegundos. */
   lastRefreshDurationMs: number | null = null;
@@ -72,11 +77,12 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
   private readonly MAX_RETRIES = 3;
 
   /** Timeout do toast de feedback (para poder cancelar em ngOnDestroy). */
-  private feedbackTimeout: any;
+  private feedbackTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  // Subscriptions
+  // Subscriptions — todas trackeadas para cleanup centralizado em ngOnDestroy.
   private wsRefreshSub!: Subscription;
-  private hostsRefreshInterval: any;
+  private httpSubs = new Subscription();
+  private hostsRefreshInterval: ReturnType<typeof setInterval> | null = null;
 
   /** Intervalo de auto-refresh em milissegundos: 60 segundos. */
   private readonly AUTO_REFRESH_MS = 60_000;
@@ -104,6 +110,7 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
     this.stopCountdownTimer();
     if (this.wsRefreshSub) this.wsRefreshSub.unsubscribe();
     if (this.refreshSub) this.refreshSub.unsubscribe();
+    this.httpSubs.unsubscribe();
     if (this.feedbackTimeout) { clearTimeout(this.feedbackTimeout); this.feedbackTimeout = null; }
   }
 
@@ -118,7 +125,7 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
     this.isLoading = true;
     this.clearFeedback();
 
-    this.cpeService.getConnectedDevices(this.serialNumber, this.currentPage, this.itemsPerPage).subscribe({
+    const sub = this.cpeService.getConnectedDevices(this.serialNumber, this.currentPage, this.itemsPerPage).subscribe({
       next: (data) => {
         this.devicesData = data;
         this.totalPages = data.pagination?.pages || 1;
@@ -131,16 +138,22 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
       }
     });
+    this.httpSubs.add(sub);
   }
 
   /**
    * Recarrega os dados SEM acionar o skeleton de loading — usado quando o
    * WebSocket avisa que a CPE respondeu, para atualizar a tabela em tempo
    * real sem apagar a tabela já renderizada (evita flicker).
+   *
+   * CRÍTICO: usa forceRefresh=true para bypassar o cache de 30s do CpeService.
+   * Sem isso, se a CPE responder em <30s (caso comum), o cache serviria dados
+   * stale e a tabela "atualizada em tempo real" não mudaria — feedback verde
+   * com dados antigos.
    */
   private reloadDevicesDataSilently(): void {
     if (!this.serialNumber) return;
-    this.cpeService.getConnectedDevices(this.serialNumber, this.currentPage, this.itemsPerPage).subscribe({
+    const sub = this.cpeService.getConnectedDevices(this.serialNumber, this.currentPage, this.itemsPerPage, true).subscribe({
       next: (data) => {
         this.devicesData = data;
         this.totalPages = data.pagination?.pages || 1;
@@ -148,12 +161,7 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
       },
       error: () => { /* mantém os dados já exibidos em tela silenciosamente */ }
     });
-  }
-
-  changePage(page: number): void {
-    if (page < 1 || page > this.totalPages) return;
-    this.currentPage = page;
-    this.loadConnectedDevices();
+    this.httpSubs.add(sub);
   }
 
   nextPage(): void {
@@ -200,6 +208,7 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
       catchError((err: any) => {
         this.refreshing = false;
         this.backgroundRefreshing = false;
+        this.refreshStartTime = null; // descarta medição — não houve resposta da CPE
         if (err?.status === 409) {
           this.setFeedback('Uma atualização já está em andamento na fila da CPE. Aguarde...', 'info');
         } else {
@@ -226,12 +235,18 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
       }),
       catchError(() => {
         this.setFeedback('A CPE não respondeu após 3 tentativas. Dados do cache em exibição.', 'error');
+        this.refreshing = false;
+        this.backgroundRefreshing = false;
+        this.refreshStartTime = null; // descarta medição — CPE não respondeu
+        this.cdr.markForCheck();
         return EMPTY;
       })
     ).subscribe(() => {
-      // Sucesso: o próprio listenWifiDataRefreshed já tratou o reload dos dados.
+      // Sucesso: o próprio listenWifiDataRefreshed já tratou o reload dos dados
+      // e a medição de tempo (lastRefreshDurationMs). Aqui apenas garante o estado.
       this.refreshing = false;
       this.backgroundRefreshing = false;
+      this.refreshStartTime = null; // medição já consumida por listenWifiDataRefreshed
       this.cdr.markForCheck();
     });
   }
@@ -252,10 +267,11 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
       // pelo pipeline de retry mas ainda há uma tentativa aguardando resposta da CPE.
       if (!this.serialNumber || this.refreshing || this.backgroundRefreshing) return;
       // refreshWifiHosts é mais leve — não computa insights/congestionamento que esta aba não usa
-      this.cpeService.refreshWifiHosts(this.serialNumber).subscribe({
+      const sub = this.cpeService.refreshWifiHosts(this.serialNumber).subscribe({
         error: () => { /* ignora 409 e erros de rede sem exibir feedback */ }
       });
-      // Reseta contador regressivo
+      this.httpSubs.add(sub);
+      // Reseta contador regressivo sincronizado com o disparo real do auto-refresh
       this.nextRefreshInSeconds = this.AUTO_REFRESH_MS / 1000;
       this.cdr.markForCheck();
     }, this.AUTO_REFRESH_MS);
@@ -299,29 +315,45 @@ export class CpeDevicesTabComponent implements OnInit, OnDestroy {
 
   /**
    * Ouve o evento 'wifi_data_refreshed' emitido pelo backend quando a CPE
-   * responde ao GetParameterValues solicitado pelo refreshWifiData.
+   * responde ao GetParameterValues solicitado pelo refreshWifiHosts.
    * Atualiza a tabela automaticamente em tempo real.
-   * MEDE o tempo de resposta da CPE e exibe ao técnico.
+   *
+   * DISTINÇÃO manual vs auto-refresh:
+   *   - Manual (refreshStartTime setado): mede tempo de resposta + exibe toast
+   *     de sucesso com a duração.
+   *   - Auto-refresh (refreshStartTime null): recarrega silenciosamente, sem
+   *     toast — evita poluir a UI com um toast a cada 60s.
    */
   private listenWifiDataRefreshed(): void {
     if (!this.serialNumber) return;
     this.wsRefreshSub = this.wsService.onWifiDataRefreshed().subscribe({
       next: (evt) => {
-        if (evt.serialNumber === this.serialNumber) {
-          // Calcula tempo de resposta
-          if (this.refreshStartTime) {
-            this.lastRefreshDurationMs = Date.now() - this.refreshStartTime;
-            this.lastRefreshAt = new Date();
-          }
-          this.refreshing = false;
-          this.backgroundRefreshing = false;
-          this.refreshRetryCount = 0;
+        if (evt.serialNumber !== this.serialNumber) return;
 
+        const isManualRefresh = this.refreshStartTime !== null;
+        // Calcula tempo de resposta APENAS em refresh manual (auto-refresh não
+        // seta refreshStartTime — sem isso a duração seria o tempo desde o
+        // último manual, podendo ser vários minutos, valor enganoso).
+        if (isManualRefresh) {
+          this.lastRefreshDurationMs = Date.now() - (this.refreshStartTime as number);
+          this.lastRefreshAt = new Date();
+        }
+        this.refreshing = false;
+        this.backgroundRefreshing = false;
+        this.refreshRetryCount = 0;
+
+        if (isManualRefresh) {
           const durationSec = this.lastRefreshDurationMs ? (this.lastRefreshDurationMs / 1000).toFixed(1) : '?';
           this.setFeedback(`Dados atualizados em tempo real. Resposta da CPE: ${durationSec}s.`, 'success');
-          this.reloadDevicesDataSilently();
-          this.cdr.markForCheck();
+          // SINCRONIZAÇÃO: reinicia auto-refresh + countdown para alinhar o
+          // contador visível com o próximo disparo real do intervalo. Sem isso,
+          // o countdown diria "60s" mas o auto-refresh poderia disparar em
+          // qualquer momento (intervalo original não foi reiniciado).
+          this.nextRefreshInSeconds = this.AUTO_REFRESH_MS / 1000;
+          this.startHostsAutoRefresh();
         }
+        this.reloadDevicesDataSilently();
+        this.cdr.markForCheck();
       }
     });
   }

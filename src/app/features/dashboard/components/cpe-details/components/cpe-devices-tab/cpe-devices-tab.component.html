@@ -100,8 +100,11 @@
             </td>
             <td>{{ host.ssid || '—' }}</td>
             <td>
-              <span class="signal-badge" [class.signal-good]="(host.signalStrengthDbm || 0) > -50" [class.signal-medium]="(host.signalStrengthDbm || 0) <= -50 && (host.signalStrengthDbm || 0) > -70" [class.signal-weak]="(host.signalStrengthDbm || 0) <= -70">
-                {{ host.signalStrengthDbm !== null ? host.signalStrengthDbm + ' dBm' : '—' }}
+              <span class="signal-badge"
+                [class.signal-good]="host.signalStrengthDbm != null && host.signalStrengthDbm > -50"
+                [class.signal-medium]="host.signalStrengthDbm != null && host.signalStrengthDbm <= -50 && host.signalStrengthDbm > -70"
+                [class.signal-weak]="host.signalStrengthDbm != null && host.signalStrengthDbm <= -70">
+                {{ host.signalStrengthDbm != null ? host.signalStrengthDbm + ' dBm' : '—' }}
               </span>
             </td>
             <td>{{ host.operatingStandard || '—' }}</td>
@@ -111,10 +114,10 @@
               </span>
             </td>
             <td>
-              <span *ngIf="host.qoe !== null" class="qoe-badge" [class.qoe-excelente]="host.qoeLabel === 'Excelente'" [class.qoe-bom]="host.qoeLabel === 'Bom'" [class.qoe-regular]="host.qoeLabel === 'Regular'" [class.qoe-ruim]="host.qoeLabel === 'Ruim'">
+              <span *ngIf="host.qoe != null" class="qoe-badge" [class.qoe-excelente]="host.qoeLabel === 'Excelente'" [class.qoe-bom]="host.qoeLabel === 'Bom'" [class.qoe-regular]="host.qoeLabel === 'Regular'" [class.qoe-ruim]="host.qoeLabel === 'Ruim'">
                 {{ host.qoe }}
               </span>
-              <span *ngIf="host.qoe === null" class="qoe-na">N/A</span>
+              <span *ngIf="host.qoe == null" class="qoe-na">N/A</span>
             </td>
           </tr>
         </tbody>
