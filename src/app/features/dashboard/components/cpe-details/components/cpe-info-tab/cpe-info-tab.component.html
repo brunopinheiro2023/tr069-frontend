@@ -675,7 +675,17 @@
 
 <!-- Seção Diagnóstico Técnico Avançado -->
 <div *ngIf="analysisData || analysisLoading || analysisError" class="mt-8 p-4">
-  <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Diagnóstico Técnico Avançado</h3>
+  <div class="flex items-center gap-2 mb-4">
+    <h3 class="text-xl font-semibold text-gray-900 dark:text-white">Diagnóstico Técnico Avançado</h3>
+    <app-icon-tooltip
+      icon="info"
+      title="Diagnóstico Técnico Avançado"
+      description="Análises automáticas que processam dados de telemetria dos últimos 7 dias para detectar problemas antes que afetem o cliente. Cada card mostra uma análise específica — passe o mouse sobre o ícone de info em cada card para entender o que significa e como interpretar.">
+    </app-icon-tooltip>
+    <span *ngIf="analysisUpdatedAt" class="text-xs text-gray-400 dark:text-gray-500 ml-auto">
+      Atualizado: {{ analysisUpdatedAt | date:'HH:mm:ss' }}
+    </span>
+  </div>
 
   <!-- Banner de Resumo — só renderiza quando analysisData existe (evita crash em null.summary) -->
   <div *ngIf="analysisData"
@@ -708,38 +718,73 @@
   <!-- Cards priorizados por severidade -->
   <div *ngIf="!analysisLoading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
     <ng-container *ngFor="let entry of sortedAnalysisEntries; trackBy: trackByAnalysisKey">
-      <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border"
-           [ngClass]="analysisCardBorder(entry.data)">
+      <article class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border transition-all hover:shadow-md"
+           [ngClass]="analysisCardBorder(entry.data)"
+           role="article"
+           [attr.aria-label]="getAnalysisInfo(entry.key)">
+        <!-- Header: ícone + título + tooltip info + badge severidade -->
         <div class="flex items-center justify-between mb-2">
-          <h4 class="font-semibold text-gray-900 dark:text-white text-sm">
-            {{ getAnalysisInfo(entry.key) || entry.key }}
-          </h4>
-          <span class="text-base">{{ analysisBadge(entry.data) }}</span>
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="material-symbols-rounded text-gray-400 dark:text-gray-500 text-base flex-shrink-0">
+              {{ getAnalysisMeta(entry.key)?.icon || 'analytics' }}
+            </span>
+            <h4 class="font-semibold text-gray-900 dark:text-white text-sm truncate">
+              {{ getAnalysisInfo(entry.key) || entry.key }}
+            </h4>
+            <app-icon-tooltip
+              *ngIf="getAnalysisMeta(entry.key) as meta"
+              icon="info"
+              [title]="meta.label"
+              [description]="meta.description + ' — Interpretação: ' + meta.interpretation + ' — Utilidade: ' + meta.utility">
+            </app-icon-tooltip>
+          </div>
+          <span class="text-base flex-shrink-0">{{ analysisBadge(entry.data) }}</span>
         </div>
+
+        <!-- Mensagem principal -->
         <p class="text-sm text-gray-600 dark:text-gray-300">{{ entry.data.message }}</p>
 
         <!-- Detalhes específicos por tipo de análise -->
-        <div class="mt-2 text-xs text-gray-500 space-y-0.5">
-          <div *ngIf="entry.data.rxTrend?.slopePerDay != null">RX Slope: {{ entry.data.rxTrend.slopePerDay }} dBm/dia</div>
-          <div *ngIf="entry.data.rebootCount > 0">{{ entry.data.rebootCount }} reboot(s) em {{ entry.data.days }} dias</div>
-          <div *ngIf="entry.data.anomalyCount > 0">{{ entry.data.anomalyCount }} pico(s) detectado(s)</div>
-          <div *ngIf="entry.data.errorRatePerHour > 0">{{ entry.data.errorRatePerHour }} erros/hora</div>
-          <div *ngIf="entry.data.biasTrend?.currentBias != null">Bias atual: {{ entry.data.biasTrend.currentBias }} µA</div>
-          <div *ngIf="entry.data.trend?.slopePerHour != null">Slope memória: {{ entry.data.trend.slopePerHour }}%/hora</div>
-          <div *ngIf="entry.data.avgVoltage != null">Tensão média: {{ entry.data.avgVoltage?.toFixed(2) }}V</div>
-          <div *ngIf="entry.data.totalRxGb != null">RX: {{ entry.data.totalRxGb }} GB | TX: {{ entry.data.totalTxGb }} GB</div>
-          <div *ngIf="entry.data.correlation != null">Correlação térmica: {{ entry.data.correlation }}</div>
-          <div *ngIf="entry.data.latency?.measuredAt">Medido há {{ formatMeasuredAt(entry.data.latency.measuredAt) }}</div>
+        <div class="mt-2 text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+          <!-- Tendência Óptica -->
+          <div *ngIf="entry.data.rxTrend?.slopePerDay != null">
+            RX Slope: {{ entry.data.rxTrend.slopePerDay }} dBm/dia · R²: {{ entry.data.r2 }}
+          </div>
+          <!-- Reboot Stability -->
+          <div *ngIf="entry.data.rebootCount != null">{{ entry.data.rebootCount }} reboot(s) em {{ entry.data.days }} dias · {{ entry.data.rebootsPerWeek }}/semana</div>
+          <!-- Traffic Anomalies -->
+          <div *ngIf="entry.data.anomalyCount != null">{{ entry.data.anomalyCount }} pico(s) detectado(s) em {{ entry.data.hours }}h</div>
+          <!-- WAN Errors -->
+          <div *ngIf="entry.data.errorRatePerHour != null">{{ entry.data.errorRatePerHour }} erros/hora</div>
+          <!-- Laser Health -->
+          <div *ngIf="entry.data.biasTrend?.currentBias != null">Bias atual: {{ entry.data.biasTrend.currentBias }} mA</div>
+          <!-- Memory Leak -->
+          <div *ngIf="entry.data.trend?.slopePerHour != null">Slope memória: {{ entry.data.trend.slopePerHour }}%/hora · RAM livre: {{ entry.data.trend?.currentFreePercent }}%</div>
+          <!-- Power Supply -->
+          <div *ngIf="entry.data.avgVoltage != null">Tensão: min {{ entry.data.minVoltage?.toFixed(2) }}V · máx {{ entry.data.maxVoltage?.toFixed(2) }}V · média {{ entry.data.avgVoltage?.toFixed(2) }}V</div>
+          <!-- Top Destinations -->
+          <div *ngIf="entry.data.totalRxGb != null">RX: {{ entry.data.totalRxGb }} GB | TX: {{ entry.data.totalTxGb }} GB · Padrão: {{ entry.data.usagePattern }}</div>
+          <!-- Thermal Correlation -->
+          <div *ngIf="entry.data.correlation != null">Correlação térmica: {{ entry.data.correlation }} · Temp média: {{ entry.data.tempStats?.avg }}°C</div>
+          <!-- Latency DNS -->
+          <div *ngIf="entry.data.latency?.measuredAt">Medido há {{ formatMeasuredAt(entry.data.latency.measuredAt) }} · {{ entry.data.latency?.avgMs }}ms</div>
+          <!-- OLT Comparison -->
+          <div *ngIf="entry.data.peerCount != null">{{ entry.data.peerCount }} peer(s) no /24 · Média grupo: {{ entry.data.peerAvgRx }} dBm</div>
           <!-- Wi-Fi Quality -->
-          <div *ngIf="entry.data.snrAvg != null">SNR médio: {{ entry.data.snrAvg }} dB</div>
-          <div *ngIf="entry.data.snrMin != null">SNR mín: {{ entry.data.snrMin }} dB</div>
+          <div *ngIf="entry.data.snrAvg != null">SNR médio: {{ entry.data.snrAvg }} dB · mín: {{ entry.data.snrMin }} dB</div>
           <div *ngIf="entry.data.noiseFloor != null">Piso de ruído: {{ entry.data.noiseFloor }} dBm</div>
           <div *ngIf="entry.data.clientCount != null">Clientes: {{ entry.data.clientCount }}</div>
           <!-- GPON Link Budget -->
-          <div *ngIf="entry.data.rxMargin != null">Margem RX: {{ entry.data.rxMargin }} dB</div>
+          <div *ngIf="entry.data.rxMargin != null">Margem RX: {{ entry.data.rxMargin }} dB · RX: {{ entry.data.rxPower }} dBm</div>
           <!-- Transceiver Aging -->
-          <div *ngIf="entry.data.biasSlopePerDay != null">Slope Bias: +{{ entry.data.biasSlopePerDay }} mA/dia</div>
-          <div *ngIf="entry.data.currentBias != null">Bias atual: {{ entry.data.currentBias }} µA</div>
+          <div *ngIf="entry.data.biasSlopePerDay != null">Slope Bias: {{ entry.data.biasSlopePerDay > 0 ? '+' : '' }}{{ entry.data.biasSlopePerDay }} mA/dia</div>
+          <div *ngIf="entry.data.currentBias != null">Bias atual: {{ entry.data.currentBias }} mA</div>
+          <!-- CPU Load -->
+          <div *ngIf="entry.data.cpuAvg != null">CPU média: {{ entry.data.cpuAvg }}% · máx: {{ entry.data.cpuMax }}% · >80%: {{ entry.data.highLoadPercent }}% do tempo</div>
+          <!-- WAN Latency -->
+          <div *ngIf="entry.data.latencyAvg != null">Latência: {{ entry.data.latencyAvg }}ms (máx {{ entry.data.latencyMax }}ms) · Jitter: {{ entry.data.jitterAvg }}ms</div>
+          <!-- WiFi Band Distribution -->
+          <div *ngIf="entry.data.totalClients != null">2.4GHz: {{ entry.data.count2g }} ({{ entry.data.pct2g }}%) · 5GHz: {{ entry.data.count5g }} ({{ entry.data.pct5g }}%)</div>
 
           <!-- Error Rate normalizado — só exibe quando relevante (> 0 erros/min) -->
           <div *ngIf="entry.data.errorRateRx != null && entry.data.errorRateRx > 0"
@@ -772,14 +817,13 @@
             ⚠ Análise parcial — apenas ruído ambiental disponível
           </div>
 
-          <!-- Timestamp de atualização -->
-          <div *ngIf="(entry.key === 'wifiQuality2g' || entry.key === 'wifiQuality5g') && analysisUpdatedAt"
+          <!-- Timestamp de atualização — padronizado para TODAS as análises -->
+          <div *ngIf="analysisUpdatedAt"
                class="text-gray-400 dark:text-gray-500 mt-1 pt-1 border-t border-gray-100 dark:border-gray-700">
-            Análise: {{ analysisUpdatedAt | date:'HH:mm:ss' }}
-            <span *ngIf="entry.data.sampleCount != null"> · {{ entry.data.sampleCount }} amostras</span>
+            <span *ngIf="entry.data.sampleCount != null">{{ entry.data.sampleCount }} amostras · </span>{{ analysisUpdatedAt | date:'HH:mm:ss' }}
           </div>
         </div>
-      </div>
+      </article>
     </ng-container>
 
     <!-- Placeholder quando analysisData existe mas analyses está vazio -->

@@ -14,6 +14,7 @@ import { ToastService } from '../../../../../../core/services/toast.service';
 import { DiagnosticParserService } from '../../../../../../core/services/diagnostic-parser.service';
 import { TelemetryCacheService } from '../../../../../../core/services/telemetry-cache.service';
 import { MetricPipe } from '../../../../../../core/pipes/metric.pipe';
+import { IconTooltipComponent } from '../../../../../../core/components/icon-tooltip/icon-tooltip.component';
 
 // ── Tipagem forte para eventos WebSocket ──
 interface ValueChangeEvent {
@@ -217,7 +218,7 @@ const createChartDataset = (label: string, color: string, data: (number | null)[
 @Component({
   selector: 'app-cpe-info-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, NgChartsModule, MetricPipe],
+  imports: [CommonModule, FormsModule, NgChartsModule, MetricPipe, IconTooltipComponent],
   templateUrl: './cpe-info-tab.component.html',
   styleUrls: ['./cpe-info-tab.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -728,27 +729,124 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     URL.revokeObjectURL(url);
   }
 
-  // Step 6: Análise priorizada
-  readonly analysisInfoMap: Record<string, string> = {
-    opticalTrend:       'Tendência Óptica',
-    rebootStability:    'Estabilidade de Reboot',
-    trafficAnomalies:   'Anomalias de Tráfego',
-    oltComparison:      'Comparação com OLT',
-    thermalCorrelation: 'Correlação Térmica',
-    latencyDns:         'Latência DNS',
-    topDestinations:    'Top Destinos de Tráfego',
-    wanErrors:          'Erros WAN',
-    laserHealth:        'Saúde do Laser',
-    memoryLeak:         'Vazamento de Memória',
-    powerSupply:        'Fonte de Energia',
-    wifiQuality2g:      'Qualidade Wi-Fi 2.4 GHz',
-    wifiQuality5g:      'Qualidade Wi-Fi 5 GHz',
-    gponLinkBudget:     'Margem Óptica GPON',
-    transceiverAging:   'Envelhecimento do Laser',
+  // Step 6: Análise priorizada — metadados completos (label, ícone, descrição, interpretação, utilidade)
+  readonly analysisInfoMap: Record<string, { label: string; icon: string; description: string; interpretation: string; utility: string }> = {
+    opticalTrend: {
+      label: 'Tendência Óptica', icon: 'fiber_manual_record',
+      description: 'Regressão linear da potência óptica RX em 7 dias para detectar degradação gradual.',
+      interpretation: 'Slope negativo = sinal piorando. Pode ser sujeira no conector, dobra na fibra ou splitter degradando.',
+      utility: 'Intervenção preventiva ANTES do LOS. Combine com GPON Link Budget para priorizar dispatch.',
+    },
+    rebootStability: {
+      label: 'Estabilidade de Reboot', icon: 'restart_alt',
+      description: 'Conta reboots por queda de uptime em 7 dias. Reboots frequentes indicam instabilidade.',
+      interpretation: '> 2 reboots/semana é anormal. Pode ser fonte defeituosa, firmware bugado ou pane térmica.',
+      utility: 'CPE com reboots frequentes tem prioridade de dispatch. Verifique correlação com temperatura e fonte.',
+    },
+    trafficAnomalies: {
+      label: 'Anomalias de Tráfego', icon: 'trending_up',
+      description: 'Detecta picos anômalos via regra 3-sigma com piso mínimo de 30 Mbps.',
+      interpretation: 'Picos podem ser downloads grandes, streaming 4K ou, em casos extremos, botnet/DDoS.',
+      utility: 'Explica lentidão relatada pelo cliente. Compare com Top Destinos para entender o padrão.',
+    },
+    oltComparison: {
+      label: 'Comparação com OLT', icon: 'compare',
+      description: 'Compara sinal óptico RX com CPEs vizinhas no mesmo /24 (mesma OLT/splitter).',
+      interpretation: 'Média do grupo baixa = problema na infraestrutura. Só esta CPE baixa = problema local.',
+      utility: 'Diferencia problema de infraestrutura (dispatch de campo) de problema local (troca de ONT).',
+    },
+    thermalCorrelation: {
+      label: 'Correlação Térmica', icon: 'thermostat',
+      description: 'Correlação de Pearson entre temperatura do transceptor e CPU. Temp alta + CPU baixa = falha de ventilação.',
+      interpretation: 'Temp > 85°C = superaquecimento. Temp alta + CPU baixa + baixa correlação = ventilação defeituosa.',
+      utility: 'Identifica CPEs em ambientes quentes que precisam realocação ou ventilação adicional.',
+    },
+    latencyDns: {
+      label: 'Latência DNS', icon: 'speed',
+      description: 'Latência via IPPingDiagnostics em cache. Requer diagnóstico de ping executado.',
+      interpretation: '> 100ms = congestionamento ou rota subótima. < 20ms excelente. < 50ms normal.',
+      utility: 'Explica lentidão de navegação. Execute ping diagnóstico para atualizar os dados.',
+    },
+    topDestinations: {
+      label: 'Top Destinos de Tráfego', icon: 'analytics',
+      description: 'Inferência de padrão de uso por horário de pico (streaming, gaming, trabalho).',
+      interpretation: 'Baseado em volume por hora. Não identifica sites específicos — requer NetFlow/DPI.',
+      utility: 'Entende o perfil do cliente. Streaming noturno é esperado em residências.',
+    },
+    wanErrors: {
+      label: 'Erros WAN', icon: 'error_outline',
+      description: 'Taxa de erros CRC/FCS na interface óptica. Erros indicam degradação física L1/L2.',
+      interpretation: '> 100/h warning, > 1000/h crítico. Indica fibra suja, conector oxidado ou cabo danificado.',
+      utility: 'Erros crescentes justificam dispatch para limpeza de conector ou troca de drop cable.',
+    },
+    laserHealth: {
+      label: 'Saúde do Laser', icon: 'highlight',
+      description: 'Tendência da corrente de bias (mA) do laser. Aumento progressivo indica envelhecimento.',
+      interpretation: 'Bias > 30mA = fim de vida. Slope > 0.5 mA/dia = envelhecimento acelerado.',
+      utility: 'Troca preventiva do transceptor ANTES da falha. Combine com Envelhecimento do Laser.',
+    },
+    memoryLeak: {
+      label: 'Vazamento de Memória', icon: 'memory',
+      description: 'Detecta leak de RAM via regressão linear, isolando o maior bloco de uptime contínuo.',
+      interpretation: 'Perda > 0.3%/hora com R² > 0.8 = leak. RAM < 10% = crítica, o roteador vai travar.',
+      utility: 'Identifica firmware bugado. CPE com leak precisa de reboot programado ou update de firmware.',
+    },
+    powerSupply: {
+      label: 'Fonte de Energia', icon: 'power',
+      description: 'Monitora tensão (V) do módulo óptico. Quedas ou picos indicam problema na fonte.',
+      interpretation: 'Normal: 3.2-3.4V. < 3.1V = subtensão (fonte defeituosa). > 3.5V = sobretensão (risco de queima).',
+      utility: 'Subtensão causa reboots aleatórios. Sobretensão pode queimar o equipamento.',
+    },
+    wifiQuality2g: {
+      label: 'Qualidade Wi-Fi 2.4 GHz', icon: 'wifi',
+      description: 'SNR, ruído, taxa de erros e densidade de clientes na banda 2.4GHz (CWNA/IEEE 802.11).',
+      interpretation: 'SNR < 10dB crítico. Ruído > -65dBm interferência severa. Erros > 2000/min link degradado.',
+      utility: '2.4GHz é mais congestionada. Alta densidade + ruído alto = migrar clientes para 5GHz.',
+    },
+    wifiQuality5g: {
+      label: 'Qualidade Wi-Fi 5 GHz', icon: 'wifi',
+      description: 'SNR, ruído, taxa de erros e densidade de clientes na banda 5GHz.',
+      interpretation: 'SNR < 10dB crítico. Ruído > -75dBm interferência severa. Erros > 800/min link degradado.',
+      utility: '5GHz tem menos interferência mas menor alcance. Se baixo, verificar obstáculos físicos.',
+    },
+    gponLinkBudget: {
+      label: 'Margem Óptica GPON', icon: 'straighten',
+      description: 'Margem entre RX atual e threshold crítico de -27 dBm. Margem baixa = proximidade de LOS.',
+      interpretation: '< 1dB crítica (LOS iminente). < 3dB warning. > 3dB adequada.',
+      utility: 'Margem baixa = dispatch urgente. Combine com Tendência Óptica para prever quando chegará a zero.',
+    },
+    transceiverAging: {
+      label: 'Envelhecimento do Laser', icon: 'schedule',
+      description: 'Tendência da corrente de bias em 30 dias para detectar envelhecimento acelerado.',
+      interpretation: 'Bias > 30mA ou slope > 1.0 mA/dia = fim de vida próximo.',
+      utility: 'Visão de longo prazo. Transceptor envelhecendo deve ser trocado preventivamente.',
+    },
+    cpuLoad: {
+      label: 'Carga de CPU', icon: 'developer_board',
+      description: 'Uso de CPU sustentado em 7 dias. CPU cronicamente alta indica CPE sobrecarregada.',
+      interpretation: '> 80% em 30% das amostras = warning. > 90% médio = crítico.',
+      utility: 'CPE com CPU alta pode precisar de modelo mais potente. Verifique clientes e throughput.',
+    },
+    wanLatency: {
+      label: 'Latência WAN Nativa', icon: 'network_ping',
+      description: 'Latência e jitter nativos da WAN (coletados passivamente). Detecta degradação de rota.',
+      interpretation: '> 50ms latência ou > 20ms jitter = crítico. > 20ms latência = warning.',
+      utility: 'Latência alta afeta tudo. Pode indicar congestionamento, rota BGP subótima ou problema na OLT.',
+    },
+    wifiBandDistribution: {
+      label: 'Distribuição Wi-Fi por Banda', icon: 'device_hub',
+      description: 'Distribuição de clientes entre 2.4GHz e 5GHz. Concentração em 2.4GHz causa congestionamento.',
+      interpretation: '> 80% em 2.4GHz com > 5 clientes = warning. > 90% com > 10 = crítico.',
+      utility: 'Recomendar migração para 5GHz. Verificar se SSID 5GHz está ativo e com potência adequada.',
+    },
   };
 
   getAnalysisInfo(key: string): string {
-    return this.analysisInfoMap[key] || key;
+    return this.analysisInfoMap[key]?.label || key;
+  }
+
+  getAnalysisMeta(key: string): { label: string; icon: string; description: string; interpretation: string; utility: string } | null {
+    return this.analysisInfoMap[key] || null;
   }
 
   formatMeasuredAt(measuredAt: string): string {
