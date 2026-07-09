@@ -228,6 +228,8 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   @Input() cpe: CpeDevice | null = null;
   /** Número de série para requisições de telemetria. */
   @Input() serialNumber: string = '';
+  /** CPE está offline — bloqueia coleta de telemetria, vitals e config WAN. */
+  @Input() isCpeOffline: boolean = false;
 
   private destroyRef = inject(DestroyRef); // Gerenciador de ciclo de vida moderno do Angular 17+
   private cdr = inject(ChangeDetectorRef); // Injetor para disparar atualizações manuais na UI

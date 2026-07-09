@@ -6,6 +6,94 @@
     animation: fadeIn 0.4s ease;
 }
 
+/* Banner de CPE Offline — bloqueia visualmente operações de escrita/coleta */
+.offline-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    background: color-mix(in srgb, var(--accent-danger) 10%, var(--bg-surface));
+    border: 1px solid color-mix(in srgb, var(--accent-danger) 30%, transparent);
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    margin-bottom: 20px;
+
+    .material-symbols-rounded {
+        color: var(--accent-danger);
+        font-size: 28px;
+        flex-shrink: 0;
+    }
+
+    .offline-banner-body {
+        strong {
+            display: block;
+            color: var(--accent-danger);
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        p {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.5;
+            margin: 0;
+        }
+    }
+}
+
+/* Error boundary para tabs que falham no lazy loading (@defer @error) */
+.tab-error {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 24px;
+    background: color-mix(in srgb, var(--accent-danger) 8%, var(--bg-surface));
+    border: 1px solid color-mix(in srgb, var(--accent-danger) 20%, transparent);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+
+    .material-symbols-rounded {
+        color: var(--accent-danger);
+        font-size: 24px;
+    }
+
+    .retry-btn {
+        background: var(--accent-color);
+        color: var(--text-on-accent);
+        border: none;
+        border-radius: var(--radius-sm);
+        padding: 6px 14px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        margin-left: 8px;
+        transition: background var(--transition-fast);
+
+        &:hover {
+            background: var(--accent-hover);
+        }
+    }
+}
+
+/* Skeleton Loaders — extraído de inline styles */
+.skeleton-hero {
+    display: flex;
+    gap: 16px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+.skeleton-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-top: 24px;
+}
+
+.skeleton-tabs {
+    margin-top: 24px;
+}
+
 /* Botão Voltar */
 .back-btn {
     background: rgba(255, 255, 255, 0.08);

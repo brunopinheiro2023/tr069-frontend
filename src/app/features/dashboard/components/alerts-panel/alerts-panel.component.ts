@@ -1,6 +1,6 @@
 // Caminho do arquivo: frontend/src/app/features/dashboard/components/alerts-panel/alerts-panel.component.ts
 
-import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef, DestroyRef, inject } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef, DestroyRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
@@ -18,7 +18,7 @@ import { TelemetryAlert } from '../../../../core/models';
   styleUrls: ['./alerts-panel.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class AlertsPanelComponent implements OnInit, OnDestroy {
+export class AlertsPanelComponent implements OnInit {
   private cdr = inject(ChangeDetectorRef);
   private destroyRef = inject(DestroyRef); // Gerenciador de ciclo de vida moderno do Angular 17+
   private toastService = inject(ToastService);
@@ -38,7 +38,7 @@ export class AlertsPanelComponent implements OnInit, OnDestroy {
         this.toastService.warning('Não foi possível carregar alertas — exibindo apenas eventos novos');
         return of({ data: [] });
       })
-    ).subscribe(res => { this.alerts = res.data; this.cdr.detectChanges(); });
+    ).subscribe(res => { this.alerts = res.data; this.cdr.markForCheck(); });
 
     // Novos alertas em tempo real (individuais - warning ou critical isolado)
     this.wsService.onTelemetryAlert().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((event) => {
@@ -59,7 +59,7 @@ export class AlertsPanelComponent implements OnInit, OnDestroy {
       if (event.severity === 'critical') {
         this.toastService.error(`${event.serialNumber}: ${event.message}`, 8000);
       }
-      this.cdr.detectChanges();
+      this.cdr.markForCheck();
     });
 
     // Batch de alertas críticos em massa (anti alert-fatigue)
@@ -88,17 +88,15 @@ export class AlertsPanelComponent implements OnInit, OnDestroy {
           this.toastService.error(`${a.serialNumber}: ${a.message}`, 8000);
         });
       }
-      this.cdr.detectChanges();
+      this.cdr.markForCheck();
     });
 
     // Alertas resolvidos — remove da lista
     this.wsService.onTelemetryAlertResolved().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((event) => {
       this.alerts = this.alerts.filter(a => !(a.serialNumber === event.serialNumber && a.metric === event.metric));
-      this.cdr.detectChanges();
+      this.cdr.markForCheck();
     });
   }
-
-  ngOnDestroy(): void {}
 
   acknowledgeAlert(alertId: string): void {
     this.cpeService.acknowledgeAlert(alertId).subscribe({
@@ -106,7 +104,7 @@ export class AlertsPanelComponent implements OnInit, OnDestroy {
         const index = this.alerts.findIndex(a => a._id === alertId);
         if (index !== -1) {
           this.alerts[index] = updatedAlert;
-          this.cdr.detectChanges();
+          this.cdr.markForCheck();
         }
       },
       error: (err) => {

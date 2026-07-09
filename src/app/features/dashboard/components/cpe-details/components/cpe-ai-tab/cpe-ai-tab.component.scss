@@ -2,6 +2,39 @@
   padding: 8px 0;
 }
 
+/* Warning de CPE offline — IA serve cache de 20min */
+.ai-offline-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: color-mix(in srgb, var(--accent-warning) 10%, var(--bg-surface));
+  border: 1px solid color-mix(in srgb, var(--accent-warning) 30%, transparent);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  margin-bottom: 16px;
+
+  .material-symbols-rounded {
+    color: var(--accent-warning);
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+
+  strong {
+    display: block;
+    color: var(--accent-warning);
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  p {
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.5;
+    margin: 0;
+  }
+}
+
 /* Loading */
 .ai-loading {
   display: flex;

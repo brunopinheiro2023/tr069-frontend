@@ -40,6 +40,12 @@ import { RadioBandConfig, WifiBand } from './radio-constants';
 export class CpeRadioTabComponent implements OnInit, OnChanges {
   @Input() cpe: CpeDevice | null = null;
   @Input() serialNumber: string = '';
+  /** CPE está offline — bloqueia salvar config de rádio. */
+  @Input() isCpeOffline: boolean = false;
+  /** LOCK-1: Usuário em modo somente leitura (outro técnico é Driver). */
+  @Input() isViewOnly: boolean = false;
+  /** LOCK-1: CPE em tráfego CWMP ativo — botões bloqueados temporariamente. */
+  @Input() isCpeBusy: boolean = false;
 
   // Estado de UI
   isSaving = false;

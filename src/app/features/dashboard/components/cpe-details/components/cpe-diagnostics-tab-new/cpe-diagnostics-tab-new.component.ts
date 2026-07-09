@@ -50,6 +50,8 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
   @Input() cpe: CpeDevice | null = null;
   @Input() serialNumber: string = '';
   @Input() readOnly: boolean = false;
+  /** CPE está offline — bloqueia execução de diagnósticos. */
+  @Input() isCpeOffline: boolean = false;
 
   // Capabilities da CPE
   diagnosticCapabilities = {

@@ -40,6 +40,12 @@ import { getTogglePathToFieldMap } from './wifi-field-registry';
 export class CpeWifiTabComponent implements OnInit, OnChanges, OnDestroy {
   @Input() cpe: CpeDevice | null = null;
   @Input() serialNumber: string = '';
+  /** CPE está offline — bloqueia apply de config Wi-Fi. */
+  @Input() isCpeOffline: boolean = false;
+  /** LOCK-1: Usuário em modo somente leitura (outro técnico é Driver). */
+  @Input() isViewOnly: boolean = false;
+  /** LOCK-1: CPE em tráfego CWMP ativo — botões bloqueados temporariamente. */
+  @Input() isCpeBusy: boolean = false;
 
   isApplyingWifi: boolean = false;
   wifiForm!: FormGroup;

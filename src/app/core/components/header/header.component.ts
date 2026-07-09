@@ -1,8 +1,10 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { ThemeService } from '../../services/theme.service';
 import { AuthService } from '../../services/auth.service';
+import { WebSocketService, WsConnectionStatus } from '../../services/websocket.service';
 import { CommonModule } from '@angular/common';
+import { Subscription } from 'rxjs';
 
 /**
  * Header global do Design System.
@@ -20,18 +22,42 @@ import { CommonModule } from '@angular/common';
   templateUrl: './header.component.html',
   styleUrls: ['./header.component.scss']
 })
-export class HeaderComponent {
+export class HeaderComponent implements OnInit, OnDestroy {
   /** Estado da sidebar (vindo do AppComponent) */
   @Input() sidebarOpen = false;
 
   /** Emite quando o técnico clica no botão hamburger */
   @Output() toggleSidebar = new EventEmitter<void>();
 
+  // P4: Status de conexão WebSocket para feedback visual no header.
+  wsStatus: WsConnectionStatus = 'disconnected';
+  private wsSub?: Subscription;
+
   constructor(
     private themeService: ThemeService,
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private wsService: WebSocketService
   ) {}
+
+  ngOnInit(): void {
+    this.wsSub = this.wsService.connectionStatus.subscribe(status => {
+      this.wsStatus = status;
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.wsSub?.unsubscribe();
+  }
+
+  /** Label amigável para o indicador de status WebSocket. */
+  get wsStatusLabel(): string {
+    switch (this.wsStatus) {
+      case 'connected':    return 'Tempo real ativo';
+      case 'reconnecting': return 'Reconectando...';
+      case 'disconnected': return 'Tempo real indisponível';
+    }
+  }
 
   onToggleSidebar(): void {
     this.toggleSidebar.emit();

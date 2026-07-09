@@ -58,6 +58,14 @@ addEventListener('message', ({ data }) => {
         if (filters.isCriticalGpon && (cpe._rx === undefined || cpe._rx >= -27)) {
           return false;
         }
+        // Filtro por faixa de Health Score: critical <50, attention 50-79, healthy 80-100
+        if (filters.healthScore) {
+          const score = cpe.healthScore;
+          if (score === undefined || score === null) return false;
+          if (filters.healthScore === 'critical' && score >= 50) return false;
+          if (filters.healthScore === 'attention' && (score < 50 || score >= 80)) return false;
+          if (filters.healthScore === 'healthy' && score < 80) return false;
+        }
 
         // 2. Validação de Busca Textual (Regex) com proteção contra valores null/undefined
         if (searchRegex) {

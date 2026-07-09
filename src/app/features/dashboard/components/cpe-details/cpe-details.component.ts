@@ -1,7 +1,9 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, inject, DestroyRef } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { Subscription } from 'rxjs';
+import { Subscription, interval } from 'rxjs';
+import { filter } from 'rxjs/operators';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CpeService } from '../../../../core/services/cpe.service';
 import { WebSocketService } from '../../../../core/services/websocket.service';
 import { ToastService } from '../../../../core/services/toast.service';
@@ -38,6 +40,14 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
   activeTab: 'info' | 'wifi' | 'radio' | 'devices' | 'diagnostics' | 'wifi-analysis' | 'ai' = 'info';
   private wsSubscriptions = new Subscription();
 
+  // LOCK-1: Sistema de lock entre técnicos — centralizado no componente pai.
+  // Antes apenas cpe-info-tab tinha. Agora todas as tabs recebem via @Input.
+  isViewOnly = false; // Se true, usuário está em modo de visualização (não é Driver)
+  isCpeBusy = false;  // Se true, CPE está em tráfego CWMP ativo (botões bloqueados)
+  viewers: string[] = []; // Lista de usernames visualizando a CPE
+  private destroyRef = inject(DestroyRef);
+  private readonly HEARTBEAT_INTERVAL_MS = 30_000;
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
@@ -51,8 +61,23 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
     this.activeTab = tab;
   }
 
+  /**
+   * Retry de carregamento de tab que falhou no @defer lazy loading.
+   * Alterna para uma tab inexistente e volta para forçar re-render do @defer.
+   */
+  retryTab(tab: typeof this.activeTab): void {
+    const current = this.activeTab;
+    this.activeTab = 'info'; // tab temporária para desmontar a que falhou
+    this.cdr.markForCheck();
+    setTimeout(() => {
+      this.activeTab = tab;
+      this.cdr.markForCheck();
+    }, 50);
+  }
+
   goToDiagnostics(): void {
-    this.router.navigate(['/dashboard/cpe', this.serialNumber, 'diagnostics']);
+    // Ativa a tab de diagnóstico internamente (não navega para rota inexistente)
+    this.setActiveTab('diagnostics');
   }
 
   ngOnInit(): void {
@@ -60,6 +85,13 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
     if (!this.serialNumber) {
       this.goBack();
       return;
+    }
+
+    // Lê query param 'tab' para ativar a aba solicitada pelo dashboard
+    const requestedTab = this.route.snapshot.queryParamMap.get('tab');
+    const validTabs: typeof this.activeTab[] = ['info', 'wifi', 'radio', 'devices', 'diagnostics', 'wifi-analysis', 'ai'];
+    if (requestedTab && validTabs.includes(requestedTab as typeof this.activeTab)) {
+      this.activeTab = requestedTab as typeof this.activeTab;
     }
     
     // Inscreve-se na sala da CPE. O WebSocketService enfileira a inscrição se ainda
@@ -70,6 +102,8 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
     
     this.loadCpeDetails();
     this.setupRealTimeUpdates();
+    this.listenForPresenceEvents();
+    this.startHeartbeat();
   }
 
   ngOnDestroy(): void {
@@ -175,6 +209,76 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
       }
     }
     return result as unknown as CpeDevice;
+  }
+
+  /**
+   * LOCK-1: Escuta eventos de presença Single Driver — centralizado no componente pai.
+   * Replicado do cpe-info-tab (linhas 1488-1579) para que todas as tabs recebam o estado.
+   */
+  private listenForPresenceEvents(): void {
+    this.wsService.onDriverAcquired()
+      .pipe(takeUntilDestroyed(this.destroyRef), filter((event) => event.serialNumber === this.serialNumber))
+      .subscribe(() => {
+        this.isViewOnly = false;
+        this.cdr.markForCheck();
+      });
+
+    this.wsService.onViewOnly()
+      .pipe(takeUntilDestroyed(this.destroyRef), filter((event) => event.serialNumber === this.serialNumber))
+      .subscribe((event) => this.handleViewOnlyEvent(event));
+
+    this.wsService.onForceViewOnly()
+      .pipe(takeUntilDestroyed(this.destroyRef), filter((event) => event.serialNumber === this.serialNumber))
+      .subscribe((event) => this.handleViewOnlyEvent(event));
+
+    this.wsService.onDriverReleased()
+      .pipe(takeUntilDestroyed(this.destroyRef), filter((event) => event.serialNumber === this.serialNumber))
+      .subscribe(() => {
+        this.isViewOnly = false;
+        this.cdr.markForCheck();
+      });
+
+    this.wsService.onViewersUpdated()
+      .pipe(takeUntilDestroyed(this.destroyRef), filter((event) => event.serialNumber === this.serialNumber))
+      .subscribe((event) => {
+        this.viewers = event.viewers;
+        this.cdr.markForCheck();
+      });
+
+    this.wsService.onCpeLocked()
+      .pipe(takeUntilDestroyed(this.destroyRef), filter((event) => event.serialNumber === this.serialNumber))
+      .subscribe(() => {
+        this.isCpeBusy = true;
+        this.cdr.markForCheck();
+      });
+
+    this.wsService.onCpeUnlocked()
+      .pipe(takeUntilDestroyed(this.destroyRef), filter((event) => event.serialNumber === this.serialNumber))
+      .subscribe(() => {
+        this.isCpeBusy = false;
+        this.cdr.markForCheck();
+      });
+  }
+
+  /** Helper compartilhado para eventos ViewOnly (elimina duplicação de código) */
+  private handleViewOnlyEvent(event: { serialNumber: string; driver?: string; message: string }): void {
+    this.isViewOnly = true;
+    this.toastService.warning(event.message);
+    this.cdr.markForCheck();
+  }
+
+  /** Inicia ciclo de heartbeat para manter controle de Driver no Redis (TTL renovado a cada 30s) */
+  private startHeartbeat(): void {
+    if (!this.serialNumber) return;
+    interval(this.HEARTBEAT_INTERVAL_MS)
+      .pipe(takeUntilDestroyed(this.destroyRef), filter(() => this.wsService.isConnected))
+      .subscribe(() => {
+        try {
+          this.wsService.emitDriverKeepalive(this.serialNumber);
+        } catch (e) {
+          console.error('Erro ao emitir keepalive', e);
+        }
+      });
   }
 
   goBack(): void {

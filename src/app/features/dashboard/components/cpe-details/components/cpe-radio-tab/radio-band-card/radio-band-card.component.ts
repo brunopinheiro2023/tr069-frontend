@@ -34,6 +34,8 @@ export class RadioBandCardComponent {
   @Input() isSaving = false;
   /** CSV com valores aceitos pela CPE, ex: "25,50,100". Null = usar fallback estático. */
   @Input() txPowerSupported: string | undefined = undefined;
+  /** CPE está offline — bloqueia salvar config de rádio. */
+  @Input() isCpeOffline: boolean = false;
   @Output() save = new EventEmitter<WifiBand>();
 
   /** Opções de canais conforme a banda */

@@ -7,21 +7,23 @@
   <!-- Ações de coleta -->
   <div class="flex items-center gap-2 flex-wrap">
     <button (click)="requestTelemetry()"
-            [disabled]="isLoading || isViewOnly || isCpeBusy || isRefreshInCooldown"
+            [disabled]="isLoading || isViewOnly || isCpeBusy || isRefreshInCooldown || isCpeOffline"
             class="refresh-btn flex items-center gap-1.5"
             [class.opacity-60]="isRefreshInCooldown"
-            [title]="isRefreshInCooldown
+            [title]="isCpeOffline
+              ? 'CPE offline — coleta de telemetria indisponível.'
+              : isRefreshInCooldown
               ? 'Aguarde o contador regressivo para nova coleta (cache fresco por 60s).'
               : 'Coleta completa: 38 métricas (sinal óptico, WAN, Wi-Fi, CPU, memória, clientes). Duração: 5–10s.'">
       <span class="material-symbols-rounded text-base" [class.animate-spin]="isLoading">sync</span>
       {{ refreshButtonLabel }}
     </button>
     <button (click)="requestVitals()"
-            [disabled]="vitalsLoading || isViewOnly || isCpeBusy"
+            [disabled]="vitalsLoading || isViewOnly || isCpeBusy || isCpeOffline"
             class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md
                    hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-40
                    flex items-center gap-1.5"
-            title="Verificação rápida: CPU, memória, WAN e sinal óptico. Duração: ~2s. Ideal para confirmar alertas.">
+            [title]="isCpeOffline ? 'CPE offline — verificação rápida indisponível.' : 'Verificação rápida: CPU, memória, WAN e sinal óptico. Duração: ~2s. Ideal para confirmar alertas.'">
       <span class="material-symbols-rounded text-base" [class.animate-spin]="vitalsLoading">bolt</span>
       Checar Status
     </button>
@@ -210,7 +212,7 @@
         <!-- Ação contextual: coletar vitals para alertas de sistema -->
         <button *ngIf="['cpuUsage','memoryFree','wanStatus'].includes(alert.metric)"
                 (click)="requestVitals()"
-                [disabled]="vitalsLoading || isViewOnly"
+                [disabled]="vitalsLoading || isViewOnly || isCpeOffline"
                 class="text-xs px-1.5 py-0.5 rounded bg-current/10 hover:bg-current/20
                        transition-colors flex-shrink-0 disabled:opacity-40">
           Coletar
@@ -443,7 +445,7 @@
                  class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
         </div>
       </div>
-      <button type="submit" [disabled]="wanConfigSaving"
+      <button type="submit" [disabled]="wanConfigSaving || isCpeOffline"
               class="w-full px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded transition-colors">
         {{ wanConfigSaving ? 'Salvando...' : 'Salvar Configuração' }}
       </button>

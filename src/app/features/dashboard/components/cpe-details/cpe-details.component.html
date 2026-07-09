@@ -11,14 +11,14 @@
 
     <!-- Estado de carregamento — Skeleton Loaders (Pilar 5) -->
     <div *ngIf="isLoading" class="skeleton-layout">
-        <div class="skeleton-hero" style="display:flex; gap:16px; margin-top:16px; flex-wrap:wrap;">
+        <div class="skeleton-hero">
             <app-skeleton shape="text-lg" width="200px"></app-skeleton>
             <app-skeleton shape="text" width="300px"></app-skeleton>
         </div>
-        <div class="skeleton-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 24px;">
+        <div class="skeleton-grid">
             <app-skeleton shape="card" height="100px" [count]="4"></app-skeleton>
         </div>
-        <div class="skeleton-tabs" style="margin-top: 24px;">
+        <div class="skeleton-tabs">
             <app-skeleton shape="text" width="100%" height="40px"></app-skeleton>
         </div>
     </div>
@@ -26,6 +26,15 @@
     <div *ngIf="!isLoading && error" class="error-state">{{ error }}</div>
 
     <ng-container *ngIf="!isLoading && !error && cpe">
+        <!-- Banner de CPE Offline — bloqueia visualmente todas as operações de escrita/coleta -->
+        <div class="offline-banner" *ngIf="!cpe.isOnline">
+            <span class="material-symbols-rounded">cloud_off</span>
+            <div class="offline-banner-body">
+                <strong>CPE Offline — Operações desabilitadas</strong>
+                <p>Esta CPE não está comunicando com o ACS. Coleta de telemetria, configuração Wi-Fi/Rádio, diagnósticos e análises estão bloqueados até que o equipamento volte a ficar online. Último informe: {{ cpe.lastInform | dataAge }}.</p>
+            </div>
+        </div>
+
         <div class="details-hero">
             <div class="hero-info">
                 <span class="status-badge" [class.online]="cpe.isOnline" [class.offline]="!cpe.isOnline">
@@ -93,57 +102,71 @@
         <div class="tab-content">
             @if (activeTab === 'info') {
                 @defer (on immediate) {
-                    <app-cpe-info-tab [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-info-tab>
+                    <app-cpe-info-tab [cpe]="cpe" [serialNumber]="serialNumber" [isCpeOffline]="!cpe.isOnline"></app-cpe-info-tab>
                 } @placeholder {
                     <app-skeleton shape="card" height="300px"></app-skeleton>
+                } @error {
+                    <div class="tab-error"><span class="material-symbols-rounded">error</span> Falha ao carregar aba. <button class="retry-btn" (click)="retryTab('info')">Tentar novamente</button></div>
                 }
             }
 
             @if (activeTab === 'wifi') {
                 @defer (on immediate) {
-                    <app-cpe-wifi-tab [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-wifi-tab>
+                    <app-cpe-wifi-tab [cpe]="cpe" [serialNumber]="serialNumber" [isCpeOffline]="!cpe.isOnline" [isViewOnly]="isViewOnly" [isCpeBusy]="isCpeBusy"></app-cpe-wifi-tab>
                 } @placeholder {
                     <app-skeleton shape="card" height="300px"></app-skeleton>
+                } @error {
+                    <div class="tab-error"><span class="material-symbols-rounded">error</span> Falha ao carregar aba. <button class="retry-btn" (click)="retryTab('wifi')">Tentar novamente</button></div>
                 }
             }
 
             @if (activeTab === 'radio') {
                 @defer (on immediate) {
-                    <app-cpe-radio-tab [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-radio-tab>
+                    <app-cpe-radio-tab [cpe]="cpe" [serialNumber]="serialNumber" [isCpeOffline]="!cpe.isOnline" [isViewOnly]="isViewOnly" [isCpeBusy]="isCpeBusy"></app-cpe-radio-tab>
                 } @placeholder {
                     <app-skeleton shape="card" height="300px"></app-skeleton>
+                } @error {
+                    <div class="tab-error"><span class="material-symbols-rounded">error</span> Falha ao carregar aba. <button class="retry-btn" (click)="retryTab('radio')">Tentar novamente</button></div>
                 }
             }
 
             @if (activeTab === 'devices') {
                 @defer (on immediate) {
-                    <app-cpe-devices-tab [serialNumber]="serialNumber"></app-cpe-devices-tab>
+                    <app-cpe-devices-tab [serialNumber]="serialNumber" [isCpeOffline]="!cpe.isOnline" [isViewOnly]="isViewOnly"></app-cpe-devices-tab>
                 } @placeholder {
                     <app-skeleton shape="rect" height="400px"></app-skeleton>
+                } @error {
+                    <div class="tab-error"><span class="material-symbols-rounded">error</span> Falha ao carregar aba. <button class="retry-btn" (click)="retryTab('devices')">Tentar novamente</button></div>
                 }
             }
 
             @if (activeTab === 'diagnostics') {
                 @defer (on immediate) {
-                    <app-cpe-diagnostics-tab-new [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-diagnostics-tab-new>
+                    <app-cpe-diagnostics-tab-new [cpe]="cpe" [serialNumber]="serialNumber" [isCpeOffline]="!cpe.isOnline" [readOnly]="isViewOnly"></app-cpe-diagnostics-tab-new>
                 } @placeholder {
                     <app-skeleton shape="rect" height="400px"></app-skeleton>
+                } @error {
+                    <div class="tab-error"><span class="material-symbols-rounded">error</span> Falha ao carregar aba. <button class="retry-btn" (click)="retryTab('diagnostics')">Tentar novamente</button></div>
                 }
             }
 
             @if (activeTab === 'wifi-analysis') {
                 @defer (on immediate) {
-                    <app-cpe-wifi-analysis-tab [cpe]="cpe" [serialNumber]="serialNumber"></app-cpe-wifi-analysis-tab>
+                    <app-cpe-wifi-analysis-tab [cpe]="cpe" [serialNumber]="serialNumber" [isCpeOffline]="!cpe.isOnline" [isViewOnly]="isViewOnly"></app-cpe-wifi-analysis-tab>
                 } @placeholder {
                     <app-skeleton shape="rect" height="400px"></app-skeleton>
+                } @error {
+                    <div class="tab-error"><span class="material-symbols-rounded">error</span> Falha ao carregar aba. <button class="retry-btn" (click)="retryTab('wifi-analysis')">Tentar novamente</button></div>
                 }
             }
 
             @if (activeTab === 'ai') {
                 @defer (on immediate) {
-                    <app-cpe-ai-tab [serialNumber]="serialNumber"></app-cpe-ai-tab>
+                    <app-cpe-ai-tab [serialNumber]="serialNumber" [isCpeOffline]="!cpe.isOnline"></app-cpe-ai-tab>
                 } @placeholder {
                     <app-skeleton shape="card" height="300px"></app-skeleton>
+                } @error {
+                    <div class="tab-error"><span class="material-symbols-rounded">error</span> Falha ao carregar aba. <button class="retry-btn" (click)="retryTab('ai')">Tentar novamente</button></div>
                 }
             }
         </div>

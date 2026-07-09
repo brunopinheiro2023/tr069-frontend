@@ -316,6 +316,9 @@ export interface CpeDevice {
   // Fila de comandos
   pendingTasks?: CpePendingTask[];
 
+  // F10: Contagem de alertas ativos (preenchido pelo endpoint /api/cpe via aggregation)
+  activeAlertsCount?: number;
+
   // Timestamps do Mongoose
   createdAt?: string;
   updatedAt?: string;

@@ -33,7 +33,7 @@ export class CpeService {
    * @param filters - Objeto opcional com filtros (isOnline, manufacturer, productClass, softwareVersion, search, isCriticalGpon)
    * @returns Observable com resposta contendo data e pagination
    */
-  getAllCpes(page: number = 1, limit: number = 50, filters?: { isOnline?: boolean; manufacturer?: string; productClass?: string; softwareVersion?: string; search?: string; isCriticalGpon?: boolean }): Observable<PaginatedResponse<CpeDevice>> {
+  getAllCpes(page: number = 1, limit: number = 50, filters?: { isOnline?: boolean; manufacturer?: string; productClass?: string; softwareVersion?: string; search?: string }): Observable<PaginatedResponse<CpeDevice>> {
     // Inicia construção da query string com parâmetros de paginação
     let params = `?page=${page}&limit=${limit}`;
 
@@ -59,10 +59,8 @@ export class CpeService {
       if (filters.search) {
         params += `&search=${encodeURIComponent(filters.search)}`;
       }
-      // Se filtro de GPON Crítico foi ativado
-      if (filters.isCriticalGpon !== undefined) {
-        params += `&isCriticalGpon=${filters.isCriticalGpon}`;
-      }
+      // Filtro isCriticalGpon removido: backend ignora (opticalRx removido do schema EP28).
+      // O filtro GPON crítico é aplicado localmente no frontend via campo _rx.
     }
 
     // Faz requisição GET com query string construída
@@ -617,7 +615,7 @@ export class CpeService {
   /**
    * Busca o resumo de saúde da frota para o widget do dashboard.
    * Retorna métricas agregadas: totalCpes, online, offline, neverSeen, criticalAlerts,
-   * byManufacturer, byFirmware, averageUptime, lastUpdated.
+   * byManufacturer, byFirmware, lastUpdated.
    */
   getHealthSummary(): Observable<{
     totalCpes: number;
@@ -627,7 +625,6 @@ export class CpeService {
     criticalAlerts: number;
     byManufacturer: { name: string; count: number }[];
     byFirmware: { firmware: string; count: number }[];
-    averageUptime: number;
     lastUpdated: string;
   }> {
     return this.http.get<{
@@ -638,7 +635,6 @@ export class CpeService {
       criticalAlerts: number;
       byManufacturer: { name: string; count: number }[];
       byFirmware: { firmware: string; count: number }[];
-      averageUptime: number;
       lastUpdated: string;
     }>(`${environment.apiUrl}/api/health-summary`);
   }

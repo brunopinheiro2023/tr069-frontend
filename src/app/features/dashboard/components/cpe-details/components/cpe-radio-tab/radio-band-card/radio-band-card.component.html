@@ -89,7 +89,7 @@
         size="sm"
         iconLeft="save"
         [loading]="isSaving"
-        [disabled]="bandForm.invalid || isSaving || !hasChanges"
+        [disabled]="bandForm.invalid || isSaving || !hasChanges || isCpeOffline"
         (clicked)="onSave()"
       >
         Salvar Rádio {{ bandLabel }}

@@ -22,6 +22,10 @@ import { CpeDevice, WifiInsight, WifiHostsData, WifiDiagnosticsData } from '@app
 export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
   @Input() cpe: CpeDevice | null = null;
   @Input() serialNumber: string = '';
+  /** CPE está offline — bloqueia scan de vizinhos e otimização. */
+  @Input() isCpeOffline: boolean = false;
+  /** LOCK-1: Usuário em modo somente leitura (outro técnico é Driver). */
+  @Input() isViewOnly: boolean = false;
 
   isLoading: boolean = false;
   neighborScanData: WifiDiagnosticsData | null = null;

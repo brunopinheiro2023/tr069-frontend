@@ -18,6 +18,8 @@ import { CpePrediction, CpePredictionFactor } from '../../../../../../core/model
 })
 export class CpeAiTabComponent implements OnChanges {
   @Input() serialNumber: string = '';
+  /** CPE está offline — a IA usa cache de 20min do backend, então pode funcionar. */
+  @Input() isCpeOffline: boolean = false;
 
   prediction: CpePrediction | null = null;
   loading = false;

@@ -54,7 +54,7 @@
           size="sm"
           iconLeft="save"
           [loading]="isSaving && isSavingBand === null"
-          [disabled]="isSaving || !hasAnyChanges"
+          [disabled]="isSaving || !hasAnyChanges || isCpeOffline || isViewOnly"
           (clicked)="saveAllRadioConfig()"
         >
           Salvar Tudo
@@ -92,6 +92,7 @@
       [isTR181]="isTR181"
       [txPowerSupported]="txPowerSupported2g"
       [isSaving]="isSaving && (isSavingBand === '2.4GHz' || isSavingBand === null)"
+      [isCpeOffline]="isCpeOffline"
       (save)="saveBandConfig($event)"
     />
 
@@ -103,6 +104,7 @@
       [isTR181]="isTR181"
       [txPowerSupported]="txPowerSupported5g"
       [isSaving]="isSaving && (isSavingBand === '5GHz' || isSavingBand === null)"
+      [isCpeOffline]="isCpeOffline"
       (save)="saveBandConfig($event)"
     />
   </div>

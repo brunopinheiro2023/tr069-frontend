@@ -30,6 +30,10 @@ import { ConnectedDevicesData, WifiHost, EthernetDevice } from '../../../../../.
 })
 export class CpeDevicesTabComponent implements OnInit, OnDestroy {
   @Input() serialNumber: string = '';
+  /** CPE está offline — bloqueia refresh de dispositivos (requer comunicação CWMP). */
+  @Input() isCpeOffline: boolean = false;
+  /** LOCK-1: Usuário em modo somente leitura (outro técnico é Driver). */
+  @Input() isViewOnly: boolean = false;
 
   // Dados de dispositivos
   devicesData: ConnectedDevicesData | null = null;

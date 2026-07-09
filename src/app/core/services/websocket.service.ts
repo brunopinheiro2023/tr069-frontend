@@ -1,8 +1,10 @@
 import { Injectable, NgZone } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
-import { Observable, share } from 'rxjs';
+import { Observable, BehaviorSubject, share } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Router } from '@angular/router';
+
+export type WsConnectionStatus = 'connected' | 'disconnected' | 'reconnecting';
 
 @Injectable({
   providedIn: 'root'
@@ -12,6 +14,10 @@ export class WebSocketService {
   private sessionId: string; // Identidade resiliente para tolerar reconexões
   private activeRooms = new Set<string>();
   private pendingRooms = new Set<string>(); // Salas solicitadas antes da conexão estabelecida
+
+  // P4: Status de conexão reativo — componentes podem subscrever para feedback visual.
+  private connectionStatus$ = new BehaviorSubject<WsConnectionStatus>('disconnected');
+  readonly connectionStatus = this.connectionStatus$.asObservable();
 
   // Contagem de referências por sala: permite que múltiplos componentes compartilhem
   // a mesma inscrição CPE sem que um ngOnDestroy filho destrua a sala para os outros.
@@ -37,10 +43,31 @@ export class WebSocketService {
 
     this.socket.on('connect', () => {
       console.log('Conectado ao WebSocket do Servidor ACS.');
+      this.connectionStatus$.next('connected');
       // Reemite inscrições pendentes que foram solicitadas antes da conexão.
       this.flushPendingRooms();
       // Reemite heartbeat imediatamente na reconexão para evitar perder lock
       this.reemitHeartbeatOnReconnect();
+    });
+
+    // P4: Listener de desconexão — atualiza status e notifica componentes.
+    this.socket.on('disconnect', (reason) => {
+      console.warn('WebSocket desconectado:', reason);
+      this.connectionStatus$.next('disconnected');
+    });
+
+    // P4: Listener de tentativa de reconexão — atualiza status para 'reconnecting'.
+    this.socket.io.on('reconnect_attempt', (attempt) => {
+      console.log(`Tentativa de reconexão WebSocket #${attempt}`);
+      this.connectionStatus$.next('reconnecting');
+    });
+
+    // P4: Listener de reconexão bem-sucedida — já tratado no 'connect' acima.
+
+    // P4: Listener de falha definitiva de reconexão — todas as tentativas esgotadas.
+    this.socket.io.on('reconnect_failed', () => {
+      console.error('Falha definitiva de reconexão WebSocket — tentativas esgotadas.');
+      this.connectionStatus$.next('disconnected');
     });
 
     // Monitora falhas de autenticação em tempo real

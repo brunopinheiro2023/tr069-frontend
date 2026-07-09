@@ -12,7 +12,6 @@ import { NgChartsModule } from 'ng2-charts';
 import { ChartConfiguration, ChartOptions } from 'chart.js';
 import { CpeService } from '../../core/services/cpe.service';
 import { WebSocketService } from '../../core/services/websocket.service';
-import { LoadingService } from '../../core/services/loading.service';
 import { ToastService } from '../../core/services/toast.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ButtonComponent } from '../../core/components/button/button.component';
@@ -68,7 +67,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     criticalAlerts: number;
     byManufacturer: { name: string; count: number }[];
     byFirmware: { firmware: string; count: number }[];
-    averageUptime: number;
     lastUpdated: string;
   } | null = null;
 
@@ -110,6 +108,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   filterModel: string = '';
   filterFirmware: string = '';
   filterCriticalGpon: boolean = false;
+  filterHealthScore: 'critical' | 'attention' | 'healthy' | null = null;
 
   // Agregações de marca e modelo
   globalManufacturers: { name: string; count: number }[] = [];
@@ -133,6 +132,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // Estado de carregamento
   loading: boolean = true;
   isRefiltering: boolean = false; // true durante re-filtragem silenciosa (WS); não exibe skeleton
+  isLoadingMore: boolean = false; // true durante carregamento incremental de página (scroll)
+  private currentPage: number = 1;
+  private totalPages: number = 1;
+  private readonly PAGE_SIZE = 500;
 
   // Getter para detectar filtros ativos
   private get hasActiveFilters(): boolean {
@@ -141,16 +144,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
       || !!this.filterModel
       || !!this.filterFirmware
       || !!this.searchQuery.trim()
-      || this.filterCriticalGpon;
+      || this.filterCriticalGpon
+      || this.filterHealthScore !== null;
   }
 
   // CPEs que já receberam alerta de offline nesta sessão (evita spam)
   private alertedOfflineCpes = new Set<string>();
   private alertedGponCpes = new Set<string>();
+  // CPEs aguardando Connection Request — exibe spinner no botão bolt
+  wakingUpCpes = new Set<string>();
+  // CPEs aguardando reboot — exibe spinner no botão power
+  rebootingCpes = new Set<string>();
 
   private timeAgoInterval?: ReturnType<typeof setInterval>;
   private metricsInterval?: ReturnType<typeof setInterval>;
   private healthSummaryInterval?: ReturnType<typeof setInterval>;
+  private visibilityHandler?: () => void;
   private worker?: Worker;
   private destroyRef = inject(DestroyRef); // Gerenciador de ciclo de vida moderno do Angular 17+
 
@@ -175,7 +184,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   constructor(
     private cpeService: CpeService,
     private wsService: WebSocketService,
-    private loadingService: LoadingService,
     private toastService: ToastService,
     private router: Router,
     private cdr: ChangeDetectorRef,
@@ -195,6 +203,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // F2: Restaura filtros salvos no localStorage antes de carregar dados
+    this.loadSavedFilters();
+
     // Setup do debounce reativo para a busca (Otimização RxJS)
     this.searchSubject.pipe(
       debounceTime(400),
@@ -217,7 +228,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.worker = new Worker(new URL('./cpe-filter.worker.ts', import.meta.url), { type: 'module' });
       this.worker.onmessage = ({ data }) => {
         if (data.error) {
-          console.error('Erro no Web Worker:', data.error, data.message);
           this.toastService.error(`Erro no filtro: ${data.message}`);
           this.cpes = this.applyFilters(this.allCpes); // Fallback: aplica filtros na thread principal
         } else {
@@ -232,7 +242,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
       };
       this.worker.onerror = (error) => {
-        console.error('Erro no Web Worker de filtro:', error);
         this.toastService.error('Ocorreu um erro no processamento de filtros em segundo plano.');
         this.cpes = this.applyFilters(this.allCpes); // Fallback: aplica filtros na thread principal
         this.loading = false;
@@ -303,42 +312,128 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.healthSummaryInterval = setInterval(() => {
       this.loadHealthSummary();
     }, 30000); // Atualiza a cada 30 segundos
+
+    // OTIMIZAÇÃO P5: Pausar polling quando a aba está ociosa (Page Visibility API)
+    // Reduz carga no backend quando o técnico alterna entre abas do navegador
+    this.visibilityHandler = () => {
+      if (document.hidden) {
+        clearInterval(this.metricsInterval);
+        clearInterval(this.healthSummaryInterval);
+        this.metricsInterval = undefined;
+        this.healthSummaryInterval = undefined;
+      } else {
+        // Retoma polling imediatamente ao voltar à aba
+        if (!this.metricsInterval) {
+          this.metricsInterval = setInterval(() => {
+            this.cpeService.getWorkerHealth().subscribe({
+              next: (health) => {
+                this.xmlParserMetrics = health.xmlParser;
+                this.queueStats = health.rabbitmq;
+                this.processHealth = health.process;
+                this.workerHealthDegraded = false;
+                const now = new Date().toLocaleTimeString();
+                this.xmlChartLabels.push(now);
+                this.xmlChartDatasets[0].data.push(health.xmlParser.avgProcessingTimeMs);
+                this.xmlChartDatasets[1].data.push(health.xmlParser.p95ProcessingTimeMs);
+                if (this.xmlChartLabels.length > 30) {
+                  this.xmlChartLabels.shift();
+                  this.xmlChartDatasets[0].data.shift();
+                  this.xmlChartDatasets[1].data.shift();
+                }
+                this.xmlChartDatasets = [...this.xmlChartDatasets];
+                this.cdr.markForCheck();
+              },
+              error: () => {
+                this.workerHealthDegraded = true;
+                this.cdr.markForCheck();
+              }
+            });
+          }, 5000);
+        }
+        if (!this.healthSummaryInterval) {
+          this.healthSummaryInterval = setInterval(() => {
+            this.loadHealthSummary();
+          }, 30000);
+          // Atualiza imediatamente ao retornar
+          this.loadHealthSummary();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', this.visibilityHandler);
   }
 
   ngOnDestroy(): void {
+    // F2: Persiste filtros atuais no localStorage
+    this.saveFilters();
     this.wsService.unsubscribeFromAllCpes();
     clearInterval(this.timeAgoInterval);
     clearInterval(this.metricsInterval);
     clearInterval(this.healthSummaryInterval);
+    if (this.visibilityHandler) {
+      document.removeEventListener('visibilitychange', this.visibilityHandler);
+    }
     this.worker?.terminate();
   }
 
+  // F2: Persistência de filtros no localStorage — restaura estado ao recarregar a página.
+  private static readonly FILTERS_KEY = 'vmoas_dashboard_filters';
+
+  private saveFilters(): void {
+    try {
+      const filters = {
+        searchQuery: this.searchQuery,
+        filterStatus: this.filterStatus,
+        filterManufacturer: this.filterManufacturer,
+        filterModel: this.filterModel,
+        filterFirmware: this.filterFirmware,
+        filterCriticalGpon: this.filterCriticalGpon,
+        filterHealthScore: this.filterHealthScore,
+      };
+      localStorage.setItem(DashboardComponent.FILTERS_KEY, JSON.stringify(filters));
+    } catch (e) {
+      console.error('Erro ao salvar filtros no localStorage', e);
+    }
+  }
+
+  private loadSavedFilters(): void {
+    try {
+      const raw = localStorage.getItem(DashboardComponent.FILTERS_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (saved.searchQuery !== undefined) this.searchQuery = saved.searchQuery;
+      if (saved.filterStatus) this.filterStatus = saved.filterStatus;
+      if (saved.filterManufacturer !== undefined) this.filterManufacturer = saved.filterManufacturer;
+      if (saved.filterModel !== undefined) this.filterModel = saved.filterModel;
+      if (saved.filterFirmware !== undefined) this.filterFirmware = saved.filterFirmware;
+      if (saved.filterCriticalGpon !== undefined) this.filterCriticalGpon = saved.filterCriticalGpon;
+      if (saved.filterHealthScore !== undefined) this.filterHealthScore = saved.filterHealthScore;
+    } catch (e) {
+      console.error('Erro ao carregar filtros do localStorage', e);
+    }
+  }
+
   /**
-   * Busca a lista inicial de CPEs via API REST COM PAGINAÇÃO.
-   * IMPLEMENTAÇÃO DE PAGINAÇÃO PARA SUPORTAR 6.000+ CPEs.
-   *
-   * Carrega apenas a página atual de itens (padrão: 50 itens)
-   * em vez de carregar todas as 6.000 CPEs de uma vez.
+   * Busca a lista inicial de CPEs via API REST com paginação híbrida.
+   * Carrega a primeira página (500 itens) e delega filtro/busca ao Web Worker.
+   * Páginas subsequentes são carregadas sob demanda via onScrollIndex().
    */
   loadInitialData(): void {
     this.loading = true;
-    // OTIMIZAÇÃO: Busca um grande volume de dados de uma vez (até 10k) e delega o filtro/busca para o Web Worker.
-    // A paginação é removida e substituída por Virtual Scrolling.
-    this.cpeService.getAllCpes(1, 10000).subscribe({
+    this.currentPage = 1;
+    this.cpeService.getAllCpes(1, this.PAGE_SIZE).subscribe({
       next: (response: any) => {
         this.allCpes = response.data.map((c: any) => this.enrichCpeData(c));
-        // Construir índice O(N) uma vez só na carga:
         this.cpeIndexMap.clear();
         this.allCpes.forEach((cpe, i) => this.cpeIndexMap.set(cpe.serialNumber, i));
-        this.globalTotalCpes = response.pagination.total; // Total real global do banco
+        this.globalTotalCpes = response.pagination.total;
+        this.totalPages = response.pagination.totalPages;
 
-        // Recebe as métricas agregadas diretamente do MongoDB
+        // Recebe as métricas agregadas diretamente do MongoDB (agregação global, não paginada)
         if (response.metrics) {
           this.globalOnlineCount = response.metrics.onlineCount;
-          // globalCriticalGponCount calculado localmente via _rx (opticalRx removido do schema Cpe EP28 — backend retorna 0 fixo)
+          // globalCriticalGponCount calculado localmente via _rx (opticalRx removido do schema Cpe EP28)
           this.globalCriticalGponCount = this.allCpes.filter(c => c._rx !== undefined && c._rx < -27).length;
           this.globalPendingTasksCount = response.metrics.pendingTasksCount;
-          // xmlParserMetrics agora é buscado via polling real do endpoint /api/system/health/workers
           this.globalManufacturers = (response.metrics.byManufacturer || []).map((m: any) => ({ name: m._id || 'Desconhecido', count: m.count }));
           this.globalModels = (response.metrics.byModel || []).map((m: any) => ({ name: m._id || 'Desconhecido', count: m.count }));
           this.globalFirmwares = (response.metrics.byFirmware || []).map((m: any) => ({ name: m._id || 'Desconhecido', count: m.count })).sort((a: any, b: any) => b.count - a.count);
@@ -346,17 +441,50 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.calculateFallbackMetrics();
         }
 
-        this.triggerFilter(); // Dispara o primeiro filtro no worker
+        this.triggerFilter();
 
-        // OTIMIZAÇÃO UX: Reseta o scroll para o topo ao carregar nova página ou filtros
         if (this.viewport) {
           this.viewport.scrollToIndex(0);
         }
       },
-      error: (err) => {
-        console.error('Erro ao buscar CPEs', err);
+      error: () => {
         this.toastService.error('Falha ao carregar lista de CPEs.');
         this.loading = false;
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  /**
+   * Carrega a próxima página de CPEs quando o usuário rola próximo ao fim da lista.
+   * Acionado pelo evento scrolledIndexChange do CDK Virtual Scroll.
+   */
+  onScrollIndex(index: number): void {
+    // Não carrega se já está carregando, se não há mais páginas, ou se o usuário está longe do fim
+    if (this.isLoadingMore || this.currentPage >= this.totalPages) return;
+    const loadedCount = this.allCpes.length;
+    // Gatilho: quando o usuário chega a 80% dos itens carregados
+    if (index < loadedCount * 0.8) return;
+
+    this.isLoadingMore = true;
+    const nextPage = this.currentPage + 1;
+    this.cpeService.getAllCpes(nextPage, this.PAGE_SIZE).subscribe({
+      next: (response: any) => {
+        const newCpes = response.data.map((c: any) => this.enrichCpeData(c));
+        // Adiciona apenas CPEs que ainda não estão carregadas (evita duplicatas de updates WS)
+        const newOnes = newCpes.filter((c: DashboardCpe) => !this.cpeIndexMap.has(c.serialNumber));
+        newOnes.forEach((cpe: DashboardCpe) => {
+          this.cpeIndexMap.set(cpe.serialNumber, this.allCpes.length);
+          this.allCpes.push(cpe);
+        });
+        this.currentPage = nextPage;
+        this.isLoadingMore = false;
+        // Re-filtra com a lista expandida (sem overlay de loading)
+        this.triggerFilter(false);
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.isLoadingMore = false;
         this.cdr.markForCheck();
       },
     });
@@ -390,6 +518,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.filterFirmware) filters['softwareVersion'] = this.filterFirmware;
     if (this.searchQuery.trim()) filters['search'] = this.searchQuery.trim();
     if (this.filterCriticalGpon) filters['isCriticalGpon'] = true;
+    if (this.filterHealthScore) filters['healthScore'] = this.filterHealthScore;
 
     if (this.worker) {
       this.worker.postMessage({ cpes: this.allCpes, filters });
@@ -435,6 +564,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.triggerFilter();
   }
 
+  onHealthScoreFilterChange(faixa: 'critical' | 'attention' | 'healthy'): void {
+    // Toggle: clicar na faixa ativa desativa o filtro
+    this.filterHealthScore = this.filterHealthScore === faixa ? null : faixa;
+    this.triggerFilter();
+  }
+
   clearFilters(): void {
     this.filterStatus = 'all';
     this.filterManufacturer = '';
@@ -442,6 +577,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.filterFirmware = '';
     this.searchQuery = '';
     this.filterCriticalGpon = false;
+    this.filterHealthScore = null;
     this.triggerFilter();
   }
 
@@ -475,6 +611,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
       onlineCpes.forEach(onlineCpe => {
         const mergedCpe = { ...onlineCpe, isOnline: true };
         if (this.processCpeUpdate(mergedCpe, true)) hasChanges = true;
+        // Remove spinner de Connection Request quando a CPE volta online
+        if (this.wakingUpCpes.has(onlineCpe.serialNumber)) {
+          this.wakingUpCpes.delete(onlineCpe.serialNumber);
+          this.toastService.success(`${onlineCpe.serialNumber} voltou online!`);
+        }
+        // Remove spinner de reboot quando a CPE volta online (reboot completo)
+        if (this.rebootingCpes.has(onlineCpe.serialNumber)) {
+          this.rebootingCpes.delete(onlineCpe.serialNumber);
+          this.toastService.success(`${onlineCpe.serialNumber} reiniciou com sucesso!`);
+        }
       });
       this.applyChangesIfAny(hasChanges);
     });
@@ -513,6 +659,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       productClass: this.filterModel || undefined,
       softwareVersion: this.filterFirmware || undefined,
       isCriticalGpon: this.filterCriticalGpon || undefined,
+      healthScore: this.filterHealthScore,
       search: this.searchQuery || undefined
     };
 
@@ -522,6 +669,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
       if (filters.productClass && (cpe.deviceInfo?.productClass || cpe.productClass) !== filters.productClass) return false;
       if (filters.softwareVersion && (cpe.deviceInfo?.softwareVersion || cpe.softwareVersion) !== filters.softwareVersion) return false;
       if (filters.isCriticalGpon && (cpe._rx === undefined || cpe._rx >= -27)) return false;
+      if (filters.healthScore) {
+        const score = cpe.healthScore;
+        if (score === undefined || score === null) return false;
+        if (filters.healthScore === 'critical' && score >= 50) return false;
+        if (filters.healthScore === 'attention' && (score < 50 || score >= 80)) return false;
+        if (filters.healthScore === 'healthy' && score < 80) return false;
+      }
       if (filters.search) {
         const searchRegex = new RegExp(this.escapeRegex(filters.search), 'i');
         const matches =
@@ -661,9 +815,50 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   wakeUpDevice(serialNumber: string): void {
+    this.wakingUpCpes.add(serialNumber);
+    this.cdr.markForCheck();
     this.cpeService.wakeUpCpe(serialNumber).subscribe({
-      next: () => this.toastService.success(`Connection Request enviado para ${serialNumber}!`),
-      error: () => this.toastService.error(`Falha ao acordar a CPE ${serialNumber}.`),
+      next: () => {
+        this.toastService.success(`Connection Request enviado para ${serialNumber}!`);
+        // Remove o spinner após 10s se a CPE não voltar online (timeout de segurança)
+        setTimeout(() => {
+          this.wakingUpCpes.delete(serialNumber);
+          this.cdr.markForCheck();
+        }, 10000);
+      },
+      error: () => {
+        this.wakingUpCpes.delete(serialNumber);
+        this.cdr.markForCheck();
+        this.toastService.error(`Falha ao acordar a CPE ${serialNumber}.`);
+      },
+    });
+  }
+
+  /**
+   * Reinicia uma CPE individual diretamente da tabela.
+   * O backend enfileira a task via taskQueueService + cria AuditLog + snapshot "before".
+   * Spinner permanece até a CPE voltar online via WebSocket ou timeout de 60s.
+   */
+  rebootDevice(serialNumber: string): void {
+    if (!confirm(`Confirmar reinício da CPE ${serialNumber}?`)) return;
+    this.rebootingCpes.add(serialNumber);
+    this.cdr.markForCheck();
+    this.cpeService.rebootCpe(serialNumber).subscribe({
+      next: () => {
+        this.toastService.success(`Comando de reinício enfileirado para ${serialNumber}.`);
+        // Timeout de segurança: remove o spinner após 60s (reboot leva ~30-45s)
+        setTimeout(() => {
+          if (this.rebootingCpes.has(serialNumber)) {
+            this.rebootingCpes.delete(serialNumber);
+            this.cdr.markForCheck();
+          }
+        }, 60000);
+      },
+      error: () => {
+        this.rebootingCpes.delete(serialNumber);
+        this.cdr.markForCheck();
+        this.toastService.error(`Falha ao reiniciar a CPE ${serialNumber}.`);
+      },
     });
   }
 
@@ -695,8 +890,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.globalOnlineCount = summary.online;
         this.cdr.markForCheck();
       },
-      error: (err) => {
-        console.error('Erro ao carregar health summary:', err);
+      error: () => {
         // Silencioso - não quebra o dashboard se o widget falhar
       }
     });
@@ -855,19 +1049,34 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   exportSelectedToCsv(): void {
     if (this.selectedCpes.size === 0) return;
-
     const selectedData = this.cpes.filter(c => this.selectedCpes.has(c.serialNumber));
+    this.generateCsv(selectedData, 'selecionadas');
+  }
+
+  /**
+   * F9: Exporta toda a frota filtrada (this.cpes) em vez de apenas selecionadas.
+   * Usa a lista já filtrada pelo Web Worker — inclui todos os CPEs que match os filtros ativos.
+   */
+  exportFilteredToCsv(): void {
+    if (this.cpes.length === 0) return;
+    this.generateCsv(this.cpes, 'filtradas');
+  }
+
+  /**
+   * Lógica compartilhada de geração de CSV — reutilizada por exportSelectedToCsv e exportFilteredToCsv.
+   * Previne CSV Injection (prefixa campos que começam com =, +, -, @).
+   */
+  private generateCsv(data: DashboardCpe[], suffix: string): void {
     const headers = ['Status', 'Serial Number', 'Modelo', 'IP WAN', 'PPPoE', 'Sinal Rx (dBm)', 'Ultima Conexao'];
 
     const sanitizeCsvField = (value: string | undefined): string => {
       if (!value) return 'N/D';
       const str = String(value);
-      // Previne CSV Injection: prefixa com ' se começar com =, +, -, @
       if (/^[=+\-@]/.test(str)) return `'${str}`;
       return str;
     };
 
-    const rows = selectedData.map(c => [
+    const rows = data.map(c => [
       c.isOnline ? 'Online' : 'Offline',
       sanitizeCsvField(c.serialNumber),
       sanitizeCsvField(c.deviceInfo?.productClass || c.productClass || c.deviceInfo?.manufacturer || c.manufacturer),
@@ -883,7 +1092,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `acs_cpes_export_${new Date().getTime()}.csv`);
+    link.setAttribute('download', `acs_cpes_${suffix}_${new Date().getTime()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -912,9 +1121,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private executeBulkReboot(): void {
     const BATCH_SIZE = 50;
     const BATCH_DELAY_MS = 500;
-    const serialNumbers = Array.from(this.selectedCpes);
+    const allSelected = Array.from(this.selectedCpes);
 
-    if (serialNumbers.length === 0) return;
+    // BC-4: Filtra CPEs offline — reboot exige comunicação CWMP ativa.
+    // CPEs offline seriam rejeitadas pelo backend/Circuit Breaker, gerando
+    // falhas desnecessárias e poluindo o AuditLog com result: 'failed'.
+    const serialNumbers = allSelected.filter(sn => {
+      const cpe = this.allCpes.find(c => c.serialNumber === sn);
+      return cpe?.isOnline === true;
+    });
+    const offlineCount = allSelected.length - serialNumbers.length;
+
+    if (serialNumbers.length === 0) {
+      this.toastService.warning('Todas as CPEs selecionadas estão offline. Nenhum reinício enviado.');
+      this.isBulkRebootConfirmOpen = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    if (offlineCount > 0) {
+      this.toastService.warning(`${offlineCount} CPE(s) offline foram ignoradas — reinício exige CPE online.`);
+    }
 
     let success = 0;
     let failed = 0;
@@ -961,8 +1188,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       complete: () => {
         this.finalizeBulkReboot(success, failed);
       },
-      error: (err) => {
-        console.error('Erro geral no fluxo RxJS de reboot:', err);
+      error: () => {
         this.toastService.error('Falha crítica no processamento do lote de reinício.');
       }
     });
@@ -988,17 +1214,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // 2. Funções de controle do Modal (Adicione estas duas funções)
   openConfigModal(cpe: DashboardCpe): void {
-    this.selectedCpeForConfig = cpe;
-    this.isConfigModalOpen = true;
+    // Navega para a tab Wi-Fi do CpeDetailsComponent em vez de abrir modal inline
+    this.router.navigate(['/dashboard/cpe', cpe.serialNumber], { queryParams: { tab: 'wifi' } });
   }
 
   closeConfigModal(): void {
+    // Mantido para compatibilidade — navegação não usa mais estado de modal
     this.isConfigModalOpen = false;
     this.selectedCpeForConfig = null;
   }
 
   goToDiagnostics(serialNumber: string): void {
-    this.router.navigate(['/dashboard/cpe', serialNumber, 'diagnostics']);
+    // Navega para a tab de diagnóstico do CpeDetailsComponent via query param
+    this.router.navigate(['/dashboard/cpe', serialNumber], { queryParams: { tab: 'diagnostics' } });
   }
 
   // --- INTEGRAÇÃO COM INTELIGÊNCIA ARTIFICIAL (MOTOR DE PREDIÇÃO) ---

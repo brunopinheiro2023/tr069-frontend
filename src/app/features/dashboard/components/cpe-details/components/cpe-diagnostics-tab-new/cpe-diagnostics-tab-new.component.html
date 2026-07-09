@@ -16,6 +16,15 @@
     </div>
   </div>
 
+  <!-- Banner de CPE Offline — diagnósticos exigem comunicação CWMP ativa -->
+  <div *ngIf="isCpeOffline && !readOnly" class="access-denied-banner offline">
+    <span class="material-symbols-rounded">cloud_off</span>
+    <div class="access-denied-body">
+      <strong>CPE Offline — Diagnósticos indisponíveis</strong>
+      <p>Os testes de conectividade exigem que a CPE esteja online e comunicando com o ACS. Aguarde o equipamento reconectar para executar diagnósticos.</p>
+    </div>
+  </div>
+
   <!-- Grid de diagnósticos -->
   <div class="diagnostics-grid">
 
@@ -28,7 +37,7 @@
     <div class="diagnostic-card-full">
       <app-speed-test-card
         [serialNumber]="serialNumber"
-        [readOnly]="readOnly"
+        [readOnly]="readOnly || isCpeOffline"
         [isSupported]="diagnosticCapabilities.ipDownloadSupported || diagnosticCapabilities.ipUploadSupported"
         [isRunning]="diagnosticRunning.Download || diagnosticRunning.Upload"
         [result]="speedTestResult"
@@ -53,7 +62,7 @@
     <div class="diagnostic-card">
       <app-ping-diagnostic-card
         [serialNumber]="serialNumber"
-        [readOnly]="readOnly"
+        [readOnly]="readOnly || isCpeOffline"
         [isSupported]="diagnosticCapabilities.ipPingSupported"
         [isRunning]="diagnosticRunning.IPPing"
         [result]="pingResult"
@@ -67,7 +76,7 @@
     <div class="diagnostic-card">
       <app-traceroute-diagnostic-card
         [serialNumber]="serialNumber"
-        [readOnly]="readOnly"
+        [readOnly]="readOnly || isCpeOffline"
         [isSupported]="diagnosticCapabilities.ipTraceRouteSupported"
         [isRunning]="diagnosticRunning.TraceRoute"
         [result]="traceRouteResult"
@@ -87,7 +96,7 @@
     <div class="diagnostic-card">
       <app-dns-lookup-card
         [serialNumber]="serialNumber"
-        [readOnly]="readOnly"
+        [readOnly]="readOnly || isCpeOffline"
         [isSupported]="true"
         [isRunning]="diagnosticRunning.DNSLookup"
         [result]="dnsLookupResult"
@@ -107,7 +116,7 @@
     <div class="diagnostic-card">
       <app-udp-echo-card
         [serialNumber]="serialNumber"
-        [readOnly]="readOnly"
+        [readOnly]="readOnly || isCpeOffline"
         [isSupported]="diagnosticCapabilities.ipUdpEchoSupported"
         [isRunning]="diagnosticRunning.UDPEcho"
         [result]="udpEchoResult"

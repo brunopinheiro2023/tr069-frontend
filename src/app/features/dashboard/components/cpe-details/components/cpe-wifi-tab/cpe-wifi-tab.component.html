@@ -57,7 +57,7 @@
                     variant="primary"
                     size="sm"
                     iconLeft="add_circle"
-                    [disabled]="isApplyingWifi"
+                    [disabled]="isApplyingWifi || isCpeOffline || isViewOnly"
                     (clicked)="openGuestModal()"
                 >
                     Gerenciar Redes Visitantes
@@ -87,8 +87,8 @@
                         </span>
                     </ng-container>
                 </div>
-                <label class="vmoas-switch" [class.disabled-toggle]="!hasCapability('bandSteering')">
-                    <input type="checkbox" formControlName="smartConnect" (change)="applySmartConnectToggle($event)" [attr.disabled]="!hasCapability('bandSteering') ? '' : null">
+                <label class="vmoas-switch" [class.disabled-toggle]="!hasCapability('bandSteering') || isCpeOffline">
+                    <input type="checkbox" formControlName="smartConnect" (change)="applySmartConnectToggle($event)" [attr.disabled]="!hasCapability('bandSteering') || isCpeOffline ? '' : null">
                     <span class="vmoas-slider"></span>
                 </label>
             </div>
@@ -156,7 +156,7 @@
                                     variant="danger"
                                     size="sm"
                                     iconLeft="close"
-                                    [disabled]="isApplyingWifi"
+                                    [disabled]="isApplyingWifi || isCpeOffline"
                                     (clicked)="disableGuestSSID(ssid.index)"
                                 >
                                     Desabilitar
@@ -191,7 +191,7 @@
                                     variant="primary"
                                     size="sm"
                                     iconLeft="check"
-                                    [disabled]="isApplyingWifi"
+                                    [disabled]="isApplyingWifi || isCpeOffline"
                                     (clicked)="enableGuestSSID(ssid.index)"
                                 >
                                     Habilitar

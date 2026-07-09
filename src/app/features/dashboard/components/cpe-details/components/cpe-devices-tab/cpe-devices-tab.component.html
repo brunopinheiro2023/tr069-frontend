@@ -42,9 +42,9 @@
         size="sm"
         iconLeft="sync"
         [loading]="refreshing"
-        [disabled]="refreshing"
+        [disabled]="refreshing || isCpeOffline || isViewOnly"
         (clicked)="refreshDevicesData()"
-        title="Lê os parâmetros diretamente da CPE (tempo real)"
+        [title]="isCpeOffline ? 'CPE offline — atualização indisponível' : 'Lê os parâmetros diretamente da CPE (tempo real)'"
       >
         Atualizar Agora
       </app-button>

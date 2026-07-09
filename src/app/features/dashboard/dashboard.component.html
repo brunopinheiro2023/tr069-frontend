@@ -50,26 +50,26 @@
             </div>
 
             <!-- Card do Gráfico de Saúde ACS (Worker Threads) -->
-            <div class="card health-card" style="display: flex; flex-direction: column; padding: 12px 16px; overflow: hidden;">
-                <div *ngIf="!xmlParserMetrics && !workerHealthDegraded" class="skeleton-loader" style="padding: 20px; text-align: center; color: #94a3b8; font-size: 0.75rem;">
+            <div class="card health-card">
+                <div *ngIf="!xmlParserMetrics && !workerHealthDegraded" class="acs-loading">
                     Carregando saúde do ACS...
                 </div>
-                <div *ngIf="workerHealthDegraded" class="error-banner" style="padding: 8px 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 4px; margin-bottom: 8px; font-size: 0.7rem; color: #fca5a5;">
+                <div *ngIf="workerHealthDegraded" class="acs-error-banner">
                     ⚠ Não foi possível atualizar métricas — exibindo último valor conhecido
                 </div>
                 <ng-container *ngIf="xmlParserMetrics">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <h3 style="font-size: 0.85rem; color: #94a3b8; margin: 0; font-weight: 600;">Saúde do ACS (Workers)</h3>
-                        <span class="status-badge" [ngClass]="'status-badge ' + workerHealthSeverity" style="font-size: 0.7rem; padding: 2px 6px;">
+                    <div class="acs-header">
+                        <h3>Saúde do ACS (Workers)</h3>
+                        <span class="status-badge" [ngClass]="workerHealthSeverity">
                             {{ workerHealthSeverity === 'ok' ? 'Estável' : workerHealthSeverity === 'warning' ? 'Atenção' : 'Crítico' }}
                         </span>
                     </div>
-                    <div style="display: flex; gap: 12px; font-size: 0.75rem; color: #cbd5e1; margin-bottom: 8px; z-index: 10;">
-                        <span><strong style="color: #f8fafc;">{{ xmlParserMetrics.avgProcessingTimeMs }}ms</strong> CPU</span>
-                        <span><strong style="color: #f8fafc;">{{ xmlParserMetrics.lastMemoryUsageMB }}MB</strong> RAM</span>
-                        <span><strong style="color: #f8fafc;">{{ xmlParserMetrics.activeWorkers }}/{{ xmlParserMetrics.poolSize }}</strong> Threads</span>
+                    <div class="acs-metrics">
+                        <span><strong>{{ xmlParserMetrics.avgProcessingTimeMs }}ms</strong> CPU</span>
+                        <span><strong>{{ xmlParserMetrics.lastMemoryUsageMB }}MB</strong> RAM</span>
+                        <span><strong>{{ xmlParserMetrics.activeWorkers }}/{{ xmlParserMetrics.poolSize }}</strong> Threads</span>
                     </div>
-                    <div style="flex: 1; min-height: 45px; position: relative; margin: -10px -16px -12px -16px;">
+                    <div class="acs-chart-container">
                         <canvas baseChart [datasets]="xmlChartDatasets" [labels]="xmlChartLabels" [options]="xmlChartOptions" type="line"></canvas>
                     </div>
                 </ng-container>
@@ -114,6 +114,33 @@
             </div>
         </div>
 
+        <!-- Filtro por faixa de Health Score -->
+        <div class="filters-grid">
+            <div class="filter-group">
+                <h4 class="filter-title">Saúde (Score)</h4>
+                <div class="chips-container">
+                    <button class="chip-btn chip-critical"
+                            [class.active]="filterHealthScore === 'critical'"
+                            (click)="onHealthScoreFilterChange('critical')"
+                            title="CPEs com score abaixo de 50">
+                        Crítico <span class="chip-badge">&lt;50</span>
+                    </button>
+                    <button class="chip-btn chip-attention"
+                            [class.active]="filterHealthScore === 'attention'"
+                            (click)="onHealthScoreFilterChange('attention')"
+                            title="CPEs com score entre 50 e 79">
+                        Atenção <span class="chip-badge">50-79</span>
+                    </button>
+                    <button class="chip-btn chip-healthy"
+                            [class.active]="filterHealthScore === 'healthy'"
+                            (click)="onHealthScoreFilterChange('healthy')"
+                            title="CPEs com score 80 ou superior">
+                        Saudável <span class="chip-badge">80+</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div class="content-card table-card">
             <div class="table-header">
                 <!-- Lado Esquerdo: Título e Ações Diretas -->
@@ -125,8 +152,11 @@
                         <span class="selected-count">
                             {{ selectedCpes.size }} selecionado(s)
                         </span>
-                        <button class="filter-btn active" title="Exportar CSV" (click)="exportSelectedToCsv()">
+                        <button class="filter-btn active" title="Exportar selecionadas para CSV" (click)="exportSelectedToCsv()">
                             <span class="material-symbols-rounded icon-sm">download</span>
+                        </button>
+                        <button class="filter-btn active" title="Exportar frota filtrada para CSV" (click)="exportFilteredToCsv()">
+                            <span class="material-symbols-rounded icon-sm">file_download</span>
                         </button>
 
                         <button class="filter-btn active btn-danger-outline" title="Reiniciar Selecionados" (click)="bulkRebootSelected()">
@@ -158,7 +188,7 @@
                                 (click)="onStatusFilterChange('offline')">Offline</button>
                     </div>
 
-                    <button *ngIf="filterStatus !== 'all' || filterManufacturer || filterModel || filterFirmware || searchQuery || filterCriticalGpon"
+                    <button *ngIf="filterStatus !== 'all' || filterManufacturer || filterModel || filterFirmware || searchQuery || filterCriticalGpon || filterHealthScore"
                             class="filter-btn btn-clear-filters circle-btn"
                             (click)="clearFilters()" title="Limpar Filtros">
                         <span class="material-symbols-rounded icon-sm">filter_alt_off</span>
@@ -172,34 +202,41 @@
             </div>
 
             <div class="table-responsive">
-            <div class="vmoas-grid-table">
+            <div class="vmoas-grid-table" role="grid" aria-label="Lista de CPEs conectadas">
                 <!-- Header Fixo Fora do Viewport de Rolagem -->
-                <div class="vmoas-grid-header">
-                    <div class="col-checkbox">
+                <div class="vmoas-grid-header" role="row">
+                    <div class="col-checkbox" role="columnheader">
                         <input type="checkbox"
                                (change)="toggleSelectAll($event)"
                                [checked]="isAllSelected"
-                               [indeterminate]="isIndeterminate" />
+                               [indeterminate]="isIndeterminate"
+                               aria-label="Selecionar todas as CPEs" />
                     </div>
-                    <div>Status</div>
-                    <div>Serial Number</div>
-                    <div>Modelo</div>
-                    <div>IP WAN</div>
-                    <div>PPPoE</div>
-                    <div>Sinal Óptico (Rx)</div>
-                    <div class="sortable-header" (click)="toggleHealthScoreSort()">
+                    <div role="columnheader">Status</div>
+                    <div role="columnheader">Serial Number</div>
+                    <div role="columnheader">Modelo</div>
+                    <div role="columnheader">IP WAN</div>
+                    <div role="columnheader">PPPoE</div>
+                    <div role="columnheader">Sinal Óptico (Rx)</div>
+                    <div class="sortable-header" role="columnheader" (click)="toggleHealthScoreSort()">
                         Saúde
                         <span class="material-symbols-rounded sort-icon" *ngIf="healthScoreSortDirection">
                             {{ healthScoreSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
                         </span>
                     </div>
-                    <div class="actions-header">Ações</div>
+                    <div role="columnheader">Tarefas</div>
+                    <div class="actions-header" role="columnheader">Ações</div>
                 </div>
 
                 <!-- Viewport controla apenas as linhas de dados, mantendo a rolagem fluida e alinhada -->
-                <cdk-virtual-scroll-viewport itemSize="70" class="vmoas-viewport">
+                <cdk-virtual-scroll-viewport itemSize="70" class="vmoas-viewport" (scrolledIndexChange)="onScrollIndex($event)">
                     <!-- Alterado para cdkVirtualFor para suportar centenas de CPEs renderizadas sem travar -->
-                    <div *cdkVirtualFor="let cpe of cpes; trackBy: trackByCpe" (click)="goToDetails(cpe.serialNumber)" class="table-row-clickable vmoas-grid-row">
+                    <div *cdkVirtualFor="let cpe of cpes; trackBy: trackByCpe"
+                         (click)="goToDetails(cpe.serialNumber)"
+                         class="table-row-clickable vmoas-grid-row"
+                         [class.row-offline]="!cpe.isOnline"
+                         role="row"
+                         [attr.aria-label]="'CPE ' + cpe.serialNumber + ', ' + (cpe.isOnline ? 'online' : 'offline')">
                         <div class="col-checkbox" (click)="$event.stopPropagation()">
                             <input type="checkbox"
                                    [checked]="selectedCpes.has(cpe.serialNumber)"
@@ -208,6 +245,9 @@
                         <div>
                             <span class="status-badge" [class.online]="cpe.isOnline" [class.offline]="!cpe.isOnline">
                                 {{ cpe.isOnline ? 'Online' : 'Offline' }}
+                            </span>
+                            <span class="locked-badge" *ngIf="!cpe.isOnline" title="CPE offline — ações de configuração e diagnóstico bloqueadas">
+                                <span class="material-symbols-rounded">lock</span> Bloqueada
                             </span>
                             <!-- Indicador de Tempo Atrás -->
                             <div class="time-ago">
@@ -256,39 +296,71 @@
                                 <span class="text-muted">N/D</span>
                             </ng-template>
                         </div>
-                        <td class="actions-cell" (click)="$event.stopPropagation()">
+                        <div class="badges-cell">
+                            <span class="tasks-badge"
+                                  *ngIf="cpe.pendingTasks && cpe.pendingTasks.length > 0"
+                                  [class.tasks-warning]="cpe.pendingTasks.length <= 3"
+                                  [class.tasks-critical]="cpe.pendingTasks.length > 3"
+                                  [title]="cpe.pendingTasks.length + ' tarefa(s) pendente(s)'">
+                                {{ cpe.pendingTasks.length }}
+                            </span>
+                            <span class="text-muted" *ngIf="!cpe.pendingTasks || cpe.pendingTasks.length === 0">—</span>
+                            <span class="alerts-badge"
+                                  *ngIf="cpe.activeAlertsCount && cpe.activeAlertsCount > 0"
+                                  [title]="cpe.activeAlertsCount + ' alerta(s) ativo(s)'">
+                                <span class="material-symbols-rounded">warning</span>
+                                {{ cpe.activeAlertsCount }}
+                            </span>
+                        </div>
+                        <div class="actions-cell" (click)="$event.stopPropagation()">
                             <button class="action-btn"
-                                    [disabled]="!cpe.isOnline"
+                                    [disabled]="!cpe.isOnline || wakingUpCpes.has(cpe.serialNumber)"
                                     (click)="wakeUpDevice(cpe.serialNumber)"
-                                    title="Acordar CPE">
-                                <span class="material-symbols-rounded">bolt</span>
+                                    title="Forçar Conexão (Connection Request)"
+                                    [attr.aria-label]="'Forçar conexão com CPE ' + cpe.serialNumber">
+                                <span class="material-symbols-rounded" [class.rotating]="wakingUpCpes.has(cpe.serialNumber)">{{ wakingUpCpes.has(cpe.serialNumber) ? 'progress_activity' : 'bolt' }}</span>
+                            </button>
+
+                            <button class="action-btn reboot"
+                                    [disabled]="!cpe.isOnline || rebootingCpes.has(cpe.serialNumber)"
+                                    (click)="rebootDevice(cpe.serialNumber)"
+                                    title="Reiniciar CPE"
+                                    [attr.aria-label]="'Reiniciar CPE ' + cpe.serialNumber">
+                                <span class="material-symbols-rounded" [class.rotating]="rebootingCpes.has(cpe.serialNumber)">{{ rebootingCpes.has(cpe.serialNumber) ? 'progress_activity' : 'power_settings_new' }}</span>
                             </button>
 
                             <button class="action-btn config"
+                                    [disabled]="!cpe.isOnline"
                                     (click)="openConfigModal(cpe)"
-                                    title="Configurar Wi-Fi">
+                                    title="Configurar Wi-Fi"
+                                    [attr.aria-label]="'Configurar Wi-Fi da CPE ' + cpe.serialNumber">
                                 <span class="material-symbols-rounded">settings</span>
                             </button>
 
                             <button class="action-btn diagnostics"
+                                    [disabled]="!cpe.isOnline"
                                     (click)="goToDiagnostics(cpe.serialNumber)"
-                                    title="Diagnóstico Wi-Fi dedicado">
+                                    title="Diagnóstico Wi-Fi dedicado"
+                                    [attr.aria-label]="'Abrir diagnóstico da CPE ' + cpe.serialNumber">
                                 <span class="material-symbols-rounded">analytics</span>
                             </button>
 
                             <button class="action-btn ai-btn"
+                                    [disabled]="!cpe.isOnline"
                                     (click)="runAiAnalysis(cpe)"
-                                    title="Análise Preditiva de Saúde (IA)">
+                                    title="Análise Preditiva de Saúde (IA)"
+                                    [attr.aria-label]="'Análise preditiva de saúde da CPE ' + cpe.serialNumber">
                                 <span class="material-symbols-rounded" [class.rotating]="isAnalyzingAi && selectedCpeForAi?.serialNumber === cpe.serialNumber">smart_toy</span>
                             </button>
 
                             <button class="action-btn danger"
                                     *ngIf="authService.isAdmin()"
                                     (click)="deleteCpe(cpe)"
-                                    title="Excluir CPE do Sistema">
+                                    title="Excluir CPE do Sistema"
+                                    [attr.aria-label]="'Excluir CPE ' + cpe.serialNumber + ' do sistema'">
                                 <span class="material-symbols-rounded">delete</span>
                             </button>
-                        </td>
+                        </div>
                     </div>
                     <div *ngIf="cpes.length === 0" class="empty-state-row">
                         <div class="empty-state">Nenhuma CPE encontrada ou registrada no ACS.</div>

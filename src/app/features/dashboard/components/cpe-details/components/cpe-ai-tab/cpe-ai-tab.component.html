@@ -1,4 +1,15 @@
 <div class="ai-tab">
+  <!-- Warning: CPE offline — IA usa cache de 20min do backend, pode servir predição antiga -->
+  @if (isCpeOffline && !loading && !error) {
+    <div class="ai-offline-warning">
+      <span class="material-symbols-rounded">cloud_off</span>
+      <div>
+        <strong>CPE Offline — Exibindo predição em cache</strong>
+        <p>A análise preditiva foi calculada usando telemetria histórica e pode não refletir o estado atual. A predição é atualizada a cada hora pelo backend (TTL de 20 minutos).</p>
+      </div>
+    </div>
+  }
+
   <!-- Estado de loading -->
   @if (loading) {
     <div class="ai-loading">

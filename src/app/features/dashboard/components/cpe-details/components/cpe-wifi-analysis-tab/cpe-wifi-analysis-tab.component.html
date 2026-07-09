@@ -106,7 +106,7 @@
     <div class="analysis-section">
       <app-neighbor-scan-card
         [serialNumber]="serialNumber"
-        [readOnly]="false"
+        [readOnly]="isCpeOffline || isViewOnly"
         [isSupported]="true"
         [isRunning]="neighborScanInProgress"
         [result]="$any(neighborScanData)"

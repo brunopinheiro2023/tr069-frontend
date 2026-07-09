@@ -16,6 +16,18 @@
   </div>
 
   <div class="header-actions">
+    <!-- P4: Indicador de status WebSocket — feedback visual em tempo real -->
+    <div class="ws-status-indicator"
+         [class.ws-connected]="wsStatus === 'connected'"
+         [class.ws-disconnected]="wsStatus === 'disconnected'"
+         [class.ws-reconnecting]="wsStatus === 'reconnecting'"
+         [title]="wsStatusLabel"
+         role="status"
+         [attr.aria-label]="wsStatusLabel">
+      <span class="ws-dot"></span>
+      <span class="ws-label">{{ wsStatusLabel }}</span>
+    </div>
+
     <button
       class="theme-toggle-btn"
       (click)="toggleTheme()"
