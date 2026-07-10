@@ -85,7 +85,7 @@ export class PingDiagnosticCardComponent {
       return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     });
 
-    this.lineChartData.datasets[0].data = sortedHistory.map(h => h.averageResponseTime || 0);
+    this.lineChartData.datasets[0].data = sortedHistory.map(h => h.results?.averageResponseTime || 0);
   }
 
   onHostChange(value: string): void {
@@ -95,6 +95,24 @@ export class PingDiagnosticCardComponent {
 
   onRunPing(): void {
     this.runPing.emit(this.host);
+  }
+
+  /** Timestamp do diagnóstico mais recente (history[0] = mais recente, ordenado pelo backend). */
+  get lastRunTimestamp(): string {
+    const ts = this.history?.[0]?.timestamp;
+    return typeof ts === 'string' && ts.length > 0 ? ts : '';
+  }
+
+  /** Formata timestamp ISO para exibição pt-BR. Segue padrão do neighbor-scan-card. */
+  formatTimestamp(timestamp: string): string {
+    if (!timestamp || typeof timestamp !== 'string') return '';
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) return '';
+      return date.toLocaleString('pt-BR');
+    } catch {
+      return '';
+    }
   }
 
   formatBytes(bytes: number): string {

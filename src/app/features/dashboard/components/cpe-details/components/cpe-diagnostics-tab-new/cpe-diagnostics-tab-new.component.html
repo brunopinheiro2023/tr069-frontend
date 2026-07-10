@@ -97,7 +97,7 @@
       <app-dns-lookup-card
         [serialNumber]="serialNumber"
         [readOnly]="readOnly || isCpeOffline"
-        [isSupported]="true"
+        [isSupported]="diagnosticCapabilities.ipDnsLookupSupported"
         [isRunning]="diagnosticRunning.DNSLookup"
         [result]="dnsLookupResult"
         [history]="dnsLookupHistory"

@@ -2,6 +2,7 @@ import { Component, Input, OnInit, OnDestroy, ChangeDetectorRef } from '@angular
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { CpeService } from '../../../../../../core/services/cpe.service';
+import { CapabilityService } from '../../../../../../core/services/capability.service';
 import { DiagnosticParserService } from '../../../../../../core/services/diagnostic-parser.service';
 import { WebSocketService } from '../../../../../../core/services/websocket.service';
 import {
@@ -53,13 +54,16 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
   /** CPE está offline — bloqueia execução de diagnósticos. */
   @Input() isCpeOffline: boolean = false;
 
-  // Capabilities da CPE
+  // Capabilities da CPE — preenchidas via CapabilityService (backend /capabilities/diagnostics).
+  // Antes eram lidas de cpe.parameters buscando paths inexistentes (Device.Capabilities.IP.*),
+  // o que fazia TODOS os cards exibirem "Não suportado" mesmo em CPEs que suportam.
   diagnosticCapabilities = {
     ipPingSupported: false,
     ipTraceRouteSupported: false,
     ipDownloadSupported: false,
     ipUploadSupported: false,
-    ipUdpEchoSupported: false
+    ipUdpEchoSupported: false,
+    ipDnsLookupSupported: false
   };
 
   // Estado de execução de cada diagnóstico
@@ -98,16 +102,20 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
   udpSourceIPAddress: string = '';
 
   private wsSub = new Subscription();
+  /** Debounce de recargas: wifi_data_refreshed é emitido múltiplas vezes em sequência
+   *  (telemetria, diagnóstico, etc.). Sem debounce, cada emissão dispara 5 chamadas HTTP
+   *  simultâneas — com 3 emissões em 2s = 15 requisições. Debounce de 500ms agrupa em 1. */
+  private reloadTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private cpeService: CpeService,
+    private capabilityService: CapabilityService,
     private wsService: WebSocketService,
     private diagnosticParser: DiagnosticParserService,
     private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
-    console.log('[DiagnosticsNew] ngOnInit chamado, serialNumber:', this.serialNumber);
     this.loadCapabilities();
     this.loadDiagnosticHistories();
     this.listenForWebSocketEvents();
@@ -127,37 +135,160 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
 
   /**
    * Carrega o histórico de cada diagnóstico específico.
+   * Chamado no ngOnInit e quando wifi_data_refreshed chega via WebSocket.
+   * Use debouncedReload() para chamadas via WebSocket (agrupa múltiplas emissões).
    */
   private loadDiagnosticHistories(): void {
     if (!this.serialNumber) return;
 
+    // Helper: se o doc mais recente do histórico tem estado final (Complete/Error_*),
+    // o diagnóstico terminou — resetamos diagnosticRunning para desbloquear o card.
+    const isFinalState = (state: string | undefined): boolean =>
+      !!state && !['Requested', 'Running'].includes(state);
+
     this.cpeService.getPingHistory(this.serialNumber, 10).subscribe({
-      next: (res) => { this.pingHistory = res.data || []; },
+      next: (res) => {
+        this.pingHistory = res.data || [];
+        if (this.pingHistory.length > 0) {
+          const latest = this.pingHistory[0] as any;
+          const r = latest.results || {};
+          this.pingResult = {
+            averageResponseTime: r.averageResponseTime,
+            minResponseTime: r.minResponseTime,
+            maxResponseTime: r.maxResponseTime,
+            successCount: r.successCount,
+            failureCount: r.failureCount,
+            diagnosticsState: latest.diagnosticsState,
+            host: latest.host || '',
+            timestamp: latest.timestamp || ''
+          };
+          if (isFinalState(latest.diagnosticsState)) {
+            this.diagnosticRunning.IPPing = false;
+          }
+        }
+        this.cdr.markForCheck();
+      },
       error: (err) => { console.error('Erro ao carregar histórico de ping:', err); }
     });
 
     this.cpeService.getTraceRouteHistory(this.serialNumber, 10).subscribe({
-      next: (res) => { this.traceRouteHistory = res.data || []; },
+      next: (res) => {
+        this.traceRouteHistory = res.data || [];
+        if (this.traceRouteHistory.length > 0) {
+          const latest = this.traceRouteHistory[0] as any;
+          const r = latest.results || {};
+          this.traceRouteResult = {
+            hopCount: r.hopCount,
+            responseTime: r.responseTime,
+            diagnosticsState: latest.diagnosticsState,
+            hops: r.hops,
+            host: latest.host || '',
+            timestamp: latest.timestamp || ''
+          };
+          if (isFinalState(latest.diagnosticsState)) {
+            this.diagnosticRunning.TraceRoute = false;
+          }
+        }
+        this.cdr.markForCheck();
+      },
       error: (err) => { console.error('Erro ao carregar histórico de traceroute:', err); }
     });
 
-    this.cpeService.getSpeedTestHistory(this.serialNumber, 'Download', 10).subscribe({
-      next: (res) => { this.speedTestHistory = res.data || []; },
+    // SpeedTest: carrega histórico da direção atualmente selecionada no card.
+    // Antes carregava só 'Download' — se o usuário fez upload, não aparecia no histórico inicial.
+    const currentDirection: 'Download' | 'Upload' =
+      this.speedTestDirection === 'upload' ? 'Upload' : 'Download';
+    this.cpeService.getSpeedTestHistory(this.serialNumber, currentDirection, 10).subscribe({
+      next: (res) => {
+        this.speedTestHistory = res.data || [];
+        if (this.speedTestHistory.length > 0) {
+          const latest = this.speedTestHistory[0] as any;
+          const r = latest.results || {};
+          this.speedTestResult = {
+            throughput: r.throughputMbps,
+            duration: r.durationSeconds,
+            bytes: r.testBytes || r.totalBytes || 0,
+            diagnosticsState: latest.diagnosticsState
+          };
+          if (isFinalState(latest.diagnosticsState)) {
+            this.diagnosticRunning[currentDirection] = false;
+          }
+        }
+        this.cdr.markForCheck();
+      },
       error: (err) => { console.error('Erro ao carregar histórico de teste de velocidade:', err); }
     });
 
     this.cpeService.getDNSLookupHistory(this.serialNumber, 10).subscribe({
-      next: (res) => { this.dnsLookupHistory = res.data || []; },
+      next: (res) => {
+        this.dnsLookupHistory = res.data || [];
+        if (this.dnsLookupHistory.length > 0) {
+          const latest = this.dnsLookupHistory[0] as any;
+          const r = latest.results || {};
+          this.dnsLookupResult = {
+            diagnosticsState: latest.diagnosticsState,
+            dnsServer: '',
+            hostName: latest.hostName || '',
+            results: [],
+            timestamp: latest.timestamp || ''
+          };
+          // O backend retorna successCount/resultCount/resolvedIPs em results, não results[]
+          // Adaptamos para o formato esperado pelo card (successCount/resultCount)
+          if (r.successCount !== undefined) {
+            (this.dnsLookupResult as any).successCount = r.successCount;
+          }
+          if (r.resultCount !== undefined) {
+            (this.dnsLookupResult as any).resultCount = r.resultCount;
+          }
+          if (isFinalState(latest.diagnosticsState)) {
+            this.diagnosticRunning.DNSLookup = false;
+          }
+        }
+        this.cdr.markForCheck();
+      },
       error: (err) => { console.error('Erro ao carregar histórico de DNS lookup:', err); }
     });
 
     this.cpeService.getUDPEchoHistory(this.serialNumber, 10).subscribe({
-      next: (res) => { this.udpEchoHistory = res.data || []; },
+      next: (res) => {
+        this.udpEchoHistory = res.data || [];
+        if (this.udpEchoHistory.length > 0) {
+          const latest = this.udpEchoHistory[0] as any;
+          const r = latest.results || {};
+          this.udpEchoResult = {
+            packetsReceived: r.packetsReceived,
+            packetsResponded: r.packetsResponded,
+            bytesReceived: r.bytesReceived,
+            bytesResponded: r.bytesResponded,
+            diagnosticsState: latest.diagnosticsState,
+            timestamp: latest.timestamp || ''
+          };
+          if (isFinalState(latest.diagnosticsState)) {
+            this.diagnosticRunning.UDPEcho = false;
+          }
+        }
+        this.cdr.markForCheck();
+      },
       error: (err) => { console.error('Erro ao carregar histórico de UDP echo:', err); }
     });
   }
 
+  /**
+   * Debounce de loadDiagnosticHistories para chamadas via WebSocket.
+   * wifi_data_refreshed pode ser emitido 3-5x em sequência rápida (telemetria chunks +
+   * diagnóstico). Sem debounce = 15-25 chamadas HTTP simultâneas. Com 500ms debounce = 5.
+   */
+  private debouncedReload(): void {
+    if (this.reloadTimer) clearTimeout(this.reloadTimer);
+    this.reloadTimer = setTimeout(() => {
+      this.reloadTimer = null;
+      this.loadDiagnosticHistories();
+      this.cdr.markForCheck();
+    }, 500);
+  }
+
   ngOnDestroy(): void {
+    if (this.reloadTimer) { clearTimeout(this.reloadTimer); this.reloadTimer = null; }
     this.wsSub.unsubscribe();
     if (this.serialNumber) {
       this.wsService.unsubscribeFromCpe(this.serialNumber);
@@ -165,23 +296,37 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Carrega capabilities de diagnóstico da CPE.
+   * Carrega capabilities de diagnóstico da CPE via backend.
+   * Usa o CapabilityService, que consulta /api/cpe/:sn/capabilities/diagnostics —
+   * o mesmo motor (capabilityRegistry.js) usado pelo runDiagnostic no strict check,
+   * garantindo consistência entre o que o frontend exibe e o que o backend aceita.
+   *
+   * O CapabilityService já tem cache em memória (5min) e fallback permissivo quando
+   * o CpeModel está em aprendizado (confidence='learning') — CPEs recém-adicionadas
+   * ou após firmware update não ficam com todos os cards bloqueados.
    */
   private loadCapabilities(): void {
-    if (!this.cpe?.parameters) return;
+    if (!this.serialNumber) return;
 
-    const getCapability = (path: string): boolean => {
-      const param = this.cpe!.parameters!.find(p => p.name === `Device.Capabilities.IP.Diagnostics.${path}`);
-      return param?.value === 'true';
-    };
-
-    this.diagnosticCapabilities = {
-      ipPingSupported: getCapability('IPPing'),
-      ipTraceRouteSupported: getCapability('TraceRoute'),
-      ipDownloadSupported: getCapability('Download'),
-      ipUploadSupported: getCapability('Upload'),
-      ipUdpEchoSupported: getCapability('UDPEcho')
-    };
+    this.capabilityService.getCapabilities(this.serialNumber, 'diagnostics').subscribe({
+      next: (response) => {
+        const caps = response.capabilities || {};
+        this.diagnosticCapabilities = {
+          ipPingSupported:      caps['ipping'] ?? false,
+          ipTraceRouteSupported: caps['traceroute'] ?? false,
+          ipDownloadSupported:  caps['download'] ?? false,
+          ipUploadSupported:    caps['upload'] ?? false,
+          ipUdpEchoSupported:   caps['udpecho'] ?? false,
+          ipDnsLookupSupported: caps['dnslookup'] ?? false
+        };
+        this.cdr.markForCheck();
+      },
+      error: (err) => {
+        console.error('Erro ao carregar capabilities de diagnóstico:', err);
+        // Em caso de erro, mantém defaults (false) — o usuário pode ainda tentar
+        // disparar via ?strict=false no backend se necessário.
+      }
+    });
   }
 
   /**
@@ -190,29 +335,37 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
    * que permitem atualizar o UI sem polling.
    */
   private listenForWebSocketEvents(): void {
-    // Evento genérico: a CPE reportou DIAGNOSTICS COMPLETE
+    // Evento genérico: a CPE reportou DIAGNOSTICS COMPLETE (evento "8 DIAGNOSTICS COMPLETE").
+    // ATENÇÃO: este evento é emitido ANTES do follow-up GPV que lê os resultados da CPE.
+    // Os resultados ainda não estão no DB neste momento — recarregar o histórico aqui
+    // retorna dados vazios. A recarga efetiva acontece no evento wifi_data_refreshed abaixo.
     this.wsSub.add(
       this.wsService.onDiagnosticsComplete().subscribe(event => {
         if (event.serialNumber !== this.serialNumber) return;
-        // Recarrega o histórico de todos os diagnósticos
-        this.loadDiagnosticHistories();
+        // Apenas marca que um diagnóstico completou — a recarga do histórico
+        // acontece quando wifi_data_refreshed chega (após o GPV de follow-up).
+      })
+    );
+
+    // Evento: resultados de diagnóstico salvos no DB (backend emite wifi_data_refreshed
+    // após handleGetParameterValuesResponse salvar os resultados no DiagnosticHistory
+    // e modelos tipados). Este é o momento correto para recarregar o histórico.
+    // Usa debounce porque wifi_data_refreshed é emitido múltiplas vezes em sequência
+    // (telemetria chunks + diagnóstico + outros GPVs on-demand).
+    this.wsSub.add(
+      this.wsService.onWifiDataRefreshed().subscribe(event => {
+        if (event.serialNumber !== this.serialNumber) return;
+        this.debouncedReload();
       })
     );
 
     // Teste de velocidade — Download concluído com sucesso
     this.wsSub.add(
       this.wsService.onDownloadTestCompleted().subscribe(event => {
-        console.log('[WebSocket] download_test_completed recebido:', event);
-        console.log('[WebSocket] serialNumber esperado:', this.serialNumber, 'deviceId recebido:', event.deviceId);
-        if (event.deviceId !== this.serialNumber) {
-          console.log('[WebSocket] Ignorando evento de outra CPE');
-          return;
-        }
-        console.log('[WebSocket] Processando resultado:', event.results);
+        if (event.deviceId !== this.serialNumber) return;
         this.diagnosticRunning.Download = false;
         this.speedTestError = null;
         this.speedTestResult = this.buildSpeedTestResult(event.results);
-        console.log('[WebSocket] speedTestResult construído:', this.speedTestResult);
         this.loadSpeedTestHistory('Download');
         this.cdr.markForCheck();
       })
@@ -259,9 +412,16 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
    */
   private buildSpeedTestResult(results: any): LiveSpeedTestResult | null {
     if (!results) return null;
+    // parseFloat pode retornar NaN se o valor for string não-numérica.
+    // NaN é !== undefined mas é inválido para exibição — converte para undefined.
+    const safeFloat = (v: any): number | undefined => {
+      if (v === undefined || v === null) return undefined;
+      const n = parseFloat(v);
+      return Number.isNaN(n) ? undefined : n;
+    };
     return {
-      throughput: results.throughputMbps !== undefined ? parseFloat(results.throughputMbps) : undefined,
-      duration: results.durationSeconds !== undefined ? parseFloat(results.durationSeconds) : undefined,
+      throughput: safeFloat(results.throughputMbps),
+      duration: safeFloat(results.durationSeconds),
       bytes: results.TotalBytesReceived || results.TotalBytesSent || results.TestBytesReceived || results.TestBytesSent || 0,
       diagnosticsState: results.DiagnosticsState || 'Complete',
     };
@@ -284,9 +444,7 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
     this.pingHost = host;
     this.diagnosticRunning.IPPing = true;
     this.cpeService.runDiagnostic(this.serialNumber, 'IPPing', { Host: host }).subscribe({
-      next: (res) => {
-        console.log('Ping iniciado:', res.message);
-      },
+      next: () => {},
       error: (err) => {
         console.error('Erro ao iniciar ping:', err);
         this.diagnosticRunning.IPPing = false;
@@ -298,9 +456,7 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
     this.traceRouteHost = host;
     this.diagnosticRunning.TraceRoute = true;
     this.cpeService.runDiagnostic(this.serialNumber, 'TraceRoute', { Host: host }).subscribe({
-      next: (res) => {
-        console.log('TraceRoute iniciado:', res.message);
-      },
+      next: () => {},
       error: (err) => {
         console.error('Erro ao iniciar traceroute:', err);
         this.diagnosticRunning.TraceRoute = false;
@@ -320,9 +476,7 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
       'HTTP',
       String(data.connections) as '1' | '2' | '3'
     ).subscribe({
-      next: (res) => {
-        console.log('Teste de velocidade iniciado:', res.message);
-      },
+      next: () => {},
       error: (err) => {
         console.error('Erro ao iniciar teste de velocidade:', err);
         this.diagnosticRunning[data.direction === 'download' ? 'Download' : 'Upload'] = false;
@@ -336,9 +490,7 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
     this.dnsHostName = hostName;
     this.diagnosticRunning.DNSLookup = true;
     this.cpeService.runDiagnostic(this.serialNumber, 'DNSLookup', { HostName: hostName }).subscribe({
-      next: (res) => {
-        console.log('DNS Lookup iniciado:', res.message);
-      },
+      next: () => {},
       error: (err) => {
         console.error('Erro ao iniciar DNS lookup:', err);
         this.diagnosticRunning.DNSLookup = false;
@@ -354,9 +506,7 @@ export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
       UDPPort: String(data.udpPort),
       SourceIPAddress: data.sourceIPAddress
     }).subscribe({
-      next: (res) => {
-        console.log('UDP Echo iniciado:', res.message);
-      },
+      next: () => {},
       error: (err) => {
         console.error('Erro ao iniciar UDP echo:', err);
         this.diagnosticRunning.UDPEcho = false;

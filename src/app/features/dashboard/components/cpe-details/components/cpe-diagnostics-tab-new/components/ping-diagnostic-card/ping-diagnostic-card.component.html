@@ -5,6 +5,11 @@
     <span class="diag-capability unsupported" *ngIf="!isSupported">Não suportado</span>
   </div>
 
+  <div class="diag-last-run" *ngIf="lastRunTimestamp">
+    <span class="material-symbols-rounded">schedule</span>
+    Última coleta: {{ formatTimestamp(lastRunTimestamp) }}
+  </div>
+
   <p class="diag-description">
     Testa a conectividade e latência da CPE até um host remoto. Útil para diagnosticar problemas de rede e medir o tempo de resposta.
   </p>

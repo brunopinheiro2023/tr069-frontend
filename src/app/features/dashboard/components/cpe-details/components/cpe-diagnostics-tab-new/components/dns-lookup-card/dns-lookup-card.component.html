@@ -3,6 +3,11 @@
     <h4><span class="material-symbols-rounded">dns</span> DNS Lookup</h4>
   </div>
 
+  <div class="diag-last-run" *ngIf="lastRunTimestamp">
+    <span class="material-symbols-rounded">schedule</span>
+    Última coleta: {{ formatTimestamp(lastRunTimestamp) }}
+  </div>
+
   <p class="diag-description">
     Resolve nomes de domínio para endereços IP. Útil para verificar se o servidor DNS configurado na CPE está funcionando corretamente e diagnosticar problemas de resolução de nomes.
   </p>

@@ -5,6 +5,11 @@
     <span class="diag-capability unsupported" *ngIf="!isSupported">Não suportado</span>
   </div>
 
+  <div class="diag-last-run" *ngIf="lastRunTimestamp">
+    <span class="material-symbols-rounded">schedule</span>
+    Última coleta: {{ formatTimestamp(lastRunTimestamp) }}
+  </div>
+
   <p class="diag-description">
     Testa a conectividade UDP enviando pacotes echo para um servidor remoto. Útil para diagnosticar problemas de firewall, NAT e verificar se a CPE pode receber conexões UDP.
   </p>

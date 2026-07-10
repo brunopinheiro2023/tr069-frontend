@@ -8,6 +8,11 @@
     </span>
   </div>
 
+  <div class="diag-last-run" *ngIf="lastRunTimestamp">
+    <span class="material-symbols-rounded">schedule</span>
+    Última coleta: {{ formatTimestamp(lastRunTimestamp) }}
+  </div>
+
   <p class="diag-description">
     Mede a velocidade real de download/upload da CPE usando o padrão TR-143. Útil para verificar se a conexão está entregando a velocidade contratada pelo provedor.
   </p>
