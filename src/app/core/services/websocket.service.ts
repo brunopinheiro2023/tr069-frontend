@@ -1,6 +1,6 @@
 import { Injectable, NgZone } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
-import { Observable, BehaviorSubject, share } from 'rxjs';
+import { Observable, BehaviorSubject, share, merge } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Router } from '@angular/router';
 
@@ -142,6 +142,30 @@ export class WebSocketService {
   onWifiDiagnosticsUpdate(): Observable<any> { return this.on('wifi_diagnostics_update'); }
   onWifiDataRefreshed(): Observable<{ serialNumber: string; timestamp: string }> { return this.on('wifi_data_refreshed'); }
   onNeighborScanCompleted(): Observable<{ serialNumber: string; timestamp: string }> { return this.on('neighbor_scan_completed'); }
+
+  // Diagnósticos ativos — 4 pares de evento (ipping/traceroute/dnslookup/udpecho × completed/error)
+  // já emitidos pelo backend na sala cpe_${serialNumber}. Reaproveita os eventos
+  // existentes — só adiciona listeners novos no frontend.
+  onDiagnosticTestCompleted(): Observable<{ deviceId: string; targetId: string | null }> {
+    return merge(
+      this.on<any>('ipping_test_completed'), this.on<any>('traceroute_test_completed'),
+      this.on<any>('dnslookup_test_completed'), this.on<any>('udpecho_test_completed'),
+    );
+  }
+  onDiagnosticTestError(): Observable<{ deviceId: string; targetId: string | null }> {
+    return merge(
+      this.on<any>('ipping_test_error'), this.on<any>('traceroute_test_error'),
+      this.on<any>('dnslookup_test_error'), this.on<any>('udpecho_test_error'),
+    );
+  }
+  // Evento global (sala all_cpes) — emitido pelo scheduler quando um destino periódico completa
+  onDiagnosticTargetResult(): Observable<{ targetId: string; serialNumber: string; type: string; timestamp: string }> {
+    return this.on('diagnostic_target_result');
+  }
+  // Evento global — emitido quando um destino falha em ≥3 CPEs distintas na última hora
+  onDiagnosticTargetDegraded(): Observable<{ targetId: string; host: string; type: string; distinctFailingCpes: number; timestamp: string }> {
+    return this.on('diagnostic_target_degraded');
+  }
   onCpeAccessDenied(): Observable<{ serialNumber: string; lockedBy: string; lockedAt: string; lockedMinutes: number }> { return this.on('cpe_access_denied'); }
   onCpeAccessGranted(): Observable<{ serialNumber: string; isDriver: boolean }> { return this.on('cpe_access_granted'); }
   onPresenceConflict(): Observable<{ serialNumber: string; driver: string; message: string }> { return this.on('presence_conflict'); }

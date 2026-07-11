@@ -1261,6 +1261,8 @@ export interface DiagnosticTarget {
   updatedBy: string;
   createdAt?: string;
   updatedAt?: string;
+  /** Saúde das últimas 24h — populado por listDiagnosticTargets (aggregation). */
+  health?: { totalExecutions24h: number; successRate24h: number } | null;
 }
 
 export interface DiagnosticTargetCreate {

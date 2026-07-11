@@ -4,10 +4,11 @@ import {
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { catchError, finalize, of } from 'rxjs';
+import { catchError, finalize, of, forkJoin } from 'rxjs';
 import { DiagnosticTargetService } from '../../core/services/diagnostic-target.service';
 import { ToastService } from '../../core/services/toast.service';
 import { AuthService } from '../../core/services/auth.service';
+import { WebSocketService } from '../../core/services/websocket.service';
 import {
   DiagnosticTarget, DiagnosticTargetType, DiagnosticTargetAnalysis,
 } from '../../core/models';
@@ -51,6 +52,7 @@ export class DiagnosticTargetsComponent implements OnInit {
     private service: DiagnosticTargetService,
     private toast: ToastService,
     private authService: AuthService,
+    private wsService: WebSocketService,
     private cdr: ChangeDetectorRef,
   ) {}
 
@@ -65,6 +67,21 @@ export class DiagnosticTargetsComponent implements OnInit {
       enabled: [true],
     });
     this.load();
+
+    // Tempo real: escuta eventos globais do scheduler na sala all_cpes.
+    // diagnostic_target_result → atualiza lista (pega novo health 24h) + recarrega análise se expandida.
+    // diagnostic_target_degraded → toast de aviso + destaca visualmente o item.
+    this.wsService.subscribeToAllCpes();
+    this.wsService.onDiagnosticTargetResult().pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(ev => {
+        if (this.expandedAnalysisId === ev.targetId) delete this.analysisMap[ev.targetId];
+        this.load();
+      });
+    this.wsService.onDiagnosticTargetDegraded().pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(ev => {
+        this.toast.warning(`Destino "${ev.host}" (${ev.type}) falhando em ${ev.distinctFailingCpes} CPEs distintas na última hora.`);
+        this.cdr.markForCheck();
+      });
   }
 
   private load(): void {
@@ -148,7 +165,11 @@ export class DiagnosticTargetsComponent implements OnInit {
     req$.pipe(
       takeUntilDestroyed(this.destroyRef),
       catchError(err => {
-        this.toast.error(err?.error?.error || err?.error?.message || 'Erro ao salvar destino.');
+        if (err.status === 409) {
+          this.toast.error(err.error?.error || 'Destino duplicado já existe.');
+        } else {
+          this.toast.error(err?.error?.error || err?.error?.message || 'Erro ao salvar destino.');
+        }
         return of(null);
       }),
       finalize(() => { this.saving = false; this.cdr.markForCheck(); }),
@@ -225,5 +246,59 @@ export class DiagnosticTargetsComponent implements OnInit {
     if (target.scopeType === 'all') return 'Todas as CPEs';
     const count = target.serialNumbers?.length || 0;
     return `${count} CPE${count !== 1 ? 's' : ''} selecionada${count !== 1 ? 's' : ''}`;
+  }
+
+  // Exporta a série diária da análise em CSV — reaproveita o padrão Blob+BOM
+  // já usado em cpe-info-tab.component.ts:705-732, sem inventar utilitário novo.
+  exportAnalysisCsv(target: DiagnosticTarget): void {
+    const a = this.analysisMap[target._id!];
+    if (!a?.dailySeries?.length) return;
+    const headers = ['day', 'success', 'error', 'total'];
+    const rows = a.dailySeries.map(d => [d.day, d.success, d.error, d.total].join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `diagnostico_${target.host}_${target.type}_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ── Ações em lote ──────────────────────────────────────────────────────
+  // Sem endpoint bulk no backend — client-side com forkJoin nos endpoints
+  // singulares já existentes. Simples e suficiente pro volume esperado.
+
+  selectedIds = new Set<string>();
+
+  toggleSelection(id: string): void {
+    if (this.selectedIds.has(id)) this.selectedIds.delete(id);
+    else this.selectedIds.add(id);
+  }
+
+  bulkToggleEnabled(enabled: boolean): void {
+    if (this.selectedIds.size === 0) return;
+    const calls = Array.from(this.selectedIds).map(id => this.service.update(id, { enabled }));
+    forkJoin(calls).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      catchError(() => { this.toast.error('Falha ao atualizar alguns destinos.'); return of(null); }),
+    ).subscribe(() => {
+      this.toast.success(`${this.selectedIds.size} destino(s) atualizados.`);
+      this.selectedIds.clear();
+      this.load();
+    });
+  }
+
+  bulkDelete(): void {
+    if (this.selectedIds.size === 0 || !confirm(`Remover ${this.selectedIds.size} destino(s)?`)) return;
+    const calls = Array.from(this.selectedIds).map(id => this.service.delete(id));
+    forkJoin(calls).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      catchError(() => { this.toast.error('Falha ao remover alguns destinos.'); return of(null); }),
+    ).subscribe(() => {
+      this.toast.success('Destinos removidos.');
+      this.selectedIds.clear();
+      this.load();
+    });
   }
 }

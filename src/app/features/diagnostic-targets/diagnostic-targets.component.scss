@@ -53,6 +53,18 @@ fieldset { border: 1px solid var(--border, #2e2e3e); border-radius: 8px; padding
 .form-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
 
 // ── Lista de destinos ─────────────────────────────────────────────────────
+.bulk-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: 12px;
+  background: rgba(99,102,241,0.08); border-radius: 8px; font-size: 0.85rem;
+  span { font-weight: 600; }
+}
+.btn-sm { padding: 4px 12px; border-radius: 6px; border: 1px solid var(--border, #2e2e3e);
+  background: var(--surface, #1e1e2e); color: var(--text, #ccc); cursor: pointer; font-size: 0.8rem;
+  &:hover { border-color: var(--accent, #6366f1); }
+}
+.btn-danger { color: #ef4444; border-color: rgba(239,68,68,0.3);
+  &:hover { border-color: #ef4444; }
+}
+.bulk-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent, #6366f1); }
 .target-list { display: flex; flex-direction: column; gap: 12px; }
 .target-item { border: 1px solid var(--border, #2e2e3e); border-radius: 10px; padding: 16px; transition: border-color 0.15s;
   &:hover { border-color: var(--accent, #6366f1); }
@@ -64,6 +76,8 @@ fieldset { border: 1px solid var(--border, #2e2e3e); border-radius: 8px; padding
 .badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: 600;
   &--on { background: rgba(34,197,94,0.15); color: #22c55e; }
   &--off { background: rgba(239,68,68,0.15); color: #ef4444; }
+  &--warn { background: rgba(245,158,11,0.15); color: #f59e0b; }
+  &--health { margin-left: 4px; }
 }
 .target-meta { display: flex; flex-wrap: wrap; gap: 4px; font-size: 0.78rem; color: var(--text-muted, #888); margin-top: 4px;
   .host { font-family: 'Courier New', monospace; color: var(--text, #ccc); }
@@ -95,7 +109,12 @@ fieldset { border: 1px solid var(--border, #2e2e3e); border-radius: 8px; padding
   strong { color: var(--text-muted, #888); font-weight: 500; }
 }
 
-.daily-series { margin-bottom: 16px; }
+.daily-series { margin-bottom: 16px;
+  h4 { display: flex; align-items: center; gap: 8px; }
+  .csv-btn { padding: 2px 6px; font-size: 0.75rem;
+    .material-symbols-rounded { font-size: 16px; }
+  }
+}
 .series-bars { display: flex; gap: 4px; align-items: flex-end; height: 80px; overflow-x: auto; padding-bottom: 20px; }
 .series-bar { display: flex; flex-direction: column; justify-content: flex-end; min-width: 28px; height: 100%; position: relative;
   .bar-ok { background: #22c55e; border-radius: 2px 2px 0 0; min-height: 2px; }

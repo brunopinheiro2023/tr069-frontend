@@ -3,8 +3,9 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { catchError, of } from 'rxjs';
+import { catchError, merge, of, filter } from 'rxjs';
 import { DiagnosticTargetService } from '../../../../../../core/services/diagnostic-target.service';
+import { WebSocketService } from '../../../../../../core/services/websocket.service';
 import {
   DiagnosticTarget, DiagnosticTargetHistoryEntry,
 } from '../../../../../../core/models';
@@ -34,11 +35,25 @@ export class CpePeriodicDiagnosticsTabComponent implements OnInit {
 
   constructor(
     private service: DiagnosticTargetService,
+    private wsService: WebSocketService,
     private cdr: ChangeDetectorRef,
   ) {}
 
   ngOnInit(): void {
     this.loadTargets();
+
+    // Escuta os 4 pares de evento já emitidos pelo backend na sala da CPE
+    // (ipping/traceroute/dnslookup/udpecho × completed/error). Se o targetId
+    // veio e está expandido, re-busca só aquele histórico.
+    merge(this.wsService.onDiagnosticTestCompleted(), this.wsService.onDiagnosticTestError())
+      .pipe(takeUntilDestroyed(this.destroyRef), filter(ev => ev.deviceId === this.serialNumber))
+      .subscribe(ev => {
+        if (ev.targetId && this.expandedTargetId === ev.targetId) {
+          // Força re-fetch: limpa cache e recarrega
+          delete this.historyByTarget[ev.targetId];
+          this.loadHistory(ev.targetId);
+        }
+      });
   }
 
   private loadTargets(): void {
@@ -65,15 +80,19 @@ export class CpePeriodicDiagnosticsTabComponent implements OnInit {
     }
     this.expandedTargetId = id;
     if (!this.historyByTarget[id]) {
-      this.service.history(id, 20, this.serialNumber).pipe(
-        takeUntilDestroyed(this.destroyRef),
-        catchError(() => of([])),
-      ).subscribe(history => {
-        this.historyByTarget[id] = history;
-        this.cdr.markForCheck();
-      });
+      this.loadHistory(id);
     }
     this.cdr.markForCheck();
+  }
+
+  private loadHistory(id: string): void {
+    this.service.history(id, 20, this.serialNumber).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      catchError(() => of([])),
+    ).subscribe(history => {
+      this.historyByTarget[id] = history;
+      this.cdr.markForCheck();
+    });
   }
 
   // Extrai um valor legível do resultado (varia por tipo de diagnóstico) — campos

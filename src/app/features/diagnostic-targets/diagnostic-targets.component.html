@@ -82,16 +82,34 @@
     <!-- Lista de destinos -->
     <section class="card" *ngIf="targets.length > 0; else emptyState">
       <h2>Destinos cadastrados ({{ targets.length }})</h2>
+
+      <!-- Toolbar de ações em lote -->
+      <div class="bulk-toolbar" *ngIf="selectedIds.size > 0">
+        <span>{{ selectedIds.size }} selecionado{{ selectedIds.size !== 1 ? 's' : '' }}</span>
+        <button class="btn-sm" (click)="bulkToggleEnabled(true)" *ngIf="isAdmin">Ativar</button>
+        <button class="btn-sm" (click)="bulkToggleEnabled(false)" *ngIf="isAdmin">Desativar</button>
+        <button class="btn-sm btn-danger" (click)="bulkDelete()" *ngIf="isAdmin">Remover</button>
+      </div>
+
       <div class="target-list">
         <div class="target-item" *ngFor="let t of targets">
           <div class="target-header">
             <div class="target-info">
+              <input type="checkbox" class="bulk-checkbox" *ngIf="isAdmin"
+                     [checked]="selectedIds.has(t._id!)"
+                     (change)="toggleSelection(t._id!)" />
               <span class="material-symbols-rounded type-icon">{{ getTypeIcon(t.type) }}</span>
               <div>
                 <div class="target-title">
                   <strong>{{ t.label || t.host }}</strong>
                   <span class="badge" [class.badge--on]="t.enabled" [class.badge--off]="!t.enabled">
                     {{ t.enabled ? 'Ativo' : 'Inativo' }}
+                  </span>
+                  <span class="badge badge--health" *ngIf="t.health"
+                    [class.badge--on]="t.health.successRate24h >= 90"
+                    [class.badge--warn]="t.health.successRate24h >= 70 && t.health.successRate24h < 90"
+                    [class.badge--off]="t.health.successRate24h < 70">
+                    {{ t.health.successRate24h }}% (24h)
                   </span>
                 </div>
                 <div class="target-meta">
@@ -168,7 +186,12 @@
 
               <!-- Série diária -->
               <div class="daily-series" *ngIf="analysisMap[t._id!]?.dailySeries?.length">
-                <h4>Execuções por dia (últimos 30 dias)</h4>
+                <h4>
+                  Execuções por dia (últimos 30 dias)
+                  <button class="icon-btn csv-btn" (click)="exportAnalysisCsv(t)" title="Exportar CSV">
+                    <span class="material-symbols-rounded">download</span>
+                  </button>
+                </h4>
                 <div class="series-bars">
                   <div class="series-bar" *ngFor="let day of analysisMap[t._id!]!.dailySeries"
                        [title]="day.day + ': ' + day.success + ' ok, ' + day.error + ' falhas'">
