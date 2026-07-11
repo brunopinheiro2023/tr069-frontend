@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { CpeService } from '../../../../../../core/services/cpe.service';
@@ -45,7 +45,8 @@ interface LiveSpeedTestResult {
     UDPEchoCardComponent
   ],
   templateUrl: './cpe-diagnostics-tab-new.component.html',
-  styleUrls: ['./cpe-diagnostics-tab-new.component.scss']
+  styleUrls: ['./cpe-diagnostics-tab-new.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class CpeDiagnosticsTabNewComponent implements OnInit, OnDestroy {
   @Input() cpe: CpeDevice | null = null;

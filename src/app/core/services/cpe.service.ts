@@ -711,6 +711,35 @@ export class CpeService {
   }
 
   /**
+   * Busca saúde do sistema (endpoint público /health — sem auth).
+   * Retorna version, uptime, mongodb, redis, memory, admission, mongoCircuit.
+   * Usado pelo painel de monitoramento ACS do dashboard.
+   */
+  getSystemHealth(): Observable<{
+    status: string;
+    version: string;
+    uptime: number;
+    timestamp: string;
+    mongodb: string;
+    redis: string;
+    memory: { heapUsed: number; heapTotal: number; rss: number };
+    admission: { circuitOpen: boolean; eventLoopLagMs: number; admitted: number; rejected: number };
+    mongoCircuit: { state: string; failureCount: number };
+  }> {
+    return this.http.get<{
+      status: string;
+      version: string;
+      uptime: number;
+      timestamp: string;
+      mongodb: string;
+      redis: string;
+      memory: { heapUsed: number; heapTotal: number; rss: number };
+      admission: { circuitOpen: boolean; eventLoopLagMs: number; admitted: number; rejected: number };
+      mongoCircuit: { state: string; failureCount: number };
+    }>(`${environment.apiUrl}/health`);
+  }
+
+  /**
    * Busca breakdown do Health Score por CPE (5 componentes + total).
    */
   getHealthScoreBreakdown(serialNumber: string): Observable<{ total: number; components: Record<string, { score: number; weight: number }> }> {

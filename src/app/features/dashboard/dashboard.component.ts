@@ -86,6 +86,45 @@ export class DashboardComponent implements OnInit, OnDestroy {
   workerHealthDegraded: boolean = false;
   selectedCpes = new Set<string>();
 
+  // ─── MONITORAMENTO ACS EXPANDIDO (FASE 3) ────────────────────────────────
+  // Informações de versão e status de serviços do backend (do endpoint /health)
+  acsSystemInfo: {
+    version: string;
+    uptimeSeconds: number;
+    mongodbStatus: 'connected' | 'disconnected' | 'degraded';
+    redisStatus: 'connected' | 'disconnected' | 'degraded';
+    eventLoopLagMs: number;
+    admissionCircuitOpen: boolean;
+    mongoCircuitState: string;
+  } | null = null;
+
+  // Alertas de sistema — disparados quando thresholds são cruzados
+  systemAlerts: { level: 'warning' | 'critical'; message: string; metric: string }[] = [];
+
+  // Getter: uptime formatado em dias/horas/minutos
+  get acsUptimeFormatted(): string {
+    if (!this.acsSystemInfo?.uptimeSeconds) return 'N/D';
+    const s = this.acsSystemInfo.uptimeSeconds;
+    const days = Math.floor(s / 86400);
+    const hours = Math.floor((s % 86400) / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    if (days > 0) return `${days}d ${hours}h ${mins}m`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
+  }
+
+  // Getter: status geral do backend (ok/degraded/critical)
+  get backendStatus(): 'ok' | 'degraded' | 'critical' {
+    if (!this.acsSystemInfo) return 'ok';
+    if (this.acsSystemInfo.mongodbStatus === 'disconnected' || this.acsSystemInfo.redisStatus === 'disconnected') return 'critical';
+    if (this.workerHealthSeverity === 'critical') return 'critical';
+    if (this.workerHealthSeverity === 'warning' ||
+        this.acsSystemInfo.mongodbStatus === 'degraded' ||
+        this.acsSystemInfo.redisStatus === 'degraded' ||
+        this.acsSystemInfo.admissionCircuitOpen) return 'degraded';
+    return 'ok';
+  }
+
   // Thresholds centralizados para saúde do ACS
   readonly WORKER_HEALTH_THRESHOLDS = {
     avgMsWarning: 80,
@@ -96,8 +135,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
     queueCritical: 200
   };
 
-  // Ordenação por Health Score
-  healthScoreSortDirection: 'asc' | 'desc' | null = null;
+  // Ordenação multi-coluna — qualquer coluna pode ser ordenada (asc/desc/null)
+  // Coluna ativa null = ordem original do backend
+  sortColumn: string | null = null;
+  sortDirection: 'asc' | 'desc' | null = null;
+
+  // Colunas ordenáveis da tabela
+  readonly SORTABLE_COLUMNS: readonly string[] = [
+    'status', 'serialNumber', 'model', 'wanIp', 'pppoe', 'rx', 'healthScore', 'tasks'
+  ];
+
+  // Compatibilidade: mantém healthScoreSortDirection mapeando para o novo sistema
+  get healthScoreSortDirection(): 'asc' | 'desc' | null {
+    return this.sortColumn === 'healthScore' ? this.sortDirection : null;
+  }
 
   // Filtros da tabela
   searchQuery: string = '';
@@ -137,8 +188,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private totalPages: number = 1;
   private readonly PAGE_SIZE = 500;
 
-  // Getter para detectar filtros ativos
-  private get hasActiveFilters(): boolean {
+  // Getter para detectar filtros ativos (público para uso no template)
+  get hasActiveFilters(): boolean {
     return this.filterStatus !== 'all'
       || !!this.filterManufacturer
       || !!this.filterModel
@@ -257,12 +308,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.wsService.subscribeToAllCpes();
 
     // OTIMIZAÇÃO: Relógio passivo interno (Heartbeat Visual)
-    // Atualiza o texto "Há X min" dinamicamente e detecta CPEs que caíram (silenciosamente)
+    // Atualiza o texto "Há X min" dinamicamente e detecta CPEs que caíram (silenciosamente).
+    // Itera sobre allCpes (fonte de verdade) — se mutar apenas cpes (lista filtrada),
+    // o próximo refilter do worker sobrescreveria com allCpes ainda isOnline=true.
     this.timeAgoInterval = setInterval(() => {
       const now = Date.now();
       let hasChanges = false;
 
-      this.cpes.forEach(cpe => {
+      this.allCpes.forEach(cpe => {
         if (cpe.lastInform) {
           const minsSince = (now - new Date(cpe.lastInform).getTime()) / 60000;
 
@@ -276,37 +329,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
         }
       });
       this.globalOnlineCount = Math.max(0, this.globalOnlineCount);
+      // Se houve mudança de status, dispara refilter para o worker atualizar cpes[]
+      if (hasChanges) {
+        this.refilterSubject.next();
+      }
       this.cdr.markForCheck(); // Força atualização dos textos "Há X min"
     }, 60000);
 
     // OTIMIZAÇÃO: Polling real para o Gráfico de Saúde do ACS
     // Cada ponto do gráfico agora é uma amostra REAL do backend, não repetição do mesmo valor
-    this.metricsInterval = setInterval(() => {
-      this.cpeService.getWorkerHealth().subscribe({
-        next: (health) => {
-          this.xmlParserMetrics = health.xmlParser;
-          this.queueStats = health.rabbitmq;
-          this.processHealth = health.process;
-          this.workerHealthDegraded = false;
-
-          const now = new Date().toLocaleTimeString();
-          this.xmlChartLabels.push(now);
-          this.xmlChartDatasets[0].data.push(health.xmlParser.avgProcessingTimeMs);
-          this.xmlChartDatasets[1].data.push(health.xmlParser.p95ProcessingTimeMs);
-          if (this.xmlChartLabels.length > 30) {
-            this.xmlChartLabels.shift();
-            this.xmlChartDatasets[0].data.shift();
-            this.xmlChartDatasets[1].data.shift();
-          }
-          this.xmlChartDatasets = [...this.xmlChartDatasets];
-          this.cdr.markForCheck();
-        },
-        error: () => {
-          this.workerHealthDegraded = true;
-          this.cdr.markForCheck();
-        }
-      });
-    }, 5000); // 5s — equilíbrio entre frescor e carga no backend
+    this.startMetricsPolling();
 
     // Polling para Widget de Saúde da Frota (Step 9)
     this.healthSummaryInterval = setInterval(() => {
@@ -324,31 +356,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       } else {
         // Retoma polling imediatamente ao voltar à aba
         if (!this.metricsInterval) {
-          this.metricsInterval = setInterval(() => {
-            this.cpeService.getWorkerHealth().subscribe({
-              next: (health) => {
-                this.xmlParserMetrics = health.xmlParser;
-                this.queueStats = health.rabbitmq;
-                this.processHealth = health.process;
-                this.workerHealthDegraded = false;
-                const now = new Date().toLocaleTimeString();
-                this.xmlChartLabels.push(now);
-                this.xmlChartDatasets[0].data.push(health.xmlParser.avgProcessingTimeMs);
-                this.xmlChartDatasets[1].data.push(health.xmlParser.p95ProcessingTimeMs);
-                if (this.xmlChartLabels.length > 30) {
-                  this.xmlChartLabels.shift();
-                  this.xmlChartDatasets[0].data.shift();
-                  this.xmlChartDatasets[1].data.shift();
-                }
-                this.xmlChartDatasets = [...this.xmlChartDatasets];
-                this.cdr.markForCheck();
-              },
-              error: () => {
-                this.workerHealthDegraded = true;
-                this.cdr.markForCheck();
-              }
-            });
-          }, 5000);
+          this.startMetricsPolling();
         }
         if (!this.healthSummaryInterval) {
           this.healthSummaryInterval = setInterval(() => {
@@ -360,6 +368,123 @@ export class DashboardComponent implements OnInit, OnDestroy {
       }
     };
     document.addEventListener('visibilitychange', this.visibilityHandler);
+  }
+
+  /**
+   * Inicia o polling de métricas de saúde do ACS.
+   * Combina dois endpoints via forkJoin:
+   *  - /health (público): version, uptime, mongodb, redis, admission, mongoCircuit
+   *  - /api/system/health/workers (auth): xmlParser, rabbitmq, process
+   * Intervalo de 5s — equilíbrio entre frescor e carga no backend.
+   */
+  private startMetricsPolling(): void {
+    this.metricsInterval = setInterval(() => {
+      forkJoin({
+        system: this.cpeService.getSystemHealth().pipe(catchError(() => of(null))),
+        workers: this.cpeService.getWorkerHealth().pipe(catchError(() => of(null))),
+      }).subscribe({
+        next: ({ system, workers }) => {
+          // --- Endpoint /health (sistema) ---
+          if (system) {
+            this.acsSystemInfo = {
+              version: system.version ?? 'N/D',
+              uptimeSeconds: system.uptime ?? 0,
+              mongodbStatus: (system.mongodb === 'connected' ? 'connected' : system.mongodb === 'degraded' ? 'degraded' : 'disconnected') as 'connected' | 'disconnected' | 'degraded',
+              redisStatus: (system.redis === 'connected' ? 'connected' : system.redis === 'degraded' ? 'degraded' : 'disconnected') as 'connected' | 'disconnected' | 'degraded',
+              eventLoopLagMs: system.admission?.eventLoopLagMs ?? 0,
+              admissionCircuitOpen: system.admission?.circuitOpen ?? false,
+              mongoCircuitState: system.mongoCircuit?.state ?? 'closed',
+            };
+          }
+
+          // --- Endpoint /api/system/health/workers (workers) ---
+          if (workers) {
+            this.xmlParserMetrics = workers.xmlParser;
+            this.queueStats = workers.rabbitmq;
+            this.processHealth = workers.process;
+            this.workerHealthDegraded = false;
+
+            const now = new Date().toLocaleTimeString();
+            this.xmlChartLabels.push(now);
+            this.xmlChartDatasets[0].data.push(workers.xmlParser.avgProcessingTimeMs);
+            this.xmlChartDatasets[1].data.push(workers.xmlParser.p95ProcessingTimeMs);
+            if (this.xmlChartLabels.length > 30) {
+              this.xmlChartLabels.shift();
+              this.xmlChartDatasets[0].data.shift();
+              this.xmlChartDatasets[1].data.shift();
+            }
+            this.xmlChartDatasets = [...this.xmlChartDatasets];
+          } else {
+            this.workerHealthDegraded = true;
+          }
+
+          // Gera alertas de sistema baseados nos thresholds
+          this.evaluateSystemAlerts();
+
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.workerHealthDegraded = true;
+          this.cdr.markForCheck();
+        }
+      });
+    }, 5000);
+  }
+
+  /**
+   * Avalia métricas contra thresholds e gera alertas de sistema visíveis no painel.
+   * Alertas são recalculados a cada polling — não persistem entre ciclos.
+   */
+  private evaluateSystemAlerts(): void {
+    const alerts: { level: 'warning' | 'critical'; message: string; metric: string }[] = [];
+    const t = this.WORKER_HEALTH_THRESHOLDS;
+
+    if (this.xmlParserMetrics) {
+      if (this.xmlParserMetrics.avgProcessingTimeMs > t.avgMsCritical) {
+        alerts.push({ level: 'critical', message: `CPU XML parser crítica: ${this.xmlParserMetrics.avgProcessingTimeMs}ms`, metric: 'cpu' });
+      } else if (this.xmlParserMetrics.avgProcessingTimeMs > t.avgMsWarning) {
+        alerts.push({ level: 'warning', message: `CPU XML parser elevada: ${this.xmlParserMetrics.avgProcessingTimeMs}ms`, metric: 'cpu' });
+      }
+
+      if (this.xmlParserMetrics.lastMemoryUsageMB > t.memoryMBCritical) {
+        alerts.push({ level: 'critical', message: `RAM crítica: ${this.xmlParserMetrics.lastMemoryUsageMB}MB`, metric: 'memory' });
+      } else if (this.xmlParserMetrics.lastMemoryUsageMB > t.memoryMBWarning) {
+        alerts.push({ level: 'warning', message: `RAM elevada: ${this.xmlParserMetrics.lastMemoryUsageMB}MB`, metric: 'memory' });
+      }
+    }
+
+    if (this.queueStats) {
+      if (this.queueStats.messageCount > t.queueCritical) {
+        alerts.push({ level: 'critical', message: `Fila RabbitMQ crítica: ${this.queueStats.messageCount} mensagens`, metric: 'queue' });
+      } else if (this.queueStats.messageCount > t.queueWarning) {
+        alerts.push({ level: 'warning', message: `Fila RabbitMQ elevada: ${this.queueStats.messageCount} mensagens`, metric: 'queue' });
+      }
+    }
+
+    if (this.acsSystemInfo) {
+      if (this.acsSystemInfo.mongodbStatus === 'disconnected') {
+        alerts.push({ level: 'critical', message: 'MongoDB desconectado', metric: 'mongodb' });
+      } else if (this.acsSystemInfo.mongodbStatus === 'degraded') {
+        alerts.push({ level: 'warning', message: 'MongoDB degradado', metric: 'mongodb' });
+      }
+      if (this.acsSystemInfo.redisStatus === 'disconnected') {
+        alerts.push({ level: 'critical', message: 'Redis desconectado', metric: 'redis' });
+      } else if (this.acsSystemInfo.redisStatus === 'degraded') {
+        alerts.push({ level: 'warning', message: 'Redis degradado', metric: 'redis' });
+      }
+      // Alerta: admission circuit aberto (backend sob pressão, rejeitando requisições)
+      if (this.acsSystemInfo.admissionCircuitOpen) {
+        alerts.push({ level: 'critical', message: 'Admission circuit aberto — backend rejeitando requisições', metric: 'admission' });
+      }
+      // Alerta: event loop lag alto
+      if (this.acsSystemInfo.eventLoopLagMs > 100) {
+        alerts.push({ level: 'critical', message: `Event loop lag crítico: ${this.acsSystemInfo.eventLoopLagMs}ms`, metric: 'eventloop' });
+      } else if (this.acsSystemInfo.eventLoopLagMs > 30) {
+        alerts.push({ level: 'warning', message: `Event loop lag elevado: ${this.acsSystemInfo.eventLoopLagMs}ms`, metric: 'eventloop' });
+      }
+    }
+
+    this.systemAlerts = alerts;
   }
 
   ngOnDestroy(): void {
@@ -897,33 +1022,98 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Ordena a lista atualmente exibida por healthScore.
-   * Ciclo: null → asc (piores primeiro) → desc (melhores primeiro) → null (ordem original).
+   * Alterna ordenação de uma coluna. Ciclo: null → asc → desc → null.
+   * Se clicar em coluna diferente, inicia nova ordenação asc.
+   * @param column Nome da coluna (deve estar em SORTABLE_COLUMNS)
    */
-  toggleHealthScoreSort(): void {
-    if (this.healthScoreSortDirection === null) {
-      this.healthScoreSortDirection = 'asc';
-    } else if (this.healthScoreSortDirection === 'asc') {
-      this.healthScoreSortDirection = 'desc';
+  toggleSort(column: string): void {
+    if (!this.SORTABLE_COLUMNS.includes(column)) return;
+    if (this.sortColumn === column) {
+      // Mesma coluna: cicla direção
+      if (this.sortDirection === null) this.sortDirection = 'asc';
+      else if (this.sortDirection === 'asc') this.sortDirection = 'desc';
+      else { this.sortColumn = null; this.sortDirection = null; }
     } else {
-      this.healthScoreSortDirection = null;
+      // Coluna nova: inicia asc
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
     }
-    this.applyHealthScoreSort();
+    this.applySort();
   }
 
-  private applyHealthScoreSort(): void {
-    if (this.healthScoreSortDirection === null) {
+  /** Compatibilidade: mantém toggleHealthScoreSort delegando para o novo sistema */
+  toggleHealthScoreSort(): void {
+    this.toggleSort('healthScore');
+  }
+
+  /**
+   * Aplica ordenação na lista exibida (this.cpes).
+   * Se sortColumn é null, reaplica filtro original (ordem do backend).
+   */
+  private applySort(): void {
+    if (this.sortColumn === null || this.sortDirection === null) {
       this.triggerFilter(); // Reaplica o filtro original (ordem do backend) sem sort
       return;
     }
-    const direction = this.healthScoreSortDirection === 'asc' ? 1 : -1;
+    const direction = this.sortDirection === 'asc' ? 1 : -1;
+    const col = this.sortColumn;
+
     this.cpes = [...this.cpes].sort((a, b) => {
-      // CPEs sem score (N/D) vão para o final independente da direção
-      const scoreA = a.healthScore ?? (direction === 1 ? Infinity : -Infinity);
-      const scoreB = b.healthScore ?? (direction === 1 ? Infinity : -Infinity);
-      return (scoreA - scoreB) * direction;
+      let valA: any;
+      let valB: any;
+
+      switch (col) {
+        case 'status':
+          valA = a.isOnline ? 1 : 0;
+          valB = b.isOnline ? 1 : 0;
+          break;
+        case 'serialNumber':
+          valA = a.serialNumber?.toLowerCase() ?? '';
+          valB = b.serialNumber?.toLowerCase() ?? '';
+          return valA.localeCompare(valB) * direction;
+        case 'model':
+          valA = (a.productClass || a.manufacturer || '').toLowerCase();
+          valB = (b.productClass || b.manufacturer || '').toLowerCase();
+          return valA.localeCompare(valB) * direction;
+        case 'wanIp':
+          valA = a.wanIp || a.wan?.ip || '';
+          valB = b.wanIp || b.wan?.ip || '';
+          // IPs ordenados por string é aceitável para ordenação visual
+          return valA.localeCompare(valB, undefined, { numeric: true }) * direction;
+        case 'pppoe':
+          valA = a._pppoe || '';
+          valB = b._pppoe || '';
+          return valA.localeCompare(valB) * direction;
+        case 'rx':
+          // Sem rx vai para o final independente da direção
+          valA = a._rx ?? (direction === 1 ? Infinity : -Infinity);
+          valB = b._rx ?? (direction === 1 ? Infinity : -Infinity);
+          break;
+        case 'healthScore':
+          // Sem score vai para o final independente da direção
+          valA = a.healthScore ?? (direction === 1 ? Infinity : -Infinity);
+          valB = b.healthScore ?? (direction === 1 ? Infinity : -Infinity);
+          break;
+        case 'tasks':
+          valA = a.pendingTasks?.length ?? 0;
+          valB = b.pendingTasks?.length ?? 0;
+          break;
+        default:
+          return 0;
+      }
+      return (valA - valB) * direction;
     });
     this.cdr.markForCheck();
+  }
+
+  /** Compatibilidade: mantém applyHealthScoreSort delegando para applySort */
+  private applyHealthScoreSort(): void {
+    this.applySort();
+  }
+
+  /** Verifica se uma coluna está ordenada e retorna a direção (para ícone no template) */
+  getSortDirection(column: string): 'asc' | 'desc' | null {
+    return this.sortColumn === column ? this.sortDirection : null;
   }
 
   // Função de Performance: Pré-processa os dados pesados na entrada
@@ -996,6 +1186,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
       _bw5g: formatBw(raw5g),
       // FIX EP 27.16: normaliza productClass de deviceInfo.productClass (schema EP24)
       productClass: (cpe as any).deviceInfo?.productClass || cpe.productClass || null,
+      // FIX: normaliza manufacturer e softwareVersion de deviceInfo (schema EP24)
+      // Sem isso, o worker filtra por cpe.manufacturer que é undefined — tabela fica vazia
+      manufacturer: (cpe as any).deviceInfo?.manufacturer || cpe.manufacturer || null,
+      softwareVersion: (cpe as any).deviceInfo?.softwareVersion || cpe.softwareVersion || null,
     };
   }
 

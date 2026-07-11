@@ -1,5 +1,6 @@
-import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef, DestroyRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CpeService } from '../../../../../../core/services/cpe.service';
 import { ToastService } from '../../../../../../core/services/toast.service';
 import { CpePrediction, CpePredictionFactor } from '../../../../../../core/models';
@@ -15,8 +16,11 @@ import { CpePrediction, CpePredictionFactor } from '../../../../../../core/model
   imports: [CommonModule],
   templateUrl: './cpe-ai-tab.component.html',
   styleUrls: ['./cpe-ai-tab.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class CpeAiTabComponent implements OnChanges {
+export class CpeAiTabComponent implements OnChanges, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly cdr = inject(ChangeDetectorRef);
   @Input() serialNumber: string = '';
   /** CPE está offline — a IA usa cache de 20min do backend, então pode funcionar. */
   @Input() isCpeOffline: boolean = false;
@@ -41,19 +45,28 @@ export class CpeAiTabComponent implements OnChanges {
     }
   }
 
+  ngOnDestroy(): void {
+    // Cleanup automático via takeUntilDestroyed nos observables
+  }
+
   loadPrediction(): void {
     if (!this.serialNumber) return;
     this.loading = true;
     this.error = null;
+    this.cdr.markForCheck();
 
-    this.cpeService.predictFailure(this.serialNumber).subscribe({
+    this.cpeService.predictFailure(this.serialNumber).pipe(
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe({
       next: (data: CpePrediction) => {
         this.prediction = data;
         this.loading = false;
+        this.cdr.markForCheck();
       },
       error: (_err: unknown) => {
         this.error = 'Não foi possível gerar a predição.';
         this.loading = false;
+        this.cdr.markForCheck();
         this.toastService.error('Erro ao carregar análise de falhas da CPE.');
       },
     });

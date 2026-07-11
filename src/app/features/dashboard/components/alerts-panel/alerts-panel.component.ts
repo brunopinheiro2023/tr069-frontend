@@ -33,6 +33,7 @@ export class AlertsPanelComponent implements OnInit {
     // Carga inicial via REST com retry automático
     this.cpeService.getActiveAlerts().pipe(
       retry({ count: 1, delay: 2000 }),
+      takeUntilDestroyed(this.destroyRef),
       catchError(err => {
         console.error('[AlertsPanel] Falha ao carregar alertas iniciais', err);
         this.toastService.warning('Não foi possível carregar alertas — exibindo apenas eventos novos');
@@ -99,7 +100,9 @@ export class AlertsPanelComponent implements OnInit {
   }
 
   acknowledgeAlert(alertId: string): void {
-    this.cpeService.acknowledgeAlert(alertId).subscribe({
+    this.cpeService.acknowledgeAlert(alertId).pipe(
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe({
       next: (updatedAlert) => {
         const index = this.alerts.findIndex(a => a._id === alertId);
         if (index !== -1) {
@@ -109,6 +112,7 @@ export class AlertsPanelComponent implements OnInit {
       },
       error: (err) => {
         console.error('[AlertsPanel] Erro ao reconhecer alerta', err);
+        this.toastService.error('Falha ao reconhecer alerta.');
       }
     });
   }

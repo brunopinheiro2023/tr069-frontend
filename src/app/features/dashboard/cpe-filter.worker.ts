@@ -46,13 +46,16 @@ addEventListener('message', ({ data }) => {
         if (filters.isOnline !== undefined && cpe.isOnline !== filters.isOnline) {
           return false;
         }
-        if (filters.manufacturer && cpe.manufacturer !== filters.manufacturer) {
+        // Fallback: manufacturer pode estar em deviceInfo.manufacturer (schema EP24)
+        if (filters.manufacturer && (cpe.manufacturer || cpe.deviceInfo?.manufacturer) !== filters.manufacturer) {
           return false;
         }
-        if (filters.productClass && cpe.productClass !== filters.productClass) {
+        // Fallback: productClass pode estar em deviceInfo.productClass (schema EP24)
+        if (filters.productClass && (cpe.productClass || cpe.deviceInfo?.productClass) !== filters.productClass) {
           return false;
         }
-        if (filters.softwareVersion && cpe.softwareVersion !== filters.softwareVersion) {
+        // Fallback: softwareVersion pode estar em deviceInfo.softwareVersion (schema EP24)
+        if (filters.softwareVersion && (cpe.softwareVersion || cpe.deviceInfo?.softwareVersion) !== filters.softwareVersion) {
           return false;
         }
         if (filters.isCriticalGpon && (cpe._rx === undefined || cpe._rx >= -27)) {

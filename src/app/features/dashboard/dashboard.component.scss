@@ -953,3 +953,356 @@
     .material-symbols-rounded { font-size: 16px; }
   }
 }
+
+/* =========================================================================
+   NOVOS ESTILOS — FASE 2+3: Painel ACS Expandido, Filtros Unificados, Sort
+   ========================================================================= */
+
+/* --- Cards de métricas primárias (uniformes) --- */
+.metrics-grid-primary {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.metric-card {
+    min-height: 110px;
+}
+
+/* --- Painel de Monitoramento ACS --- */
+.acs-monitor-panel {
+    margin-bottom: 24px;
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+/* Barra de alertas de sistema */
+.system-alerts-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 20px;
+    background: color-mix(in srgb, var(--accent-danger) 5%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--accent-danger) 20%, transparent);
+}
+
+.system-alert-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 600;
+
+    &.alert-critical {
+        background: color-mix(in srgb, var(--accent-danger) 15%, transparent);
+        color: var(--accent-danger);
+        border: 1px solid color-mix(in srgb, var(--accent-danger) 30%, transparent);
+    }
+
+    &.alert-warning {
+        background: color-mix(in srgb, var(--accent-warning) 15%, transparent);
+        color: var(--accent-warning);
+        border: 1px solid color-mix(in srgb, var(--accent-warning) 30%, transparent);
+    }
+
+    .alert-icon {
+        font-size: 16px;
+    }
+}
+
+/* Grid de sub-cards do ACS */
+.acs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1px;
+    background-color: var(--border-color);
+}
+
+.acs-sub-card {
+    background-color: var(--bg-surface);
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    min-height: 180px;
+}
+
+.acs-sub-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+
+    h4 {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0;
+        flex: 1;
+    }
+
+    .acs-sub-icon {
+        font-size: 20px;
+        color: var(--accent-color);
+    }
+
+    .status-badge {
+        font-size: 10px;
+        padding: 2px 8px;
+
+        &.ok { background: color-mix(in srgb, var(--accent-success) 15%, transparent); color: var(--accent-success); }
+        &.degraded { background: color-mix(in srgb, var(--accent-warning) 15%, transparent); color: var(--accent-warning); }
+        &.critical { background: color-mix(in srgb, var(--accent-danger) 15%, transparent); color: var(--accent-danger); }
+    }
+}
+
+.acs-sub-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.acs-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+
+    .acs-label {
+        color: var(--text-muted);
+        font-weight: 500;
+    }
+
+    .acs-value {
+        color: var(--text-primary);
+        font-weight: 600;
+    }
+}
+
+.acs-services-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.service-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 600;
+
+    .material-symbols-rounded { font-size: 14px; }
+
+    &.connected {
+        background: color-mix(in srgb, var(--accent-success) 12%, transparent);
+        color: var(--accent-success);
+    }
+
+    &.degraded {
+        background: color-mix(in srgb, var(--accent-warning) 12%, transparent);
+        color: var(--accent-warning);
+    }
+
+    &.disconnected {
+        background: color-mix(in srgb, var(--accent-danger) 12%, transparent);
+        color: var(--accent-danger);
+    }
+}
+
+.acs-loading-inline {
+    color: var(--text-muted);
+    font-size: 13px;
+    padding: 20px 0;
+    text-align: center;
+}
+
+/* --- Filtros Unificados --- */
+.filters-unified {
+    margin-bottom: 24px;
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.filters-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-elevated);
+
+    .material-symbols-rounded {
+        font-size: 20px;
+        color: var(--accent-color);
+    }
+
+    h3 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0;
+        flex: 1;
+    }
+}
+
+.btn-clear-filters {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    padding: 4px 12px;
+}
+
+.filters-grid-unified {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    padding: 20px 24px;
+    align-items: flex-start;
+}
+
+/* --- Toolbar da tabela (agrupada) --- */
+.table-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.search-group {
+    flex: 1;
+    min-width: 200px;
+}
+
+/* --- Ordenação multi-coluna: headers clicáveis --- */
+.sortable-header {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: color var(--transition-fast);
+
+    &:hover {
+        color: var(--accent-color);
+    }
+
+    &.sorted {
+        color: var(--accent-color);
+        font-weight: 700;
+    }
+
+    .sort-icon {
+        font-size: 16px;
+        color: var(--accent-color);
+    }
+}
+
+/* --- Barra de re-filtragem silenciosa --- */
+.refilter-bar {
+    height: 2px;
+    background: var(--border-color);
+    overflow: hidden;
+    position: relative;
+}
+
+.refilter-progress {
+    position: absolute;
+    height: 100%;
+    width: 40%;
+    background: var(--accent-color);
+    animation: refilter-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes refilter-slide {
+    0% { left: -40%; }
+    100% { left: 100%; }
+}
+
+/* --- Badge de health score na tabela --- */
+.health-score-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 700;
+
+    &.score-good {
+        background: color-mix(in srgb, var(--accent-success) 15%, transparent);
+        color: var(--accent-success);
+    }
+
+    &.score-warning {
+        background: color-mix(in srgb, var(--accent-warning) 15%, transparent);
+        color: var(--accent-warning);
+    }
+
+    &.score-critical {
+        background: color-mix(in srgb, var(--accent-danger) 15%, transparent);
+        color: var(--accent-danger);
+    }
+}
+
+/* --- Badge de tarefas pendentes --- */
+.tasks-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 700;
+
+    &.tasks-warning {
+        background: color-mix(in srgb, var(--accent-warning) 15%, transparent);
+        color: var(--accent-warning);
+    }
+
+    &.tasks-critical {
+        background: color-mix(in srgb, var(--accent-danger) 15%, transparent);
+        color: var(--accent-danger);
+    }
+}
+
+.badges-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* --- Botão outline de danger (bulk reboot) --- */
+.btn-danger-outline {
+    border: 1px solid var(--accent-danger);
+    color: var(--accent-danger);
+
+    &:hover {
+        background: color-mix(in srgb, var(--accent-danger) 10%, transparent);
+    }
+}
+
+/* --- Texto de aviso no modal --- */
+.warning-text {
+    color: var(--accent-warning);
+    font-weight: 500;
+    font-size: 13px;
+}

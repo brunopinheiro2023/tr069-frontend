@@ -2,7 +2,7 @@
     <!-- Skeleton Loaders: estado de carregamento inicial (Pilar 5) -->
     <div *ngIf="loading" class="skeleton-metrics">
         <div class="metrics-grid">
-            <app-skeleton shape="card" height="90px" [count]="3"></app-skeleton>
+            <app-skeleton shape="card" height="90px" [count]="4"></app-skeleton>
         </div>
         <div class="skeleton-table" class="mt-6">
             <app-skeleton shape="text-lg" width="240px" class="mb-3"></app-skeleton>
@@ -12,9 +12,13 @@
 
     <!-- Conteúdo real: exibido apenas quando não está carregando -->
     <div *ngIf="!loading" class="fade-in">
-        <div class="metrics-grid">
-            <!-- Widget de Saúde da Frota (Step 9) -->
-            <div class="card fleet-health-card" *ngIf="healthSummary">
+
+        <!-- ════════════════════════════════════════════════════════════════════
+             SEÇÃO 1: Cards de Métricas Principais (4 cards uniformes)
+             ════════════════════════════════════════════════════════════════════ -->
+        <div class="metrics-grid metrics-grid-primary">
+            <!-- Widget de Saúde da Frota -->
+            <div class="card metric-card" *ngIf="healthSummary">
                 <div class="card-icon success"><span class="material-symbols-rounded">health_and_safety</span></div>
                 <div class="card-info">
                     <h3>Saúde da Frota</h3>
@@ -27,127 +31,222 @@
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card metric-card">
                 <div class="card-icon"><span class="material-symbols-rounded">router</span></div>
                 <div class="card-info">
                     <h3>CPEs Online</h3>
                     <p>{{ globalOnlineCount }}</p>
                 </div>
             </div>
-            <div class="card clickable-card" [class.active-danger]="filterCriticalGpon" (click)="toggleCriticalGponFilter()" title="Clique para filtrar apenas CPEs com sinal crítico">
+
+            <div class="card metric-card clickable-card" [class.active-danger]="filterCriticalGpon" (click)="toggleCriticalGponFilter()" title="Clique para filtrar apenas CPEs com sinal crítico">
                 <div class="card-icon warning"><span class="material-symbols-rounded">warning</span></div>
                 <div class="card-info">
                     <h3>Sinal GPON Crítico</h3>
                     <p>{{ globalCriticalGponCount }}</p>
                 </div>
             </div>
-            <div class="card">
+
+            <div class="card metric-card">
                 <div class="card-icon info"><span class="material-symbols-rounded">speed</span></div>
                 <div class="card-info">
                     <h3>Tarefas Pendentes</h3>
                     <p>{{ globalPendingTasksCount }}</p>
                 </div>
             </div>
+        </div>
 
-            <!-- Card do Gráfico de Saúde ACS (Worker Threads) -->
-            <div class="card health-card">
-                <div *ngIf="!xmlParserMetrics && !workerHealthDegraded" class="acs-loading">
-                    Carregando saúde do ACS...
+        <!-- ════════════════════════════════════════════════════════════════════
+             SEÇÃO 2: Painel de Monitoramento do Servidor ACS (expandido)
+             ════════════════════════════════════════════════════════════════════ -->
+        <div class="acs-monitor-panel">
+            <!-- Banner de alertas de sistema -->
+            <div class="system-alerts-bar" *ngIf="systemAlerts.length > 0">
+                <div *ngFor="let alert of systemAlerts" class="system-alert-item" [class.alert-critical]="alert.level === 'critical'" [class.alert-warning]="alert.level === 'warning'">
+                    <span class="material-symbols-rounded alert-icon">{{ alert.level === 'critical' ? 'error' : 'warning' }}</span>
+                    <span class="alert-text">{{ alert.message }}</span>
                 </div>
-                <div *ngIf="workerHealthDegraded" class="acs-error-banner">
-                    ⚠ Não foi possível atualizar métricas — exibindo último valor conhecido
-                </div>
-                <ng-container *ngIf="xmlParserMetrics">
-                    <div class="acs-header">
-                        <h3>Saúde do ACS (Workers)</h3>
-                        <span class="status-badge" [ngClass]="workerHealthSeverity">
-                            {{ workerHealthSeverity === 'ok' ? 'Estável' : workerHealthSeverity === 'warning' ? 'Atenção' : 'Crítico' }}
+            </div>
+
+            <!-- Grid de sub-cards do ACS -->
+            <div class="acs-grid">
+                <!-- Sub-card: Status do Backend (uptime + versão + serviços) -->
+                <div class="acs-sub-card">
+                    <div class="acs-sub-header">
+                        <span class="material-symbols-rounded acs-sub-icon">dns</span>
+                        <h4>Backend</h4>
+                        <span class="status-badge" [ngClass]="backendStatus">
+                            {{ backendStatus === 'ok' ? 'Operacional' : backendStatus === 'degraded' ? 'Degradado' : 'Crítico' }}
                         </span>
                     </div>
-                    <div class="acs-metrics">
-                        <span><strong>{{ xmlParserMetrics.avgProcessingTimeMs }}ms</strong> CPU</span>
-                        <span><strong>{{ xmlParserMetrics.lastMemoryUsageMB }}MB</strong> RAM</span>
-                        <span><strong>{{ xmlParserMetrics.activeWorkers }}/{{ xmlParserMetrics.poolSize }}</strong> Threads</span>
+                    <div class="acs-sub-body" *ngIf="acsSystemInfo">
+                        <div class="acs-info-row">
+                            <span class="acs-label">Versão</span>
+                            <span class="acs-value">{{ acsSystemInfo.version }}</span>
+                        </div>
+                        <div class="acs-info-row">
+                            <span class="acs-label">Uptime</span>
+                            <span class="acs-value">{{ acsUptimeFormatted }}</span>
+                        </div>
+                        <div class="acs-info-row">
+                            <span class="acs-label">Event Loop</span>
+                            <span class="acs-value">{{ acsSystemInfo.eventLoopLagMs }}ms</span>
+                        </div>
+                        <div class="acs-info-row" *ngIf="acsSystemInfo.admissionCircuitOpen">
+                            <span class="acs-label">Admission</span>
+                            <span class="acs-value" style="color: var(--accent-danger); font-weight: 700;">Circuito Aberto</span>
+                        </div>
+                        <div class="acs-services-row">
+                            <span class="service-badge" [ngClass]="acsSystemInfo.mongodbStatus" title="MongoDB">
+                                <span class="material-symbols-rounded">storage</span> MongoDB
+                            </span>
+                            <span class="service-badge" [ngClass]="acsSystemInfo.redisStatus" title="Redis">
+                                <span class="material-symbols-rounded">memory</span> Redis
+                            </span>
+                        </div>
                     </div>
-                    <div class="acs-chart-container">
-                        <canvas baseChart [datasets]="xmlChartDatasets" [labels]="xmlChartLabels" [options]="xmlChartOptions" type="line"></canvas>
+                    <div class="acs-sub-body" *ngIf="!acsSystemInfo">
+                        <div class="acs-loading-inline">Carregando...</div>
                     </div>
-                </ng-container>
-            </div>
-        </div>
+                </div>
 
-        <!-- Cards Secundários: Filtros Dinâmicos por Marca e Modelo -->
-        <div class="filters-grid" *ngIf="globalManufacturers.length > 0 || globalModels.length > 0">
-            <div class="filter-group">
-                <h4 class="filter-title">Fabricantes</h4>
-                <div class="chips-container">
-                    <button *ngFor="let m of globalManufacturers"
-                            class="chip-btn"
-                            [class.active]="filterManufacturer === m.name"
-                            (click)="onManufacturerFilterChange(m.name)">
-                        {{ m.name }} <span class="chip-badge">{{ m.count }}</span>
-                    </button>
+                <!-- Sub-card: Worker Threads (CPU + RAM + Threads + gráfico) -->
+                <div class="acs-sub-card">
+                    <div *ngIf="!xmlParserMetrics && !workerHealthDegraded" class="acs-loading">
+                        Carregando saúde do ACS...
+                    </div>
+                    <div *ngIf="workerHealthDegraded" class="acs-error-banner">
+                        ⚠ Não foi possível atualizar métricas — exibindo último valor conhecido
+                    </div>
+                    <ng-container *ngIf="xmlParserMetrics">
+                        <div class="acs-header">
+                            <h3>Worker Threads (XML)</h3>
+                            <span class="status-badge" [ngClass]="workerHealthSeverity">
+                                {{ workerHealthSeverity === 'ok' ? 'Estável' : workerHealthSeverity === 'warning' ? 'Atenção' : 'Crítico' }}
+                            </span>
+                        </div>
+                        <div class="acs-metrics">
+                            <span><strong>{{ xmlParserMetrics.avgProcessingTimeMs }}ms</strong> CPU</span>
+                            <span><strong>{{ xmlParserMetrics.lastMemoryUsageMB }}MB</strong> RAM</span>
+                            <span><strong>{{ xmlParserMetrics.activeWorkers }}/{{ xmlParserMetrics.poolSize }}</strong> Threads</span>
+                        </div>
+                        <div class="acs-chart-container">
+                            <canvas baseChart [datasets]="xmlChartDatasets" [labels]="xmlChartLabels" [options]="xmlChartOptions" type="line"></canvas>
+                        </div>
+                    </ng-container>
                 </div>
-            </div>
-            <div class="filter-group">
-                <h4 class="filter-title">Modelos (CPE)</h4>
-                <div class="chips-container">
-                    <button *ngFor="let m of globalModels"
-                            class="chip-btn"
-                            [class.active]="filterModel === m.name"
-                            (click)="onModelFilterChange(m.name)">
-                        {{ m.name }} <span class="chip-badge">{{ m.count }}</span>
-                    </button>
-                </div>
-            </div>
-            
-            <div class="filter-group" *ngIf="globalFirmwares.length > 0">
-                <h4 class="filter-title">Firmwares Ativos</h4>
-                <div class="chips-container scrollable-chips">
-                    <button *ngFor="let f of globalFirmwares"
-                            class="chip-btn"
-                            [class.active]="filterFirmware === f.name"
-                            (click)="onFirmwareFilterChange(f.name)">
-                        {{ f.name }} <span class="chip-badge">{{ f.count }}</span>
-                    </button>
-                </div>
-            </div>
-        </div>
 
-        <!-- Filtro por faixa de Health Score -->
-        <div class="filters-grid">
-            <div class="filter-group">
-                <h4 class="filter-title">Saúde (Score)</h4>
-                <div class="chips-container">
-                    <button class="chip-btn chip-critical"
-                            [class.active]="filterHealthScore === 'critical'"
-                            (click)="onHealthScoreFilterChange('critical')"
-                            title="CPEs com score abaixo de 50">
-                        Crítico <span class="chip-badge">&lt;50</span>
-                    </button>
-                    <button class="chip-btn chip-attention"
-                            [class.active]="filterHealthScore === 'attention'"
-                            (click)="onHealthScoreFilterChange('attention')"
-                            title="CPEs com score entre 50 e 79">
-                        Atenção <span class="chip-badge">50-79</span>
-                    </button>
-                    <button class="chip-btn chip-healthy"
-                            [class.active]="filterHealthScore === 'healthy'"
-                            (click)="onHealthScoreFilterChange('healthy')"
-                            title="CPEs com score 80 ou superior">
-                        Saudável <span class="chip-badge">80+</span>
-                    </button>
+                <!-- Sub-card: Fila RabbitMQ (mensagens + consumidores) -->
+                <div class="acs-sub-card">
+                    <div class="acs-header">
+                        <h3>Fila RabbitMQ</h3>
+                        <span class="status-badge" *ngIf="queueStats"
+                              [ngClass]="(queueStats.messageCount > 200) ? 'critical' : (queueStats.messageCount > 50) ? 'warning' : 'ok'">
+                            {{ (queueStats.messageCount > 200) ? 'Crítico' : (queueStats.messageCount > 50) ? 'Atenção' : 'Normal' }}
+                        </span>
+                    </div>
+                    <div class="acs-metrics" *ngIf="queueStats">
+                        <span><strong>{{ queueStats.messageCount }}</strong> Mensagens</span>
+                        <span><strong>{{ queueStats.consumerCount }}</strong> Consumers</span>
+                    </div>
+                    <div class="acs-sub-body" *ngIf="!queueStats">
+                        <div class="acs-loading-inline">Carregando...</div>
+                    </div>
                 </div>
             </div>
         </div>
 
+        <!-- ════════════════════════════════════════════════════════════════════
+             SEÇÃO 3: Filtros Unificados (uma seção só com todos os filtros)
+             ════════════════════════════════════════════════════════════════════ -->
+        <div class="filters-unified" *ngIf="globalManufacturers.length > 0 || globalModels.length > 0 || globalFirmwares.length > 0">
+            <div class="filters-section-header">
+                <span class="material-symbols-rounded">filter_alt</span>
+                <h3>Filtros</h3>
+                <button *ngIf="hasActiveFilters"
+                        class="filter-btn btn-clear-filters"
+                        (click)="clearFilters()" title="Limpar todos os filtros">
+                    <span class="material-symbols-rounded icon-sm">filter_alt_off</span>
+                    Limpar
+                </button>
+            </div>
+            <div class="filters-grid-unified">
+                <!-- Filtro: Fabricantes -->
+                <div class="filter-group" *ngIf="globalManufacturers.length > 0">
+                    <h4 class="filter-title">Fabricantes</h4>
+                    <div class="chips-container">
+                        <button *ngFor="let m of globalManufacturers"
+                                class="chip-btn"
+                                [class.active]="filterManufacturer === m.name"
+                                (click)="onManufacturerFilterChange(m.name)">
+                            {{ m.name }} <span class="chip-badge">{{ m.count }}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filtro: Modelos -->
+                <div class="filter-group" *ngIf="globalModels.length > 0">
+                    <h4 class="filter-title">Modelos (CPE)</h4>
+                    <div class="chips-container">
+                        <button *ngFor="let m of globalModels"
+                                class="chip-btn"
+                                [class.active]="filterModel === m.name"
+                                (click)="onModelFilterChange(m.name)">
+                            {{ m.name }} <span class="chip-badge">{{ m.count }}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filtro: Firmwares -->
+                <div class="filter-group" *ngIf="globalFirmwares.length > 0">
+                    <h4 class="filter-title">Firmwares Ativos</h4>
+                    <div class="chips-container scrollable-chips">
+                        <button *ngFor="let f of globalFirmwares"
+                                class="chip-btn"
+                                [class.active]="filterFirmware === f.name"
+                                (click)="onFirmwareFilterChange(f.name)">
+                            {{ f.name }} <span class="chip-badge">{{ f.count }}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filtro: Health Score -->
+                <div class="filter-group">
+                    <h4 class="filter-title">Saúde (Score)</h4>
+                    <div class="chips-container">
+                        <button class="chip-btn chip-critical"
+                                [class.active]="filterHealthScore === 'critical'"
+                                (click)="onHealthScoreFilterChange('critical')"
+                                title="CPEs com score abaixo de 50">
+                            Crítico <span class="chip-badge">&lt;50</span>
+                        </button>
+                        <button class="chip-btn chip-attention"
+                                [class.active]="filterHealthScore === 'attention'"
+                                (click)="onHealthScoreFilterChange('attention')"
+                                title="CPEs com score entre 50 e 79">
+                            Atenção <span class="chip-badge">50-79</span>
+                        </button>
+                        <button class="chip-btn chip-healthy"
+                                [class.active]="filterHealthScore === 'healthy'"
+                                (click)="onHealthScoreFilterChange('healthy')"
+                                title="CPEs com score 80 ou superior">
+                            Saudável <span class="chip-badge">80+</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ════════════════════════════════════════════════════════════════════
+             SEÇÃO 4: Tabela de Equipamentos com ordenação multi-coluna
+             ════════════════════════════════════════════════════════════════════ -->
         <div class="content-card table-card">
             <div class="table-header">
-                <!-- Lado Esquerdo: Título e Ações Diretas -->
+                <!-- Lado Esquerdo: Título e Ações em Massa -->
                 <div class="header-main">
                     <h2 class="table-title">Equipamentos Conectados <span class="total-count">({{ globalTotalCpes }})</span></h2>
-                    
-                    <!-- Ações em Massa (Moveu para perto do título) -->
+
+                    <!-- Ações em Massa -->
                     <div class="bulk-actions" *ngIf="selectedCpes.size > 0">
                         <span class="selected-count">
                             {{ selectedCpes.size }} selecionado(s)
@@ -166,33 +265,38 @@
                     </div>
                 </div>
 
-                <!-- Lado Direito: Filtros e Busca -->
+                <!-- Lado Direito: Toolbar agrupada (alerts | busca | status) -->
                 <div class="table-toolbar">
-                    <app-alerts-panel></app-alerts-panel>
-                    <div class="search-box">
-                        <span class="material-symbols-rounded search-icon">search</span>
-                        <input
-                            type="text"
-                            placeholder="Buscar serial, modelo ou IP..."
-                            [(ngModel)]="searchQuery"
-                            (ngModelChange)="onFilterChange()"
-                            class="search-input"
-                        />
-                    </div>
-                    <div class="status-filter">
-                        <button class="filter-btn" [class.active]="filterStatus === 'all'"
-                                (click)="onStatusFilterChange('all')">Todos</button>
-                        <button class="filter-btn online" [class.active]="filterStatus === 'online'"
-                                (click)="onStatusFilterChange('online')">Online</button>
-                        <button class="filter-btn offline" [class.active]="filterStatus === 'offline'"
-                                (click)="onStatusFilterChange('offline')">Offline</button>
+                    <!-- Grupo 1: Alertas -->
+                    <div class="toolbar-group">
+                        <app-alerts-panel></app-alerts-panel>
                     </div>
 
-                    <button *ngIf="filterStatus !== 'all' || filterManufacturer || filterModel || filterFirmware || searchQuery || filterCriticalGpon || filterHealthScore"
-                            class="filter-btn btn-clear-filters circle-btn"
-                            (click)="clearFilters()" title="Limpar Filtros">
-                        <span class="material-symbols-rounded icon-sm">filter_alt_off</span>
-                    </button>
+                    <!-- Grupo 2: Busca -->
+                    <div class="toolbar-group search-group">
+                        <div class="search-box">
+                            <span class="material-symbols-rounded search-icon">search</span>
+                            <input
+                                type="text"
+                                placeholder="Buscar serial, modelo ou IP..."
+                                [(ngModel)]="searchQuery"
+                                (ngModelChange)="onFilterChange()"
+                                class="search-input"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Grupo 3: Filtro de Status -->
+                    <div class="toolbar-group">
+                        <div class="status-filter">
+                            <button class="filter-btn" [class.active]="filterStatus === 'all'"
+                                    (click)="onStatusFilterChange('all')">Todos</button>
+                            <button class="filter-btn online" [class.active]="filterStatus === 'online'"
+                                    (click)="onStatusFilterChange('online')">Online</button>
+                            <button class="filter-btn offline" [class.active]="filterStatus === 'offline'"
+                                    (click)="onStatusFilterChange('offline')">Offline</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -203,7 +307,7 @@
 
             <div class="table-responsive">
             <div class="vmoas-grid-table" role="grid" aria-label="Lista de CPEs conectadas">
-                <!-- Header Fixo Fora do Viewport de Rolagem -->
+                <!-- Header Fixo Fora do Viewport de Rolagem — com ordenação multi-coluna -->
                 <div class="vmoas-grid-header" role="row">
                     <div class="col-checkbox" role="columnheader">
                         <input type="checkbox"
@@ -212,19 +316,54 @@
                                [indeterminate]="isIndeterminate"
                                aria-label="Selecionar todas as CPEs" />
                     </div>
-                    <div role="columnheader">Status</div>
-                    <div role="columnheader">Serial Number</div>
-                    <div role="columnheader">Modelo</div>
-                    <div role="columnheader">IP WAN</div>
-                    <div role="columnheader">PPPoE</div>
-                    <div role="columnheader">Sinal Óptico (Rx)</div>
-                    <div class="sortable-header" role="columnheader" (click)="toggleHealthScoreSort()">
-                        Saúde
-                        <span class="material-symbols-rounded sort-icon" *ngIf="healthScoreSortDirection">
-                            {{ healthScoreSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+                    <div class="sortable-header" role="columnheader" (click)="toggleSort('status')" [class.sorted]="getSortDirection('status')">
+                        Status
+                        <span class="material-symbols-rounded sort-icon" *ngIf="getSortDirection('status')">
+                            {{ getSortDirection('status') === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
                         </span>
                     </div>
-                    <div role="columnheader">Tarefas</div>
+                    <div class="sortable-header" role="columnheader" (click)="toggleSort('serialNumber')" [class.sorted]="getSortDirection('serialNumber')">
+                        Serial Number
+                        <span class="material-symbols-rounded sort-icon" *ngIf="getSortDirection('serialNumber')">
+                            {{ getSortDirection('serialNumber') === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+                        </span>
+                    </div>
+                    <div class="sortable-header" role="columnheader" (click)="toggleSort('model')" [class.sorted]="getSortDirection('model')">
+                        Modelo
+                        <span class="material-symbols-rounded sort-icon" *ngIf="getSortDirection('model')">
+                            {{ getSortDirection('model') === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+                        </span>
+                    </div>
+                    <div class="sortable-header" role="columnheader" (click)="toggleSort('wanIp')" [class.sorted]="getSortDirection('wanIp')">
+                        IP WAN
+                        <span class="material-symbols-rounded sort-icon" *ngIf="getSortDirection('wanIp')">
+                            {{ getSortDirection('wanIp') === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+                        </span>
+                    </div>
+                    <div class="sortable-header" role="columnheader" (click)="toggleSort('pppoe')" [class.sorted]="getSortDirection('pppoe')">
+                        PPPoE
+                        <span class="material-symbols-rounded sort-icon" *ngIf="getSortDirection('pppoe')">
+                            {{ getSortDirection('pppoe') === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+                        </span>
+                    </div>
+                    <div class="sortable-header" role="columnheader" (click)="toggleSort('rx')" [class.sorted]="getSortDirection('rx')">
+                        Sinal Óptico (Rx)
+                        <span class="material-symbols-rounded sort-icon" *ngIf="getSortDirection('rx')">
+                            {{ getSortDirection('rx') === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+                        </span>
+                    </div>
+                    <div class="sortable-header" role="columnheader" (click)="toggleSort('healthScore')" [class.sorted]="getSortDirection('healthScore')">
+                        Saúde
+                        <span class="material-symbols-rounded sort-icon" *ngIf="getSortDirection('healthScore')">
+                            {{ getSortDirection('healthScore') === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+                        </span>
+                    </div>
+                    <div class="sortable-header" role="columnheader" (click)="toggleSort('tasks')" [class.sorted]="getSortDirection('tasks')">
+                        Tarefas
+                        <span class="material-symbols-rounded sort-icon" *ngIf="getSortDirection('tasks')">
+                            {{ getSortDirection('tasks') === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+                        </span>
+                    </div>
                     <div class="actions-header" role="columnheader">Ações</div>
                 </div>
 
@@ -414,33 +553,34 @@
                     </div>
                     <div class="ai-details" *ngIf="aiReport.probableCauses && aiReport.probableCauses.length > 0">
                         <h4>Causas e Sugestões Analíticas</h4>
-                        <ul><li *ngFor="let cause of aiReport.probableCauses"><span class="material-symbols-rounded">build</span> {{ cause }}</li></ul>
+                        <ul><li *ngFor="let cause of aiReport.probableCauses"><span class="material-symbols-rounded">lightbulb</span> {{ cause }}</li></ul>
                     </div>
                 </div>
             </div>
-
             <div class="modal-footer">
-                <button class="page-btn active" (click)="closeAiModal()">Concluir Análise</button>
+                <button class="filter-btn active" (click)="closeAiModal()">Fechar</button>
             </div>
         </div>
     </div>
 
     <!-- Modal de Confirmação de Bulk Reboot -->
     <div class="modal-overlay" *ngIf="isBulkRebootConfirmOpen" (click)="cancelBulkReboot()">
-        <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-content" (click)="$event.stopPropagation()" style="max-width: 480px;">
             <div class="modal-header">
-                <h2>Confirmar Reinício em Lote</h2>
+                <h2>Confirmar Reinício em Massa</h2>
                 <button class="close-btn" (click)="cancelBulkReboot()"><span class="material-symbols-rounded">close</span></button>
             </div>
             <div class="modal-body">
-                <p>Isso irá reiniciar <strong>{{ selectedCpes.size }}</strong> equipamento(s) e derrubar a conexão dos clientes temporariamente.</p>
-                <p>Para confirmar, digite o número de equipamentos:</p>
-                <input type="number" [(ngModel)]="bulkRebootConfirmCount" class="confirm-input" [placeholder]="selectedCpes.size.toString()" />
+                <p>Você está prestes a reiniciar <strong>{{ selectedCpes.size }} CPE(s)</strong>.</p>
+                <p class="warning-text">⚠ CPEs offline serão ignoradas automaticamente.</p>
+                <p>Para confirmar, digite o número <strong>{{ selectedCpes.size }}</strong> abaixo:</p>
+                <input type="number" class="confirm-input" [(ngModel)]="bulkRebootConfirmCount" placeholder="Digite o número exato..." />
             </div>
             <div class="modal-footer">
-                <button class="page-btn" (click)="cancelBulkReboot()">Cancelar</button>
-                <button class="page-btn active btn-danger" (click)="confirmBulkReboot()">Confirmar</button>
+                <button class="filter-btn" (click)="cancelBulkReboot()">Cancelar</button>
+                <button class="filter-btn active btn-danger-outline" (click)="confirmBulkReboot()">Confirmar Reinício</button>
             </div>
         </div>
     </div>
+
 </div>
