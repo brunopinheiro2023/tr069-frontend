@@ -1237,3 +1237,87 @@ export interface ProviderConfigUpdate {
   pppoePassword?: string | null;
   autoWifiOptimizationEnabled?: boolean;
 }
+
+// =============================================================================
+// DIAGNOSTIC TARGETS — Destinos de diagnóstico periódico (admin)
+// =============================================================================
+
+export type DiagnosticTargetType = 'IPPing' | 'TraceRoute' | 'DNSLookup' | 'UDPEcho';
+export type DiagnosticTargetScope = 'all' | 'selected';
+
+// Ícones e labels centralizados em core/constants/diagnostic.constants.ts
+
+export interface DiagnosticTarget {
+  _id?: string;
+  host: string;
+  type: DiagnosticTargetType;
+  label?: string;
+  scopeType: DiagnosticTargetScope;
+  serialNumbers?: string[];
+  intervalHours: number;
+  params?: Record<string, string | number | boolean>;
+  enabled: boolean;
+  createdBy: string;
+  updatedBy: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface DiagnosticTargetCreate {
+  host: string;
+  type: DiagnosticTargetType;
+  label?: string;
+  scopeType?: DiagnosticTargetScope;
+  serialNumbers?: string[];
+  intervalHours?: number;
+  params?: Record<string, string | number | boolean>;
+  enabled?: boolean;
+}
+
+export interface DiagnosticTargetUpdate {
+  host?: string;
+  label?: string;
+  scopeType?: DiagnosticTargetScope;
+  serialNumbers?: string[];
+  intervalHours?: number;
+  params?: Record<string, string | number | boolean>;
+  enabled?: boolean;
+}
+
+/** Entrada do histórico de diagnósticos vinculada a um target. */
+export interface DiagnosticTargetHistoryEntry {
+  _id: string;
+  serialNumber: string;
+  diagnosticType: string;
+  diagnosticsState: string;
+  targetId: string;
+  triggeredBy?: string;
+  timestamp: string;
+  results: Record<string, number | string | null>;
+}
+
+/** Análise agregada de um destino (endpoint /analysis). Contrato espelha
+ * diagnosticTargetAnalysisService.js exatamente — conferir lá antes de alterar. */
+export interface DiagnosticTargetAnalysis {
+  targetId: string;
+  diagType: string;
+  days: number;
+  totalExecutions: number;
+  successCount: number;
+  errorCount: number;
+  pendingCount: number;
+  successRate: number;
+  latencyStats: {
+    min: number;
+    avg: number;
+    max: number;
+    std: number;
+    p25: number | null;
+    p50: number | null;
+    p75: number | null;
+    iqr: number | null;
+    count: number;
+  } | null;
+  topFailingCpes: { serialNumber: string; failures: number; lastError: string | null; lastErrorAt: string | null }[];
+  dailySeries: { day: string; success: number; error: number; total: number }[];
+}

@@ -1,0 +1,72 @@
+<div class="periodic-diagnostics">
+  <div class="info-bar">
+    <span class="material-symbols-rounded">info</span>
+    <p>Diagnósticos executados automaticamente pelo scheduler do ACS em intervalos regulares. Os destinos são cadastrados pelo administrador na página <strong>Diagnósticos Periódicos</strong>.</p>
+  </div>
+
+  <div *ngIf="loading" class="loading-state">
+    <span class="material-symbols-rounded spin">progress_activity</span>
+    Carregando diagnósticos periódicos…
+  </div>
+
+  <div *ngIf="!loading && targets.length === 0" class="empty-state">
+    <span class="material-symbols-rounded">inbox</span>
+    <p>Nenhum diagnóstico periódico ativo para esta CPE.</p>
+  </div>
+
+  <div *ngIf="!loading && targets.length > 0" class="target-list">
+    <div class="target-card" *ngFor="let t of targets">
+      <div class="target-header" (click)="toggleHistory(t)">
+        <div class="target-info">
+          <span class="material-symbols-rounded type-icon">{{ getTypeIcon(t.type) }}</span>
+          <div>
+            <div class="target-title">
+              <strong>{{ t.label || t.host }}</strong>
+              <span class="type-badge">{{ t.type }}</span>
+            </div>
+            <div class="target-meta">
+              <span class="host">{{ t.host }}</span>
+              <span class="sep">·</span>
+              <span>a cada {{ t.intervalHours }}h</span>
+              <span class="sep">·</span>
+              <span>{{ t.scopeType === 'all' ? 'Todas as CPEs' : 'CPEs selecionadas' }}</span>
+            </div>
+          </div>
+        </div>
+        <span class="material-symbols-rounded expand-icon" [class.expanded]="expandedTargetId === t._id">
+          {{ expandedTargetId === t._id ? 'expand_less' : 'expand_more' }}
+        </span>
+      </div>
+
+      <!-- Histórico expandido -->
+      <div class="history-panel" *ngIf="expandedTargetId === t._id">
+        <div *ngIf="!historyByTarget[t._id!]" class="loading-mini">
+          <span class="material-symbols-rounded spin">progress_activity</span>
+        </div>
+
+        <div *ngIf="historyByTarget[t._id!]?.length === 0" class="no-history">
+          Nenhuma execução registrada para esta CPE ainda.
+        </div>
+
+        <table *ngIf="historyByTarget[t._id!] && historyByTarget[t._id!].length > 0" class="history-table">
+          <thead>
+            <tr>
+              <th>Data/Hora</th>
+              <th>Estado</th>
+              <th>Resultado</th>
+              <th>Disparado por</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let entry of historyByTarget[t._id!]!">
+              <td class="timestamp">{{ entry.timestamp | date:'dd/MM/yyyy HH:mm' }}</td>
+              <td><span class="state-badge" [class]="stateClass(entry.diagnosticsState)">{{ entry.diagnosticsState }}</span></td>
+              <td class="result">{{ resultSummary(entry) }}</td>
+              <td class="triggered-by">{{ entry.triggeredBy || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

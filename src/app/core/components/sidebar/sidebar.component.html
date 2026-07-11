@@ -45,5 +45,15 @@
       <span class="material-symbols-rounded">admin_panel_settings</span>
       <span class="nav-label">Config. Provedor</span>
     </li>
+    <li
+      *ngIf="isAdmin"
+      class="nav-item"
+      routerLink="/diagnostic-targets"
+      routerLinkActive="active"
+      (click)="onNavClick()"
+    >
+      <span class="material-symbols-rounded">monitor_heart</span>
+      <span class="nav-label">Diagnósticos Periódicos</span>
+    </li>
   </ul>
 </aside>

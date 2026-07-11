@@ -91,6 +91,9 @@
             <button class="tab-btn" [class.active]="activeTab === 'diagnostics'" (click)="setActiveTab('diagnostics')">
                 <span class="material-symbols-rounded">analytics</span> Diagnóstico de Rede
             </button>
+            <button class="tab-btn" [class.active]="activeTab === 'periodic-diagnostics'" (click)="setActiveTab('periodic-diagnostics')">
+                <span class="material-symbols-rounded">monitor_heart</span> Diagnósticos Periódicos
+            </button>
             <button class="tab-btn" [class.active]="activeTab === 'wifi-analysis'" (click)="setActiveTab('wifi-analysis')">
                 <span class="material-symbols-rounded">wifi_find</span> Análise Wi-Fi
             </button>
@@ -147,6 +150,16 @@
                     <app-skeleton shape="rect" height="400px"></app-skeleton>
                 } @error {
                     <div class="tab-error"><span class="material-symbols-rounded">error</span> Falha ao carregar aba. <button class="retry-btn" (click)="retryTab('diagnostics')">Tentar novamente</button></div>
+                }
+            }
+
+            @if (activeTab === 'periodic-diagnostics') {
+                @defer (on immediate) {
+                    <app-cpe-periodic-diagnostics-tab [serialNumber]="serialNumber" [isCpeOffline]="!cpe.isOnline"></app-cpe-periodic-diagnostics-tab>
+                } @placeholder {
+                    <app-skeleton shape="rect" height="300px"></app-skeleton>
+                } @error {
+                    <div class="tab-error"><span class="material-symbols-rounded">error</span> Falha ao carregar aba. <button class="retry-btn" (click)="retryTab('periodic-diagnostics')">Tentar novamente</button></div>
                 }
             }
 

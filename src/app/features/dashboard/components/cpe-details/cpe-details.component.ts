@@ -18,6 +18,7 @@ import { CpeDevicesTabComponent } from './components/cpe-devices-tab/cpe-devices
 import { CpeDiagnosticsTabNewComponent } from './components/cpe-diagnostics-tab-new/cpe-diagnostics-tab-new.component';
 import { CpeWifiAnalysisTabComponent } from './components/cpe-wifi-analysis-tab/cpe-wifi-analysis-tab.component';
 import { CpeAiTabComponent } from './components/cpe-ai-tab/cpe-ai-tab.component';
+import { CpePeriodicDiagnosticsTabComponent } from './components/cpe-periodic-diagnostics-tab/cpe-periodic-diagnostics-tab.component';
 import { ButtonComponent } from '../../../../core/components/button/button.component';
 import { SkeletonComponent } from '../../../../core/components/skeleton/skeleton.component';
 
@@ -26,7 +27,7 @@ import { SkeletonComponent } from '../../../../core/components/skeleton/skeleton
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   // REGISTRO DOS FILHOS NO ARRAY DE IMPORTS
-  imports: [CommonModule, CpeInfoTabComponent, CpeWifiTabComponent, CpeRadioTabComponent, CpeDevicesTabComponent, CpeDiagnosticsTabNewComponent, CpeWifiAnalysisTabComponent, CpeAiTabComponent, ButtonComponent, SkeletonComponent, DataAgePipe],
+  imports: [CommonModule, CpeInfoTabComponent, CpeWifiTabComponent, CpeRadioTabComponent, CpeDevicesTabComponent, CpeDiagnosticsTabNewComponent, CpeWifiAnalysisTabComponent, CpeAiTabComponent, CpePeriodicDiagnosticsTabComponent, ButtonComponent, SkeletonComponent, DataAgePipe],
   templateUrl: './cpe-details.component.html',
   styleUrls: ['./cpe-details.component.scss']
 })
@@ -37,7 +38,7 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
   error: string | null = null;
 
   // Aba ativa na navegação
-  activeTab: 'info' | 'wifi' | 'radio' | 'devices' | 'diagnostics' | 'wifi-analysis' | 'ai' = 'info';
+  activeTab: 'info' | 'wifi' | 'radio' | 'devices' | 'diagnostics' | 'wifi-analysis' | 'ai' | 'periodic-diagnostics' = 'info';
   private wsSubscriptions = new Subscription();
 
   // LOCK-1: Sistema de lock entre técnicos — centralizado no componente pai.
@@ -57,7 +58,7 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
     private cdr: ChangeDetectorRef
   ) {}
 
-  setActiveTab(tab: 'info' | 'wifi' | 'radio' | 'devices' | 'diagnostics' | 'wifi-analysis' | 'ai'): void {
+  setActiveTab(tab: 'info' | 'wifi' | 'radio' | 'devices' | 'diagnostics' | 'wifi-analysis' | 'ai' | 'periodic-diagnostics'): void {
     this.activeTab = tab;
   }
 
@@ -89,7 +90,7 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
 
     // Lê query param 'tab' para ativar a aba solicitada pelo dashboard
     const requestedTab = this.route.snapshot.queryParamMap.get('tab');
-    const validTabs: typeof this.activeTab[] = ['info', 'wifi', 'radio', 'devices', 'diagnostics', 'wifi-analysis', 'ai'];
+    const validTabs: typeof this.activeTab[] = ['info', 'wifi', 'radio', 'devices', 'diagnostics', 'wifi-analysis', 'ai', 'periodic-diagnostics'];
     if (requestedTab && validTabs.includes(requestedTab as typeof this.activeTab)) {
       this.activeTab = requestedTab as typeof this.activeTab;
     }

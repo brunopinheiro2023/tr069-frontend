@@ -35,6 +35,15 @@ const routes: Routes = [
     canActivate: [authGuard],
   },
 
+  // Diagnósticos periódicos — destinos cadastrados pelo admin
+  {
+    path: 'diagnostic-targets',
+    loadComponent: () =>
+      import('./features/diagnostic-targets/diagnostic-targets.component')
+        .then(m => m.DiagnosticTargetsComponent),
+    canActivate: [authGuard],
+  },
+
   // Rota fallback
   { path: '**', redirectTo: '/dashboard' }
 ];
