@@ -43,3 +43,8 @@ testem.log
 # System files
 .DS_Store
 Thumbs.db
+
+# Logs temporários do ng serve / build
+ng-serve*.log
+build_err.log
+*_err.log

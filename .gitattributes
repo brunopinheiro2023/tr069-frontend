@@ -1,0 +1,28 @@
+# =============================================================================
+# .gitattributes — TR-069 ACS Frontend (Angular)
+# Força LF (Unix) como line ending em todos os arquivos textuais.
+# Garante consistência cross-platform (Windows/Linux/macOS).
+# =============================================================================
+
+# Default: todos os arquivos textuais usam LF
+* text=auto eol=lf
+
+# Arquivos de configuração
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Shell scripts (se houver no futuro)
+*.sh text eol=lf
+
+# Binários — não tocar line endings
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
