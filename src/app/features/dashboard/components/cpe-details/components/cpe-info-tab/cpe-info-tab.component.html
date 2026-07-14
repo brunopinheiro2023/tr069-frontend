@@ -163,6 +163,23 @@
     {{ incidentStatus.expiresInSeconds }}s, devido a uma métrica crítica ainda não normalizada.
   </div>
 
+  <!-- Banner de Boot Loop Anômalo — aviso ao técnico com sugestão de resolução -->
+  <div *ngIf="bootLoopAnomaly"
+       class="col-span-full bg-orange-50 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700 rounded-lg p-4 text-sm text-orange-700 dark:text-orange-300">
+    <div class="flex items-start gap-3">
+      <span class="material-symbols-rounded text-xl flex-shrink-0 mt-0.5">restart_alt</span>
+      <div class="flex-1 min-w-0">
+        <strong class="block mb-1">Boot Loop Anômalo Detectado</strong>
+        <p class="mb-2">{{ bootLoopAnomaly.message }}</p>
+        <div class="bg-orange-100/60 dark:bg-orange-900/20 rounded-md p-2 text-xs">
+          <strong class="block mb-1">Sugestão de resolução:</strong>
+          <p>{{ bootLoopAnomaly.suggestion }}</p>
+        </div>
+        <p class="text-xs opacity-70 mt-1">Detectado há {{ timeAgo(bootLoopAnomaly.timestamp) }}</p>
+      </div>
+    </div>
+  </div>
+
   <!-- Card Health Score -->
   <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
        *ngIf="healthScoreBreakdown">

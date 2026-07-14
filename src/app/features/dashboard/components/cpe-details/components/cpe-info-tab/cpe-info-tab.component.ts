@@ -309,6 +309,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   healthScoreBreakdown: { total: number; components: Record<string, { score: number; weight: number }> } | null = null;
   cpeAlerts: TelemetryAlert[] = [];
   incidentStatus: { active: boolean; expiresInSeconds: number | null } = { active: false, expiresInSeconds: null };
+  bootLoopAnomaly: { count: number; message: string; suggestion: string; timestamp: string } | null = null;
   lastIntervention: { found: boolean; before?: InterventionSnapshot; after?: InterventionSnapshot; pending?: boolean } | null = null;
 
   // Getter para filtrar apenas alertas ativos (status: 'active')
@@ -494,6 +495,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     this.listenForAlerts(); // Listener para alertas de telemetria
     this.listenForPresenceEvents(); // Single Driver: escuta conflitos e promoções
     this.listenForAnalysisUpdates(); // Listener para atualização de análise em tempo real
+    this.listenForBootLoopAnomaly(); // Listener para anomalia de boot loop (aviso ao técnico)
     this.startHeartbeat(); // Inicia heartbeat para manter controle de Driver
     // Escalonamento das chamadas HTTP para evitar burst (429 Too Many Requests)
     this.loadLatestVitals();       // 0ms — carga imediata do snapshot TelemetryVitals
@@ -1745,6 +1747,24 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
         this.analysisData = event.analysis;
         this.analysisUpdatedAt = new Date(event.timestamp);
         this.analysisLoading = false;
+        this.cdr.markForCheck();
+      });
+  }
+
+  /** Escuta anomalia de boot loop — exibe banner com sugestão ao técnico */
+  private listenForBootLoopAnomaly(): void {
+    this.wsService.onBootLoopAnomaly()
+      .pipe(
+        filter(event => event.serialNumber === this.serialNumber),
+        takeUntilDestroyed(this.destroyRef)
+      )
+      .subscribe(event => {
+        this.bootLoopAnomaly = {
+          count: event.count,
+          message: event.message,
+          suggestion: event.suggestion,
+          timestamp: event.timestamp,
+        };
         this.cdr.markForCheck();
       });
   }
