@@ -3,73 +3,111 @@
 
 <!-- ZONA 1 — Controles: sempre visíveis no topo, sem necessidade de scroll -->
 <div class="flex flex-wrap items-center justify-between gap-3 mb-4 px-4 pt-4">
-
   <!-- Ações de coleta -->
   <div class="flex items-center gap-2 flex-wrap">
-    <button (click)="requestTelemetry()"
-            [disabled]="isLoading || isViewOnly || isCpeBusy || isRefreshInCooldown || isCpeOffline"
-            class="refresh-btn flex items-center gap-1.5"
-            [class.opacity-60]="isRefreshInCooldown"
-            [title]="isCpeOffline
-              ? 'CPE offline — coleta de telemetria indisponível.'
-              : isRefreshInCooldown
-              ? 'Aguarde o contador regressivo para nova coleta (cache fresco por 60s).'
-              : 'Coleta completa: 38 métricas (sinal óptico, WAN, Wi-Fi, CPU, memória, clientes). Duração: 5–10s.'">
-      <span class="material-symbols-rounded text-base" [class.animate-spin]="isLoading">sync</span>
+    <button
+      (click)="requestTelemetry()"
+      [disabled]="
+        isLoading ||
+        isViewOnly ||
+        isCpeBusy ||
+        isRefreshInCooldown ||
+        isCpeOffline
+      "
+      class="refresh-btn flex items-center gap-1.5"
+      [class.opacity-60]="isRefreshInCooldown"
+      [title]="
+        isCpeOffline
+          ? 'CPE offline — coleta de telemetria indisponível.'
+          : isRefreshInCooldown
+            ? 'Aguarde o contador regressivo para nova coleta (cache fresco por 60s).'
+            : 'Coleta completa: 38 métricas (sinal óptico, WAN, Wi-Fi, CPU, memória, clientes). Duração: 5–10s.'
+      "
+    >
+      <span
+        class="material-symbols-rounded text-base"
+        [class.animate-spin]="isLoading"
+        >sync</span
+      >
       {{ refreshButtonLabel }}
     </button>
-    <button (click)="requestVitals()"
-            [disabled]="vitalsLoading || isViewOnly || isCpeBusy || isCpeOffline"
-            class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md
-                   hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-40
-                   flex items-center gap-1.5"
-            [title]="isCpeOffline ? 'CPE offline — verificação rápida indisponível.' : 'Verificação rápida: CPU, memória, WAN e sinal óptico. Duração: ~2s. Ideal para confirmar alertas.'">
-      <span class="material-symbols-rounded text-base" [class.animate-spin]="vitalsLoading">bolt</span>
+    <button
+      (click)="requestVitals()"
+      [disabled]="vitalsLoading || isViewOnly || isCpeBusy || isCpeOffline"
+      class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 flex items-center gap-1.5"
+      [title]="
+        isCpeOffline
+          ? 'CPE offline — verificação rápida indisponível.'
+          : 'Verificação rápida: CPU, memória, WAN e sinal óptico. Duração: ~2s. Ideal para confirmar alertas.'
+      "
+    >
+      <span
+        class="material-symbols-rounded text-base"
+        [class.animate-spin]="vitalsLoading"
+        >bolt</span
+      >
       Checar Status
     </button>
 
     <!-- Informe sobre os botões -->
     <div class="relative group ml-1">
-      <span class="material-symbols-rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300
-                   cursor-help text-base select-none">
+      <span
+        class="material-symbols-rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help text-base select-none"
+      >
         help_outline
       </span>
-      <div class="absolute left-0 top-7 z-50 hidden group-hover:block
-                  w-80 p-3 rounded-lg shadow-xl text-xs leading-relaxed
-                  bg-white dark:bg-gray-800
-                  border border-gray-200 dark:border-gray-600
-                  text-gray-700 dark:text-gray-300">
-        <p class="font-semibold text-gray-900 dark:text-white mb-2">Como funcionam as coletas</p>
+      <div
+        class="absolute left-0 top-7 z-50 hidden group-hover:block w-80 p-3 rounded-lg shadow-xl text-xs leading-relaxed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300"
+      >
+        <p class="font-semibold text-gray-900 dark:text-white mb-2">
+          Como funcionam as coletas
+        </p>
         <div class="space-y-2">
           <div class="flex gap-2">
-            <span class="material-symbols-rounded text-blue-500 text-sm flex-shrink-0 mt-0.5">sync</span>
+            <span
+              class="material-symbols-rounded text-blue-500 text-sm flex-shrink-0 mt-0.5"
+              >sync</span
+            >
             <div>
-              <span class="font-medium text-gray-900 dark:text-white">Coletar Dados</span>
+              <span class="font-medium text-gray-900 dark:text-white"
+                >Coletar Dados</span
+              >
               <p class="text-gray-500 dark:text-gray-400 mt-0.5">
-                Coleta completa com 38 métricas: sinal óptico (RX/TX), status WAN, velocidade,
-                latência, Wi-Fi 2.4 e 5 GHz, clientes conectados, CPU, memória e uptime.
-                Duração estimada: 5–10 segundos.
+                Coleta completa com 38 métricas: sinal óptico (RX/TX), status
+                WAN, velocidade, latência, Wi-Fi 2.4 e 5 GHz, clientes
+                conectados, CPU, memória e uptime. Duração estimada: 5–10
+                segundos.
               </p>
             </div>
           </div>
           <div class="flex gap-2">
-            <span class="material-symbols-rounded text-yellow-500 text-sm flex-shrink-0 mt-0.5">bolt</span>
+            <span
+              class="material-symbols-rounded text-yellow-500 text-sm flex-shrink-0 mt-0.5"
+              >bolt</span
+            >
             <div>
-              <span class="font-medium text-gray-900 dark:text-white">Checar Status</span>
+              <span class="font-medium text-gray-900 dark:text-white"
+                >Checar Status</span
+              >
               <p class="text-gray-500 dark:text-gray-400 mt-0.5">
-                Verificação expressa dos 11 campos críticos: CPU, memória, status WAN, sinal óptico
-                e uptime. Ideal para confirmar alertas sem esperar a coleta completa.
-                Duração estimada: ~2 segundos.
+                Verificação expressa dos 11 campos críticos: CPU, memória,
+                status WAN, sinal óptico e uptime. Ideal para confirmar alertas
+                sem esperar a coleta completa. Duração estimada: ~2 segundos.
               </p>
             </div>
           </div>
           <div class="flex gap-2">
-            <span class="material-symbols-rounded text-green-500 text-sm flex-shrink-0 mt-0.5">schedule</span>
+            <span
+              class="material-symbols-rounded text-green-500 text-sm flex-shrink-0 mt-0.5"
+              >schedule</span
+            >
             <div>
-              <span class="font-medium text-gray-900 dark:text-white">Coleta automática</span>
+              <span class="font-medium text-gray-900 dark:text-white"
+                >Coleta automática</span
+              >
               <p class="text-gray-500 dark:text-gray-400 mt-0.5">
-                O sistema coleta dados automaticamente a cada ciclo do scheduler,
-                sem necessidade de ação manual.
+                O sistema coleta dados automaticamente a cada ciclo do
+                scheduler, sem necessidade de ação manual.
               </p>
             </div>
           </div>
@@ -80,158 +118,253 @@
 
   <!-- Status da coleta -->
   <div class="flex items-center gap-3 text-sm">
-    <span *ngIf="isPartialResult" class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full
-                   bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+    <span
+      *ngIf="isPartialResult"
+      class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
+    >
       <span class="material-icons text-xs">warning</span>
       Coleta parcial
     </span>
-    <span class="text-gray-500 dark:text-gray-400 text-xs">{{ cacheLabel }}</span>
+    <span class="text-gray-500 dark:text-gray-400 text-xs">{{
+      cacheLabel
+    }}</span>
     <span *ngIf="lastUpdated" class="text-gray-400 text-xs">
-      Atualizado: {{ lastUpdated | date:'HH:mm:ss' }}
+      Atualizado: {{ lastUpdated | date: "HH:mm:ss" }}
     </span>
   </div>
 </div>
 
 <!-- Barra de progresso chunked -->
-<div *ngIf="telemetryLoading && telemetryProgress > 0" class="telemetry-progress-bar mx-4 mb-3">
+<div
+  *ngIf="telemetryLoading && telemetryProgress > 0"
+  class="telemetry-progress-bar mx-4 mb-3"
+>
   <div class="progress-fill" [style.width.%]="telemetryProgress"></div>
   <span class="progress-text">Coletando... {{ telemetryProgress }}%</span>
 </div>
-<div *ngIf="telemetryLoading && isPartialCollection"
-     class="mx-4 mb-3 text-xs text-yellow-500">
+<div
+  *ngIf="telemetryLoading && isPartialCollection"
+  class="mx-4 mb-3 text-xs text-yellow-500"
+>
   Coleta parcial — alguns dados podem estar indisponíveis.
 </div>
 
 <!-- ZONA 2 — KPI Row: visão instantânea do estado crítico -->
-<div class="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 mb-4"
-     *ngIf="healthScoreBreakdown || telemetryData">
-
+<div
+  class="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 mb-4"
+  *ngIf="healthScoreBreakdown || telemetryData"
+>
   <!-- KPI 1: Health Score -->
-  <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center"
-       *ngIf="healthScoreBreakdown">
+  <div
+    class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center"
+    *ngIf="healthScoreBreakdown"
+  >
     <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Saúde</div>
-    <div class="text-2xl font-bold"
-         [ngClass]="healthScoreBreakdown.total >= 80 ? 'text-green-500' :
-                    healthScoreBreakdown.total >= 50 ? 'text-yellow-500' : 'text-red-500'">
+    <div
+      class="text-2xl font-bold"
+      [ngClass]="
+        healthScoreBreakdown.total >= 80
+          ? 'text-green-500'
+          : healthScoreBreakdown.total >= 50
+            ? 'text-yellow-500'
+            : 'text-red-500'
+      "
+    >
       {{ healthScoreBreakdown.total }}
     </div>
     <div class="text-xs text-gray-400">/ 100</div>
   </div>
 
   <!-- KPI 2: WAN Status -->
-  <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center"
-       *ngIf="telemetryData?.['wanStatus'] || cpe?.wan?.ip || cpe?.wanIp">
+  <div
+    class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center"
+    *ngIf="telemetryData?.['wanStatus'] || cpe?.wan?.ip || cpe?.wanIp"
+  >
     <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">WAN</div>
-    <div class="text-sm font-bold"
-         [ngClass]="stringValue('wanStatus')?.toLowerCase() === 'connected' ? 'text-green-500' : 'text-red-500'">
-      {{ stringValue('wanStatus') || (cpe?.wan?.ip || cpe?.wanIp ? 'Com IP' : '—') }}
+    <div
+      class="text-sm font-bold"
+      [ngClass]="
+        stringValue('wanStatus')?.toLowerCase() === 'connected'
+          ? 'text-green-500'
+          : 'text-red-500'
+      "
+    >
+      {{
+        stringValue("wanStatus") ||
+          (cpe?.wan?.ip || cpe?.wanIp ? "Com IP" : "—")
+      }}
     </div>
-    <div class="text-xs text-gray-400 truncate" *ngIf="cpe?.wan?.ip || cpe?.wanIp">{{ cpe?.wan?.ip || cpe?.wanIp }}</div>
+    <div
+      class="text-xs text-gray-400 truncate"
+      *ngIf="cpe?.wan?.ip || cpe?.wanIp"
+    >
+      {{ cpe?.wan?.ip || cpe?.wanIp }}
+    </div>
   </div>
 
   <!-- KPI 3: Sinal RX -->
-  <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center"
-       *ngIf="telemetryData?.['opticalRx']">
+  <div
+    class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center"
+    *ngIf="telemetryData?.['opticalRx']"
+  >
     <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Sinal RX</div>
-    <div class="text-lg font-bold" [ngClass]="isRxCritical ? 'text-red-500' : 'text-green-500'">
-      {{ telemetryData | metric : 'opticalRx' : { unit: '' } }}
+    <div
+      class="text-lg font-bold"
+      [ngClass]="isRxCritical ? 'text-red-500' : 'text-green-500'"
+    >
+      {{ telemetryData | metric: "opticalRx" : { unit: "" } }}
     </div>
     <div class="text-xs text-gray-400">dBm</div>
   </div>
 
   <!-- KPI 4: CPU -->
-  <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center"
-       *ngIf="telemetryData?.['cpuUsage']">
+  <div
+    class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center"
+    *ngIf="telemetryData?.['cpuUsage']"
+  >
     <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">CPU</div>
-    <div class="text-2xl font-bold"
-         [ngClass]="+(telemetryData | metric : 'cpuUsage' : {}) >= 85 ? 'text-red-500' :
-                    +(telemetryData | metric : 'cpuUsage' : {}) >= 70 ? 'text-yellow-500' : 'text-green-500'">
-      {{ telemetryData | metric : 'cpuUsage' : { unit: '' } }}
+    <div
+      class="text-2xl font-bold"
+      [ngClass]="
+        +(telemetryData | metric: 'cpuUsage' : {}) >= 85
+          ? 'text-red-500'
+          : +(telemetryData | metric: 'cpuUsage' : {}) >= 70
+            ? 'text-yellow-500'
+            : 'text-green-500'
+      "
+    >
+      {{ telemetryData | metric: "cpuUsage" : { unit: "" } }}
     </div>
     <div class="text-xs text-gray-400">%</div>
   </div>
-
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
-
   <!-- Banner de Modo Incidente — topo da grid, full-width, só aparece se ativo -->
-  <div *ngIf="incidentStatus.active"
-       class="col-span-full bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg p-3 text-sm text-red-700 dark:text-red-300">
+  <div
+    *ngIf="incidentStatus.active"
+    class="col-span-full bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg p-3 text-sm text-red-700 dark:text-red-300"
+  >
     <span class="material-symbols-rounded text-sm align-middle">error</span>
     <strong>Modo Incidente ativo</strong> — coleta acelerada (a cada 2 min) por
-    {{ incidentStatus.expiresInSeconds }}s, devido a uma métrica crítica ainda não normalizada.
+    {{ incidentStatus.expiresInSeconds }}s, devido a uma métrica crítica ainda
+    não normalizada.
   </div>
 
   <!-- Banner de Boot Loop Anômalo — aviso ao técnico com sugestão de resolução -->
-  <div *ngIf="bootLoopAnomaly"
-       class="col-span-full bg-orange-50 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700 rounded-lg p-4 text-sm text-orange-700 dark:text-orange-300">
+  <div
+    *ngIf="bootLoopAnomaly"
+    class="col-span-full bg-orange-50 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700 rounded-lg p-4 text-sm text-orange-700 dark:text-orange-300"
+  >
     <div class="flex items-start gap-3">
-      <span class="material-symbols-rounded text-xl flex-shrink-0 mt-0.5">restart_alt</span>
+      <span class="material-symbols-rounded text-xl flex-shrink-0 mt-0.5"
+        >restart_alt</span
+      >
       <div class="flex-1 min-w-0">
         <strong class="block mb-1">Boot Loop Anômalo Detectado</strong>
         <p class="mb-2">{{ bootLoopAnomaly.message }}</p>
-        <div class="bg-orange-100/60 dark:bg-orange-900/20 rounded-md p-2 text-xs">
+        <div
+          class="bg-orange-100/60 dark:bg-orange-900/20 rounded-md p-2 text-xs"
+        >
           <strong class="block mb-1">Sugestão de resolução:</strong>
           <p>{{ bootLoopAnomaly.suggestion }}</p>
         </div>
-        <p class="text-xs opacity-70 mt-1">Detectado há {{ timeAgo(bootLoopAnomaly.timestamp) }}</p>
+        <p class="text-xs opacity-70 mt-1">
+          Detectado há {{ timeAgo(bootLoopAnomaly.timestamp) }}
+        </p>
       </div>
     </div>
   </div>
 
   <!-- Card Health Score -->
-  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
-       *ngIf="healthScoreBreakdown">
+  <div
+    class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+    *ngIf="healthScoreBreakdown"
+  >
     <div class="flex items-center justify-between mb-3 border-b pb-2">
-      <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Saúde da CPE</h3>
-      <span class="text-2xl font-bold"
-            [ngClass]="healthScoreBadge(healthScoreBreakdown.total)">
-        {{ healthScoreBreakdown.total }}<span class="text-sm font-normal text-gray-400">/100</span>
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+        Saúde da CPE
+      </h3>
+      <span
+        class="text-2xl font-bold"
+        [ngClass]="healthScoreBadge(healthScoreBreakdown.total)"
+      >
+        {{ healthScoreBreakdown.total
+        }}<span class="text-sm font-normal text-gray-400">/100</span>
       </span>
     </div>
     <div class="space-y-3">
-      <div *ngFor="let entry of healthScoreBreakdown.components | keyvalue; trackBy: trackByKvKey" class="space-y-1">
-        <div class="flex justify-between text-xs text-gray-600 dark:text-gray-400">
+      <div
+        *ngFor="
+          let entry of healthScoreBreakdown.components | keyvalue;
+          trackBy: trackByKvKey
+        "
+        class="space-y-1"
+      >
+        <div
+          class="flex justify-between text-xs text-gray-600 dark:text-gray-400"
+        >
           <span>{{ healthScoreLabels[entry.key] || entry.key }}</span>
-          <span [ngClass]="healthScoreBadge(entry.value.score)">{{ entry.value.score }}%</span>
+          <span [ngClass]="healthScoreBadge(entry.value.score)"
+            >{{ entry.value.score }}%</span
+          >
         </div>
         <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-          <div class="h-1.5 rounded-full transition-all duration-500"
-               [ngClass]="healthScoreColor(entry.value.score)"
-               [style.width.%]="entry.value.score">
-          </div>
+          <div
+            class="h-1.5 rounded-full transition-all duration-500"
+            [ngClass]="healthScoreColor(entry.value.score)"
+            [style.width.%]="entry.value.score"
+          ></div>
         </div>
       </div>
     </div>
   </div>
 
   <!-- Card Alertas enriquecido -->
-  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
-       *ngIf="activeAlerts.length > 0">
-    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2">
-      Alertas Ativos <span class="text-sm font-normal text-red-500">({{ activeAlerts.length }})</span>
+  <div
+    class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+    *ngIf="activeAlerts.length > 0"
+  >
+    <h3
+      class="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2"
+    >
+      Alertas Ativos
+      <span class="text-sm font-normal text-red-500"
+        >({{ activeAlerts.length }})</span
+      >
     </h3>
     <ul class="space-y-2 max-h-64 overflow-y-auto pr-1">
-      <li *ngFor="let alert of activeAlerts; trackBy: trackByAlertSeverityMsg"
-          class="flex items-start gap-2 text-sm rounded-md p-2"
-          [ngClass]="alert.severity === 'critical'
+      <li
+        *ngFor="let alert of activeAlerts; trackBy: trackByAlertSeverityMsg"
+        class="flex items-start gap-2 text-sm rounded-md p-2"
+        [ngClass]="
+          alert.severity === 'critical'
             ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
-            : 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'">
-        <span class="text-base flex-shrink-0 mt-0.5">{{ alertIcon(alert.severity) }}</span>
+            : 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'
+        "
+      >
+        <span class="text-base flex-shrink-0 mt-0.5">{{
+          alertIcon(alert.severity)
+        }}</span>
         <div class="flex-1 min-w-0">
           <div class="font-medium">{{ alert.message }}</div>
-          <div class="text-xs opacity-70 mt-0.5" *ngIf="alert.value !== undefined && alert.threshold !== undefined">
+          <div
+            class="text-xs opacity-70 mt-0.5"
+            *ngIf="alert.value !== undefined && alert.threshold !== undefined"
+          >
             Atual: {{ alert.value }} | Limite: {{ alert.threshold }}
           </div>
-          <div class="text-xs opacity-70 mt-0.5">{{ timeAgo(alert.triggeredAt) }}</div>
+          <div class="text-xs opacity-70 mt-0.5">
+            {{ timeAgo(alert.triggeredAt) }}
+          </div>
         </div>
         <!-- Ação contextual: coletar vitals para alertas de sistema -->
-        <button *ngIf="['cpuUsage','memoryFree','wanStatus'].includes(alert.metric)"
-                (click)="requestVitals()"
-                [disabled]="vitalsLoading || isViewOnly || isCpeOffline"
-                class="text-xs px-1.5 py-0.5 rounded bg-current/10 hover:bg-current/20
-                       transition-colors flex-shrink-0 disabled:opacity-40">
+        <button
+          *ngIf="['cpuUsage', 'memoryFree', 'wanStatus'].includes(alert.metric)"
+          (click)="requestVitals()"
+          [disabled]="vitalsLoading || isViewOnly || isCpeOffline"
+          class="text-xs px-1.5 py-0.5 rounded bg-current/10 hover:bg-current/20 transition-colors flex-shrink-0 disabled:opacity-40"
+        >
           Coletar
         </button>
       </li>
@@ -239,9 +372,15 @@
   </div>
 
   <!-- Card Última Intervenção expandido -->
-  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
-       *ngIf="lastIntervention?.found">
-    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2">Última Intervenção</h3>
+  <div
+    class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+    *ngIf="lastIntervention?.found"
+  >
+    <h3
+      class="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2"
+    >
+      Última Intervenção
+    </h3>
 
     <p class="text-sm text-gray-400 italic" *ngIf="lastIntervention?.pending">
       ⏳ Aguardando snapshot pós-ação...
@@ -249,7 +388,9 @@
 
     <div *ngIf="lastIntervention?.before && lastIntervention?.after">
       <!-- Cabeçalhos -->
-      <div class="grid grid-cols-3 gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">
+      <div
+        class="grid grid-cols-3 gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2"
+      >
         <div>Métrica</div>
         <div class="text-center">Antes</div>
         <div class="text-center">Depois</div>
@@ -259,44 +400,72 @@
         <!-- RX -->
         <div class="grid grid-cols-3 gap-2">
           <div class="text-gray-600 dark:text-gray-300">Sinal RX</div>
-          <div class="text-center text-gray-500">{{ lastIntervention?.before?.telemetry?.optical?.rxPower }} dBm</div>
-          <div class="text-center text-gray-500">{{ lastIntervention?.after?.telemetry?.optical?.rxPower }} dBm</div>
+          <div class="text-center text-gray-500">
+            {{ lastIntervention?.before?.telemetry?.optical?.rxPower }} dBm
+          </div>
+          <div class="text-center text-gray-500">
+            {{ lastIntervention?.after?.telemetry?.optical?.rxPower }} dBm
+          </div>
         </div>
         <!-- CPU -->
         <div class="grid grid-cols-3 gap-2">
           <div class="text-gray-600 dark:text-gray-300">CPU</div>
-          <div class="text-center text-gray-500">{{ lastIntervention?.before?.telemetry?.system?.cpuUsage }}%</div>
-          <div class="text-center text-gray-500">{{ lastIntervention?.after?.telemetry?.system?.cpuUsage }}%</div>
+          <div class="text-center text-gray-500">
+            {{ lastIntervention?.before?.telemetry?.system?.cpuUsage }}%
+          </div>
+          <div class="text-center text-gray-500">
+            {{ lastIntervention?.after?.telemetry?.system?.cpuUsage }}%
+          </div>
         </div>
         <!-- WAN Status -->
         <div class="grid grid-cols-3 gap-2">
           <div class="text-gray-600 dark:text-gray-300">WAN</div>
-          <div class="text-center text-gray-500">{{ lastIntervention?.before?.telemetry?.wan?.['status'] }}</div>
-          <div class="text-center text-gray-500">{{ lastIntervention?.after?.telemetry?.wan?.['status'] }}</div>
+          <div class="text-center text-gray-500">
+            {{ lastIntervention?.before?.telemetry?.wan?.["status"] }}
+          </div>
+          <div class="text-center text-gray-500">
+            {{ lastIntervention?.after?.telemetry?.wan?.["status"] }}
+          </div>
         </div>
       </div>
     </div>
   </div>
 
   <!-- Card Sistema -->
-  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
-       *ngIf="telemetryData?.['cpuUsage'] || telemetryData?.['uptime'] || telemetryData?.['hostCount']">
-    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2">Sistema</h3>
+  <div
+    class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+    *ngIf="
+      telemetryData?.['cpuUsage'] ||
+      telemetryData?.['uptime'] ||
+      telemetryData?.['hostCount']
+    "
+  >
+    <h3
+      class="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2"
+    >
+      Sistema
+    </h3>
     <ul class="space-y-3 text-sm text-gray-700 dark:text-gray-300">
-
       <!-- CPU com barra -->
       <li *ngIf="telemetryData?.['cpuUsage']">
         <div class="flex justify-between mb-1">
           <span class="font-medium">CPU</span>
-          <span [ngClass]="usageBarColor(+(telemetryData | metric : 'cpuUsage' : {}))">
-            {{ telemetryData | metric : 'cpuUsage' : { unit: '%' } }}
+          <span
+            [ngClass]="
+              usageBarColor(+(telemetryData | metric: 'cpuUsage' : {}))
+            "
+          >
+            {{ telemetryData | metric: "cpuUsage" : { unit: "%" } }}
           </span>
         </div>
         <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-          <div class="h-1.5 rounded-full transition-all duration-500"
-               [ngClass]="usageBarColor(+(telemetryData | metric : 'cpuUsage' : {}))"
-               [style.width.%]="+(telemetryData | metric : 'cpuUsage' : {})">
-          </div>
+          <div
+            class="h-1.5 rounded-full transition-all duration-500"
+            [ngClass]="
+              usageBarColor(+(telemetryData | metric: 'cpuUsage' : {}))
+            "
+            [style.width.%]="+(telemetryData | metric: 'cpuUsage' : {})"
+          ></div>
         </div>
       </li>
 
@@ -306,94 +475,182 @@
           <span class="font-medium">RAM</span>
           <span [ngClass]="usageBarColor(ramUsagePercent)">
             {{ ramUsagePercent }}%
-            <span class="text-xs text-gray-400 ml-1" *ngIf="ramUsedMb && ramTotalMb">
+            <span
+              class="text-xs text-gray-400 ml-1"
+              *ngIf="ramUsedMb && ramTotalMb"
+            >
               ({{ ramUsedMb }} / {{ ramTotalMb }} MB)
             </span>
           </span>
         </div>
         <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-          <div class="h-1.5 rounded-full transition-all duration-500"
-               [ngClass]="usageBarColor(ramUsagePercent)"
-               [style.width.%]="ramUsagePercent">
-          </div>
+          <div
+            class="h-1.5 rounded-full transition-all duration-500"
+            [ngClass]="usageBarColor(ramUsagePercent)"
+            [style.width.%]="ramUsagePercent"
+          ></div>
         </div>
       </li>
 
       <!-- Uptime humanizado -->
       <li *ngIf="telemetryData?.['uptime']">
         <span class="font-medium">Uptime:</span>
-        {{ formatUptimeHuman(+(telemetryData | metric : 'uptime' : {})) }}
+        {{ formatUptimeHuman(+(telemetryData | metric: "uptime" : {})) }}
       </li>
 
       <!-- Temperatura -->
       <li *ngIf="telemetryData?.['temperature']">
         <span class="font-medium">Temperatura:</span>
-        {{ telemetryData | metric : 'temperature' : { unit: '°C' } }}
+        {{ telemetryData | metric: "temperature" : { unit: "°C" } }}
       </li>
 
       <!-- Dispositivos na rede com breakdown por tipo -->
       <li *ngIf="telemetryData?.['hostCount']">
         <span class="font-medium">Dispositivos na Rede:</span>
-        {{ telemetryData | metric : 'hostCount' : { fallback: '0' } }} hosts
-        <span *ngIf="telemetryData?.['wiredCount'] != null || telemetryData?.['wirelessCount'] != null"
-              class="text-xs text-gray-400 ml-1">
-          ({{ telemetryData?.['wiredCount'] ?? 0 }} cabo
-          · {{ telemetryData?.['count2g'] ?? 0 }} 2.4G
-          · {{ telemetryData?.['count5g'] ?? 0 }} 5G)
+        {{ telemetryData | metric: "hostCount" : { fallback: "0" } }} hosts
+        <span
+          *ngIf="
+            telemetryData?.['wiredCount'] != null ||
+            telemetryData?.['wirelessCount'] != null
+          "
+          class="text-xs text-gray-400 ml-1"
+        >
+          ({{ telemetryData?.["wiredCount"] ?? 0 }} cabo ·
+          {{ telemetryData?.["count2g"] ?? 0 }} 2.4G ·
+          {{ telemetryData?.["count5g"] ?? 0 }} 5G)
         </span>
       </li>
-
     </ul>
   </div>
 
-  <!-- Card WAN Status — métricas em tempo real -->
-  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
-       *ngIf="telemetryData?.['wanStatus'] || telemetryData?.['wanDownstreamRate']">
-    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2">WAN — Status</h3>
+  <!-- Card WAN Status — métricas em tempo real + dados estruturais WAN -->
+  <div
+    class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+    *ngIf="
+      telemetryData?.['wanStatus'] ||
+      telemetryData?.['wanDownstreamRate'] ||
+      cpe?.wan?.connType ||
+      cpe?.wan?.ipv6
+    "
+  >
+    <h3
+      class="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2"
+    >
+      WAN — Status
+    </h3>
     <ul class="space-y-2 text-sm text-gray-700 dark:text-gray-300">
       <li>
         <span class="font-medium">Conexão:</span>
-        <span class="ml-1 font-bold"
-              [ngClass]="stringValue('wanStatus')?.toLowerCase() === 'connected' ? 'text-green-500' : 'text-red-500'">
-          {{ stringValue('wanStatus') || 'Desconhecido' }}
+        <span
+          class="ml-1 font-bold"
+          [ngClass]="
+            stringValue('wanStatus')?.toLowerCase() === 'connected'
+              ? 'text-green-500'
+              : 'text-red-500'
+          "
+        >
+          {{
+            stringValue("wanStatus") ||
+              (cpe?.wan?.ip ? "Com IP" : "Desconhecido")
+          }}
         </span>
       </li>
+      <li *ngIf="cpe?.wan?.connType">
+        <span class="font-medium">Tipo de Conexão:</span>
+        <span class="ml-1">{{ cpe?.wan?.connType }}</span>
+      </li>
+      <li *ngIf="cpe?.wan?.ipv6">
+        <span class="font-medium">IPv6 WAN:</span>
+        <span class="ml-1 font-mono text-xs break-all">{{
+          cpe?.wan?.ipv6
+        }}</span>
+      </li>
+      <li *ngIf="cpe?.wan?.serviceType">
+        <span class="font-medium">Serviços:</span>
+        <span class="ml-1">{{ cpe?.wan?.serviceType }}</span>
+      </li>
+      <li
+        *ngIf="
+          cpe?.connectionRequestURL || cpe?.management?.connectionRequestURL
+        "
+      >
+        <span class="font-medium">Connection Request:</span>
+        <span class="ml-1 font-mono text-xs break-all">{{
+          cpe?.connectionRequestURL || cpe?.management?.connectionRequestURL
+        }}</span>
+      </li>
       <li *ngIf="telemetryData?.['wanDownstreamRate'] != null">
-        <span class="font-medium">Download:</span> {{ telemetryData | metric : 'wanDownstreamRate' : { unit: ' Mbps' } }}
+        <span class="font-medium">Download:</span>
+        {{ telemetryData | metric: "wanDownstreamRate" : { unit: " Mbps" } }}
       </li>
       <li *ngIf="telemetryData?.['wanUpstreamRate'] != null">
-        <span class="font-medium">Upload:</span> {{ telemetryData | metric : 'wanUpstreamRate' : { unit: ' Mbps' } }}
+        <span class="font-medium">Upload:</span>
+        {{ telemetryData | metric: "wanUpstreamRate" : { unit: " Mbps" } }}
       </li>
       <li *ngIf="telemetryData?.['wanNativeLatency'] != null">
-        <span class="font-medium">Latência:</span> {{ telemetryData | metric : 'wanNativeLatency' : { unit: ' ms' } }}
+        <span class="font-medium">Latência:</span>
+        {{ telemetryData | metric: "wanNativeLatency" : { unit: " ms" } }}
       </li>
       <li *ngIf="telemetryData?.['wanNativeJitter'] != null">
-        <span class="font-medium">Jitter:</span> {{ telemetryData | metric : 'wanNativeJitter' : { unit: ' ms' } }}
+        <span class="font-medium">Jitter:</span>
+        {{ telemetryData | metric: "wanNativeJitter" : { unit: " ms" } }}
       </li>
       <li *ngIf="telemetryData?.['wanBytesReceived'] != null">
-        <span class="font-medium">Bytes RX:</span> {{ telemetryData | metric : 'wanBytesReceived' : { transform: 'formatBytes' } }}
+        <span class="font-medium">Bytes RX:</span>
+        {{
+          telemetryData
+            | metric: "wanBytesReceived" : { transform: "formatBytes" }
+        }}
       </li>
       <li *ngIf="telemetryData?.['wanBytesSent'] != null">
-        <span class="font-medium">Bytes TX:</span> {{ telemetryData | metric : 'wanBytesSent' : { transform: 'formatBytes' } }}
+        <span class="font-medium">Bytes TX:</span>
+        {{
+          telemetryData | metric: "wanBytesSent" : { transform: "formatBytes" }
+        }}
       </li>
     </ul>
   </div>
 
   <!-- Card WAN Config — configuração via Bootstrap probe + edição SPV -->
-  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
-       *ngIf="cpe?.wan?.ip || cpe?.wan?.gateway || cpe?.wan?.updatedAt || cpe?.wan?.pppoeUsername || cpe?.wanIp || cpe?.wanGateway || cpe?.wanConfigUpdatedAt || cpe?.pppoeUsername">
+  <div
+    class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+    *ngIf="
+      cpe?.wan?.ip ||
+      cpe?.wan?.gateway ||
+      cpe?.wan?.updatedAt ||
+      cpe?.wan?.pppoeUsername ||
+      cpe?.wanIp ||
+      cpe?.wanGateway ||
+      cpe?.wanConfigUpdatedAt ||
+      cpe?.pppoeUsername
+    "
+  >
     <div class="flex items-center justify-between border-b pb-2 mb-4">
-      <h3 class="text-lg font-semibold text-gray-900 dark:text-white">WAN — Configuração</h3>
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+        WAN — Configuração
+      </h3>
       <div class="flex items-center gap-2">
-        <span *ngIf="cpe?.wan?.updatedAt || cpe?.wanConfigUpdatedAt" class="text-xs text-gray-400">
-          Probe: {{ (cpe?.wan?.updatedAt || cpe?.wanConfigUpdatedAt) | date:'dd/MM HH:mm' }}
+        <span
+          *ngIf="cpe?.wan?.updatedAt || cpe?.wanConfigUpdatedAt"
+          class="text-xs text-gray-400"
+        >
+          Probe:
+          {{
+            cpe?.wan?.updatedAt || cpe?.wanConfigUpdatedAt | date: "dd/MM HH:mm"
+          }}
         </span>
-        <button *ngIf="!isEditingWanConfig" (click)="loadWanConfig()"
-                class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
+        <button
+          *ngIf="!isEditingWanConfig"
+          (click)="loadWanConfig()"
+          class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+        >
           Editar
         </button>
-        <button *ngIf="isEditingWanConfig" (click)="isEditingWanConfig = false"
-                class="text-xs px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded transition-colors">
+        <button
+          *ngIf="isEditingWanConfig"
+          (click)="isEditingWanConfig = false"
+          class="text-xs px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded transition-colors"
+        >
           Cancelar
         </button>
       </div>
@@ -401,9 +658,13 @@
 
     <!-- Modo leitura em 2 colunas -->
     <ng-container *ngIf="!isEditingWanConfig">
-      <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-gray-700 dark:text-gray-300">
+      <div
+        class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-gray-700 dark:text-gray-300"
+      >
         <div *ngIf="cpe?.wan?.pppoeUsername || cpe?.pppoeUsername">
-          <span class="font-medium block text-xs text-gray-500">PPPoE Usuário</span>
+          <span class="font-medium block text-xs text-gray-500"
+            >PPPoE Usuário</span
+          >
           {{ cpe?.wan?.pppoeUsername || cpe?.pppoeUsername }}
         </div>
         <div *ngIf="cpe?.wan?.ip || cpe?.wanIp">
@@ -434,51 +695,103 @@
     </ng-container>
 
     <!-- Modo edição -->
-    <form *ngIf="isEditingWanConfig" (ngSubmit)="saveWanConfig()" class="space-y-3">
+    <form
+      *ngIf="isEditingWanConfig"
+      (ngSubmit)="saveWanConfig()"
+      class="space-y-3"
+    >
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">PPPoE Usuário</label>
-          <input type="text" [(ngModel)]="wanConfigFields.pppoeUsername" name="ppu"
-                 class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1"
+            >PPPoE Usuário</label
+          >
+          <input
+            type="text"
+            [(ngModel)]="wanConfigFields.pppoeUsername"
+            name="ppu"
+            class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          />
         </div>
         <div>
-          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">MTU (576–1500)</label>
-          <input type="number" [(ngModel)]="wanConfigFields.mtu" name="mtu" min="576" max="1500"
-                 class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1"
+            >MTU (576–1500)</label
+          >
+          <input
+            type="number"
+            [(ngModel)]="wanConfigFields.mtu"
+            name="mtu"
+            min="576"
+            max="1500"
+            class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          />
         </div>
         <div>
-          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">DNS Primário</label>
-          <input type="text" [(ngModel)]="wanConfigFields.dnsServer1" name="dns1"
-                 class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1"
+            >DNS Primário</label
+          >
+          <input
+            type="text"
+            [(ngModel)]="wanConfigFields.dnsServer1"
+            name="dns1"
+            class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          />
         </div>
         <div>
-          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">DNS Secundário</label>
-          <input type="text" [(ngModel)]="wanConfigFields.dnsServer2" name="dns2"
-                 class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1"
+            >DNS Secundário</label
+          >
+          <input
+            type="text"
+            [(ngModel)]="wanConfigFields.dnsServer2"
+            name="dns2"
+            class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          />
         </div>
         <div>
-          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">VLAN ID (1–4094)</label>
-          <input type="number" [(ngModel)]="wanConfigFields.vlanId" name="vlan" min="1" max="4094"
-                 class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1"
+            >VLAN ID (1–4094)</label
+          >
+          <input
+            type="number"
+            [(ngModel)]="wanConfigFields.vlanId"
+            name="vlan"
+            min="1"
+            max="4094"
+            class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          />
         </div>
       </div>
-      <button type="submit" [disabled]="wanConfigSaving || isCpeOffline"
-              class="w-full px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded transition-colors">
-        {{ wanConfigSaving ? 'Salvando...' : 'Salvar Configuração' }}
+      <button
+        type="submit"
+        [disabled]="wanConfigSaving || isCpeOffline"
+        class="w-full px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded transition-colors"
+      >
+        {{ wanConfigSaving ? "Salvando..." : "Salvar Configuração" }}
       </button>
     </form>
   </div>
 
   <!-- Card Sinal Óptico -->
-  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
-       *ngIf="telemetryData?.['opticalRx'] || telemetryData?.['gponStatus']">
-    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2">Sinal Óptico</h3>
+  <div
+    class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+    *ngIf="telemetryData?.['opticalRx'] || telemetryData?.['gponStatus']"
+  >
+    <h3
+      class="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2"
+    >
+      Sinal Óptico
+    </h3>
     <ul class="space-y-2 text-sm text-gray-700 dark:text-gray-300">
-
       <li>
         <span class="font-medium">Link xPON:</span>
-        <span [ngClass]="stringValue('gponStatus')?.toLowerCase() === 'up' ? 'text-green-500' : 'text-red-500'">
-          {{ stringValue('gponStatus') || 'N/A' }}
+        <span
+          [ngClass]="
+            stringValue('gponStatus')?.toLowerCase() === 'up'
+              ? 'text-green-500'
+              : 'text-red-500'
+          "
+        >
+          {{ stringValue("gponStatus") || "N/A" }}
         </span>
       </li>
 
@@ -487,9 +800,17 @@
         <div class="flex justify-between items-center">
           <span class="font-medium">Sinal RX:</span>
           <span [ngClass]="opticalZoneClass(rxZone)">
-            {{ telemetryData | metric : 'opticalRx' : { unit: ' dBm' } }}
+            {{ telemetryData | metric: "opticalRx" : { unit: " dBm" } }}
             <span class="text-xs font-normal ml-1">
-              {{ rxZone === 'ok' ? '✅' : rxZone === 'warning' ? '⚠️' : rxZone === 'critical' ? '🔴' : '' }}
+              {{
+                rxZone === "ok"
+                  ? "✅"
+                  : rxZone === "warning"
+                    ? "⚠️"
+                    : rxZone === "critical"
+                      ? "🔴"
+                      : ""
+              }}
             </span>
           </span>
         </div>
@@ -506,9 +827,17 @@
         <div class="flex justify-between items-center">
           <span class="font-medium">Sinal TX:</span>
           <span [ngClass]="opticalZoneClass(txZone)">
-            {{ telemetryData | metric : 'opticalTx' : { unit: ' dBm' } }}
+            {{ telemetryData | metric: "opticalTx" : { unit: " dBm" } }}
             <span class="text-xs font-normal ml-1">
-              {{ txZone === 'ok' ? '✅' : txZone === 'warning' ? '⚠️' : txZone === 'critical' ? '🔴' : '' }}
+              {{
+                txZone === "ok"
+                  ? "✅"
+                  : txZone === "warning"
+                    ? "⚠️"
+                    : txZone === "critical"
+                      ? "🔴"
+                      : ""
+              }}
             </span>
           </span>
         </div>
@@ -516,160 +845,357 @@
 
       <li *ngIf="telemetryData?.['opticalTemperature'] != null">
         <span class="font-medium">Temperatura Óptica:</span>
-        {{ telemetryData | metric : 'opticalTemperature' : { unit: '°C' } }}
+        {{ telemetryData | metric: "opticalTemperature" : { unit: "°C" } }}
       </li>
       <li *ngIf="telemetryData?.['opticalVoltage'] != null">
         <span class="font-medium">Tensão Laser:</span>
-        {{ telemetryData | metric : 'opticalVoltage' : { unit: 'V' } }}
+        {{ telemetryData | metric: "opticalVoltage" : { unit: "V" } }}
       </li>
       <li *ngIf="telemetryData?.['biasCurrent'] != null">
         <span class="font-medium">Corrente Bias:</span>
-        {{ telemetryData | metric : 'biasCurrent' : { unit: 'mA' } }}
+        {{ telemetryData | metric: "biasCurrent" : { unit: "mA" } }}
       </li>
       <li *ngIf="telemetryData?.['opticalDistance']">
         <span class="font-medium">Distância:</span>
-        {{ telemetryData | metric : 'opticalDistance' : { unit: 'm' } }}
+        {{ telemetryData | metric: "opticalDistance" : { unit: "m" } }}
       </li>
     </ul>
   </div>
 
   <!-- Card Wi-Fi com tabs -->
-  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
-       *ngIf="telemetryData?.['wifi2gChannel'] || telemetryData?.['wifi5gChannel']">
-    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3 border-b pb-2">Rede Wi-Fi</h3>
+  <div
+    class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
+    *ngIf="telemetryData?.['wifi2gChannel'] || telemetryData?.['wifi5gChannel']"
+  >
+    <h3
+      class="text-lg font-semibold text-gray-900 dark:text-white mb-3 border-b pb-2"
+    >
+      Rede Wi-Fi
+    </h3>
 
     <!-- Tabs 2.4G / 5G -->
     <div class="flex border-b border-gray-200 dark:border-gray-700 mb-3">
-      <button *ngIf="telemetryData?.['wifi2gChannel']"
-              (click)="wifiTabSelected = '2g'"
-              class="px-4 py-1.5 text-sm font-medium transition-colors"
-              [ngClass]="wifiTabSelected === '2g'
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'">
+      <button
+        *ngIf="telemetryData?.['wifi2gChannel']"
+        (click)="wifiTabSelected = '2g'"
+        class="px-4 py-1.5 text-sm font-medium transition-colors"
+        [ngClass]="
+          wifiTabSelected === '2g'
+            ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+        "
+      >
         2.4 GHz
       </button>
-      <button *ngIf="telemetryData?.['wifi5gChannel']"
-              (click)="wifiTabSelected = '5g'"
-              class="px-4 py-1.5 text-sm font-medium transition-colors"
-              [ngClass]="wifiTabSelected === '5g'
-                ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400'
-                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'">
+      <button
+        *ngIf="telemetryData?.['wifi5gChannel']"
+        (click)="wifiTabSelected = '5g'"
+        class="px-4 py-1.5 text-sm font-medium transition-colors"
+        [ngClass]="
+          wifiTabSelected === '5g'
+            ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400'
+            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+        "
+      >
         5 GHz
       </button>
     </div>
 
     <!-- Painel 2.4 GHz -->
-    <div *ngIf="wifiTabSelected === '2g' && telemetryData?.['wifi2gChannel']"
-         class="space-y-1 text-sm text-gray-700 dark:text-gray-300">
+    <div
+      *ngIf="wifiTabSelected === '2g' && telemetryData?.['wifi2gChannel']"
+      class="space-y-1 text-sm text-gray-700 dark:text-gray-300"
+    >
       <div class="grid grid-cols-2 gap-x-4 gap-y-1">
-        <div><span class="font-medium">Canal:</span> {{ telemetryData | metric : 'wifi2gChannel' : { fallback: 'Auto' } }}</div>
-        <div><span class="font-medium">Clientes:</span> {{ telemetryData | metric : 'wifi2gClients' : { fallback: '0' } }}</div>
-        <div *ngIf="telemetryData?.['wifi2gBandwidth']"><span class="font-medium">Largura:</span> {{ telemetryData | metric : 'wifi2gBandwidth' : {} }} MHz</div>
+        <div>
+          <span class="font-medium">Canal:</span>
+          {{ telemetryData | metric: "wifi2gChannel" : { fallback: "Auto" } }}
+        </div>
+        <div>
+          <span class="font-medium">Clientes:</span>
+          {{ telemetryData | metric: "wifi2gClients" : { fallback: "0" } }}
+        </div>
+        <div *ngIf="telemetryData?.['wifi2gBandwidth']">
+          <span class="font-medium">Largura:</span>
+          {{ telemetryData | metric: "wifi2gBandwidth" : {} }} MHz
+        </div>
         <div *ngIf="telemetryData?.['wifi2gStatus']">
           <span class="font-medium">Status:</span>
-          <span [ngClass]="stringValue('wifi2gStatus')?.toLowerCase() === 'up' ? 'text-green-500' : 'text-red-400'">
-            {{ stringValue('wifi2gStatus') }}
+          <span
+            [ngClass]="
+              stringValue('wifi2gStatus')?.toLowerCase() === 'up'
+                ? 'text-green-500'
+                : 'text-red-400'
+            "
+          >
+            {{ stringValue("wifi2gStatus") }}
           </span>
         </div>
-        <div *ngIf="telemetryData?.['wifi2gNoise'] !== undefined"><span class="font-medium">Ruído:</span> {{ telemetryData | metric : 'wifi2gNoise' : { unit: ' dBm', zeroAsNull: true } }}</div>
-        <div *ngIf="telemetryData?.['wifi2gSnr'] !== undefined"><span class="font-medium">SNR:</span> {{ telemetryData | metric : 'wifi2gSnr' : { unit: ' dB', zeroAsNull: true } }}</div>
-        <div *ngIf="telemetryData?.['wifi2gSignalStrength'] !== undefined"><span class="font-medium">Sinal:</span> {{ telemetryData | metric : 'wifi2gSignalStrength' : { unit: ' dBm', zeroAsNull: true } }}</div>
-        <div *ngIf="telemetryData?.['wifi2gUtilization'] !== undefined"><span class="font-medium">Uso do Canal:</span> {{ telemetryData | metric : 'wifi2gUtilization' : { unit: '%' } }}</div>
+        <div *ngIf="telemetryData?.['wifi2gNoise'] !== undefined">
+          <span class="font-medium">Ruído:</span>
+          {{
+            telemetryData
+              | metric: "wifi2gNoise" : { unit: " dBm", zeroAsNull: true }
+          }}
+        </div>
+        <div *ngIf="telemetryData?.['wifi2gSnr'] !== undefined">
+          <span class="font-medium">SNR:</span>
+          {{
+            telemetryData
+              | metric: "wifi2gSnr" : { unit: " dB", zeroAsNull: true }
+          }}
+        </div>
+        <div *ngIf="telemetryData?.['wifi2gSignalStrength'] !== undefined">
+          <span class="font-medium">Sinal:</span>
+          {{
+            telemetryData
+              | metric
+                : "wifi2gSignalStrength"
+                : { unit: " dBm", zeroAsNull: true }
+          }}
+        </div>
+        <div *ngIf="telemetryData?.['wifi2gUtilization'] !== undefined">
+          <span class="font-medium">Uso do Canal:</span>
+          {{ telemetryData | metric: "wifi2gUtilization" : { unit: "%" } }}
+        </div>
       </div>
       <!-- Campos secundários colapsáveis -->
       <details class="mt-2 text-xs text-gray-500">
-        <summary class="cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">Ver métricas avançadas</summary>
+        <summary
+          class="cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"
+        >
+          Ver métricas avançadas
+        </summary>
         <div class="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
-          <div *ngIf="telemetryData?.['wifi2gAverageRxRate']">Taxa RX: {{ telemetryData | metric : 'wifi2gAverageRxRate' : { unit: ' Mbps' } }}</div>
-          <div *ngIf="telemetryData?.['wifi2gAverageTxRate']">Taxa TX: {{ telemetryData | metric : 'wifi2gAverageTxRate' : { unit: ' Mbps' } }}</div>
-          <div *ngIf="telemetryData?.['wifi2gCongestionRate']">Congestionamento: {{ telemetryData | metric : 'wifi2gCongestionRate' : { unit: '%' } }}</div>
-          <div *ngIf="telemetryData?.['wifi2gErrorsReceived']">Erros RX: {{ telemetryData | metric : 'wifi2gErrorsReceived' : { fallback: '0' } }}</div>
-          <div *ngIf="telemetryData?.['wifi2gErrorsSent']">Erros TX: {{ telemetryData | metric : 'wifi2gErrorsSent' : { fallback: '0' } }}</div>
-          <div *ngIf="telemetryData?.['wifi2gDiscardSent'] != null">Descartados TX: {{ telemetryData | metric : 'wifi2gDiscardSent' : { fallback: '0' } }}</div>
-          <div *ngIf="telemetryData?.['wifi2gDiscardReceived'] != null">Descartados RX: {{ telemetryData | metric : 'wifi2gDiscardReceived' : { fallback: '0' } }}</div>
-          <div *ngIf="telemetryData?.['wifi2gBytesSent'] != null">Bytes TX: {{ telemetryData | metric : 'wifi2gBytesSent' : { transform: 'formatBytes' } }}</div>
-          <div *ngIf="telemetryData?.['wifi2gBytesReceived'] != null">Bytes RX: {{ telemetryData | metric : 'wifi2gBytesReceived' : { transform: 'formatBytes' } }}</div>
+          <div *ngIf="telemetryData?.['wifi2gAverageRxRate']">
+            Taxa RX:
+            {{
+              telemetryData | metric: "wifi2gAverageRxRate" : { unit: " Mbps" }
+            }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi2gAverageTxRate']">
+            Taxa TX:
+            {{
+              telemetryData | metric: "wifi2gAverageTxRate" : { unit: " Mbps" }
+            }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi2gCongestionRate']">
+            Congestionamento:
+            {{ telemetryData | metric: "wifi2gCongestionRate" : { unit: "%" } }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi2gErrorsReceived']">
+            Erros RX:
+            {{
+              telemetryData | metric: "wifi2gErrorsReceived" : { fallback: "0" }
+            }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi2gErrorsSent']">
+            Erros TX:
+            {{ telemetryData | metric: "wifi2gErrorsSent" : { fallback: "0" } }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi2gDiscardSent'] != null">
+            Descartados TX:
+            {{
+              telemetryData | metric: "wifi2gDiscardSent" : { fallback: "0" }
+            }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi2gDiscardReceived'] != null">
+            Descartados RX:
+            {{
+              telemetryData
+                | metric: "wifi2gDiscardReceived" : { fallback: "0" }
+            }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi2gBytesSent'] != null">
+            Bytes TX:
+            {{
+              telemetryData
+                | metric: "wifi2gBytesSent" : { transform: "formatBytes" }
+            }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi2gBytesReceived'] != null">
+            Bytes RX:
+            {{
+              telemetryData
+                | metric: "wifi2gBytesReceived" : { transform: "formatBytes" }
+            }}
+          </div>
         </div>
       </details>
     </div>
 
     <!-- Painel 5 GHz -->
-    <div *ngIf="wifiTabSelected === '5g' && telemetryData?.['wifi5gChannel']"
-         class="space-y-1 text-sm text-gray-700 dark:text-gray-300">
+    <div
+      *ngIf="wifiTabSelected === '5g' && telemetryData?.['wifi5gChannel']"
+      class="space-y-1 text-sm text-gray-700 dark:text-gray-300"
+    >
       <div class="grid grid-cols-2 gap-x-4 gap-y-1">
-        <div><span class="font-medium">Canal:</span> {{ telemetryData | metric : 'wifi5gChannel' : { fallback: 'Auto' } }}</div>
-        <div><span class="font-medium">Clientes:</span> {{ telemetryData | metric : 'wifi5gClients' : { fallback: '0' } }}</div>
-        <div *ngIf="telemetryData?.['wifi5gBandwidth']"><span class="font-medium">Largura:</span> {{ telemetryData | metric : 'wifi5gBandwidth' : {} }} MHz</div>
+        <div>
+          <span class="font-medium">Canal:</span>
+          {{ telemetryData | metric: "wifi5gChannel" : { fallback: "Auto" } }}
+        </div>
+        <div>
+          <span class="font-medium">Clientes:</span>
+          {{ telemetryData | metric: "wifi5gClients" : { fallback: "0" } }}
+        </div>
+        <div *ngIf="telemetryData?.['wifi5gBandwidth']">
+          <span class="font-medium">Largura:</span>
+          {{ telemetryData | metric: "wifi5gBandwidth" : {} }} MHz
+        </div>
         <div *ngIf="telemetryData?.['wifi5gStatus']">
           <span class="font-medium">Status:</span>
-          <span [ngClass]="stringValue('wifi5gStatus')?.toLowerCase() === 'up' ? 'text-green-500' : 'text-red-400'">
-            {{ stringValue('wifi5gStatus') }}
+          <span
+            [ngClass]="
+              stringValue('wifi5gStatus')?.toLowerCase() === 'up'
+                ? 'text-green-500'
+                : 'text-red-400'
+            "
+          >
+            {{ stringValue("wifi5gStatus") }}
           </span>
         </div>
-        <div *ngIf="telemetryData?.['wifi5gNoise'] !== undefined"><span class="font-medium">Ruído:</span> {{ telemetryData | metric : 'wifi5gNoise' : { unit: ' dBm', zeroAsNull: true } }}</div>
-        <div *ngIf="telemetryData?.['wifi5gSnr'] !== undefined"><span class="font-medium">SNR:</span> {{ telemetryData | metric : 'wifi5gSnr' : { unit: ' dB', zeroAsNull: true } }}</div>
-        <div *ngIf="telemetryData?.['wifi5gSignalStrength'] !== undefined"><span class="font-medium">Sinal:</span> {{ telemetryData | metric : 'wifi5gSignalStrength' : { unit: ' dBm', zeroAsNull: true } }}</div>
-        <div *ngIf="telemetryData?.['wifi5gUtilization'] !== undefined"><span class="font-medium">Uso do Canal:</span> {{ telemetryData | metric : 'wifi5gUtilization' : { unit: '%' } }}</div>
+        <div *ngIf="telemetryData?.['wifi5gNoise'] !== undefined">
+          <span class="font-medium">Ruído:</span>
+          {{
+            telemetryData
+              | metric: "wifi5gNoise" : { unit: " dBm", zeroAsNull: true }
+          }}
+        </div>
+        <div *ngIf="telemetryData?.['wifi5gSnr'] !== undefined">
+          <span class="font-medium">SNR:</span>
+          {{
+            telemetryData
+              | metric: "wifi5gSnr" : { unit: " dB", zeroAsNull: true }
+          }}
+        </div>
+        <div *ngIf="telemetryData?.['wifi5gSignalStrength'] !== undefined">
+          <span class="font-medium">Sinal:</span>
+          {{
+            telemetryData
+              | metric
+                : "wifi5gSignalStrength"
+                : { unit: " dBm", zeroAsNull: true }
+          }}
+        </div>
+        <div *ngIf="telemetryData?.['wifi5gUtilization'] !== undefined">
+          <span class="font-medium">Uso do Canal:</span>
+          {{ telemetryData | metric: "wifi5gUtilization" : { unit: "%" } }}
+        </div>
       </div>
       <details class="mt-2 text-xs text-gray-500">
-        <summary class="cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">Ver métricas avançadas</summary>
+        <summary
+          class="cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"
+        >
+          Ver métricas avançadas
+        </summary>
         <div class="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
-          <div *ngIf="telemetryData?.['wifi5gAverageRxRate']">Taxa RX: {{ telemetryData | metric : 'wifi5gAverageRxRate' : { unit: ' Mbps' } }}</div>
-          <div *ngIf="telemetryData?.['wifi5gAverageTxRate']">Taxa TX: {{ telemetryData | metric : 'wifi5gAverageTxRate' : { unit: ' Mbps' } }}</div>
-          <div *ngIf="telemetryData?.['wifi5gCongestionRate']">Congestionamento: {{ telemetryData | metric : 'wifi5gCongestionRate' : { unit: '%' } }}</div>
-          <div *ngIf="telemetryData?.['wifi5gErrorsReceived']">Erros RX: {{ telemetryData | metric : 'wifi5gErrorsReceived' : { fallback: '0' } }}</div>
-          <div *ngIf="telemetryData?.['wifi5gErrorsSent']">Erros TX: {{ telemetryData | metric : 'wifi5gErrorsSent' : { fallback: '0' } }}</div>
-          <div *ngIf="telemetryData?.['wifi5gDiscardSent'] != null">Descartados TX: {{ telemetryData | metric : 'wifi5gDiscardSent' : { fallback: '0' } }}</div>
-          <div *ngIf="telemetryData?.['wifi5gDiscardReceived'] != null">Descartados RX: {{ telemetryData | metric : 'wifi5gDiscardReceived' : { fallback: '0' } }}</div>
-          <div *ngIf="telemetryData?.['wifi5gBytesSent'] != null">Bytes TX: {{ telemetryData | metric : 'wifi5gBytesSent' : { transform: 'formatBytes' } }}</div>
-          <div *ngIf="telemetryData?.['wifi5gBytesReceived'] != null">Bytes RX: {{ telemetryData | metric : 'wifi5gBytesReceived' : { transform: 'formatBytes' } }}</div>
+          <div *ngIf="telemetryData?.['wifi5gAverageRxRate']">
+            Taxa RX:
+            {{
+              telemetryData | metric: "wifi5gAverageRxRate" : { unit: " Mbps" }
+            }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi5gAverageTxRate']">
+            Taxa TX:
+            {{
+              telemetryData | metric: "wifi5gAverageTxRate" : { unit: " Mbps" }
+            }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi5gCongestionRate']">
+            Congestionamento:
+            {{ telemetryData | metric: "wifi5gCongestionRate" : { unit: "%" } }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi5gErrorsReceived']">
+            Erros RX:
+            {{
+              telemetryData | metric: "wifi5gErrorsReceived" : { fallback: "0" }
+            }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi5gErrorsSent']">
+            Erros TX:
+            {{ telemetryData | metric: "wifi5gErrorsSent" : { fallback: "0" } }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi5gDiscardSent'] != null">
+            Descartados TX:
+            {{
+              telemetryData | metric: "wifi5gDiscardSent" : { fallback: "0" }
+            }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi5gDiscardReceived'] != null">
+            Descartados RX:
+            {{
+              telemetryData
+                | metric: "wifi5gDiscardReceived" : { fallback: "0" }
+            }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi5gBytesSent'] != null">
+            Bytes TX:
+            {{
+              telemetryData
+                | metric: "wifi5gBytesSent" : { transform: "formatBytes" }
+            }}
+          </div>
+          <div *ngIf="telemetryData?.['wifi5gBytesReceived'] != null">
+            Bytes RX:
+            {{
+              telemetryData
+                | metric: "wifi5gBytesReceived" : { transform: "formatBytes" }
+            }}
+          </div>
         </div>
       </details>
     </div>
   </div>
-
 </div>
 
 <!-- Seção de Gráficos Históricos -->
 <div class="historical-charts mt-8">
   <div class="flex justify-between items-center mb-4">
-    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Histórico de Desempenho</h3>
+    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">
+      Histórico de Desempenho
+    </h3>
 
     <!-- Seletor de Período -->
-    <div class="period-selector flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+    <div
+      class="period-selector flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg"
+    >
       <button
         (click)="changeHistoryPeriod(1)"
         [class.active]="selectedPeriodHours === 1"
         class="px-3 py-1 text-sm font-medium rounded-md transition-colors"
-        [disabled]="historyLoading">
+        [disabled]="historyLoading"
+      >
         1h
       </button>
       <button
         (click)="changeHistoryPeriod(6)"
         [class.active]="selectedPeriodHours === 6"
         class="px-3 py-1 text-sm font-medium rounded-md transition-colors"
-        [disabled]="historyLoading">
+        [disabled]="historyLoading"
+      >
         6h
       </button>
       <button
         (click)="changeHistoryPeriod(24)"
         [class.active]="selectedPeriodHours === 24"
         class="px-3 py-1 text-sm font-medium rounded-md transition-colors"
-        [disabled]="historyLoading">
+        [disabled]="historyLoading"
+      >
         24h
       </button>
       <button
         (click)="changeHistoryPeriod(168)"
         [class.active]="selectedPeriodHours === 168"
         class="px-3 py-1 text-sm font-medium rounded-md transition-colors"
-        [disabled]="historyLoading">
+        [disabled]="historyLoading"
+      >
         7d
       </button>
-      <button (click)="exportHistoryCsv()"
-              [disabled]="rawHistory.length === 0 || historyLoading"
-              class="ml-2 px-3 py-1 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600
-                     text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors
-                     disabled:opacity-40 disabled:cursor-not-allowed">
+      <button
+        (click)="exportHistoryCsv()"
+        [disabled]="rawHistory.length === 0 || historyLoading"
+        class="ml-2 px-3 py-1 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+      >
         ⬇ CSV
       </button>
     </div>
@@ -680,13 +1206,23 @@
     <div class="chart-container">
       <h4 class="chart-title">CPU & Memória</h4>
       <div class="chart-canvas-wrapper">
-        <canvas baseChart [data]="chartData" [options]="chartOptions" [type]="'line'"></canvas>
+        <canvas
+          baseChart
+          [data]="chartData"
+          [options]="chartOptions"
+          [type]="'line'"
+        ></canvas>
       </div>
     </div>
     <div class="chart-container">
       <h4 class="chart-title">Sinal Óptico</h4>
       <div class="chart-canvas-wrapper">
-        <canvas baseChart [data]="opticalChartData" [options]="opticalChartOptions" [type]="'line'"></canvas>
+        <canvas
+          baseChart
+          [data]="opticalChartData"
+          [options]="opticalChartOptions"
+          [type]="'line'"
+        ></canvas>
       </div>
     </div>
   </div>
@@ -695,159 +1231,291 @@
 <!-- Seção Diagnóstico Técnico Avançado -->
 <div *ngIf="analysisData || analysisLoading || analysisError" class="mt-8 p-4">
   <div class="flex items-center gap-2 mb-4">
-    <h3 class="text-xl font-semibold text-gray-900 dark:text-white">Diagnóstico Técnico Avançado</h3>
+    <h3 class="text-xl font-semibold text-gray-900 dark:text-white">
+      Diagnóstico Técnico Avançado
+    </h3>
     <app-icon-tooltip
       icon="info"
       title="Diagnóstico Técnico Avançado"
-      description="Análises automáticas que processam dados de telemetria dos últimos 7 dias para detectar problemas antes que afetem o cliente. Cada card mostra uma análise específica — passe o mouse sobre o ícone de info em cada card para entender o que significa e como interpretar.">
+      description="Análises automáticas que processam dados de telemetria dos últimos 7 dias para detectar problemas antes que afetem o cliente. Cada card mostra uma análise específica — passe o mouse sobre o ícone de info em cada card para entender o que significa e como interpretar."
+    >
     </app-icon-tooltip>
-    <span *ngIf="analysisUpdatedAt" class="text-xs text-gray-400 dark:text-gray-500 ml-auto">
-      Atualizado: {{ analysisUpdatedAt | date:'HH:mm:ss' }}
+    <span
+      *ngIf="analysisUpdatedAt"
+      class="text-xs text-gray-400 dark:text-gray-500 ml-auto"
+    >
+      Atualizado: {{ analysisUpdatedAt | date: "HH:mm:ss" }}
     </span>
   </div>
 
   <!-- Banner de Resumo — só renderiza quando analysisData existe (evita crash em null.summary) -->
-  <div *ngIf="analysisData"
-       class="border rounded-lg p-3 mb-4 text-sm"
-       [ngClass]="analysisData.summary.overallHealth === 'critical' ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700' : analysisData.summary.overallHealth === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700' : 'bg-green-50 dark:bg-green-900/30 border-green-300 dark:border-green-700'">
+  <div
+    *ngIf="analysisData"
+    class="border rounded-lg p-3 mb-4 text-sm"
+    [ngClass]="
+      analysisData.summary.overallHealth === 'critical'
+        ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700'
+        : analysisData.summary.overallHealth === 'warning'
+          ? 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700'
+          : 'bg-green-50 dark:bg-green-900/30 border-green-300 dark:border-green-700'
+    "
+  >
     <strong>Saúde Geral:</strong> {{ overallHealthLabel }}
-    <span *ngIf="(analysisData.summary.alertCount ?? 0) > 0" class="ml-2">({{ analysisData.summary.alertCount }} alerta(s))</span>
+    <span *ngIf="(analysisData.summary.alertCount ?? 0) > 0" class="ml-2"
+      >({{ analysisData.summary.alertCount }} alerta(s))</span
+    >
     <div *ngIf="analysisAlerts.length > 0" class="mt-2 space-y-1">
-      <div *ngFor="let alert of analysisAlerts; trackBy: trackByAlertMsg" class="text-xs">
-        <span [ngClass]="alert.severity === 'critical' ? 'text-red-700 dark:text-red-300' : 'text-yellow-700 dark:text-yellow-300'">
-          {{ alert.severity === 'critical' ? '🔴' : '⚠️' }} {{ alert.message }}
+      <div
+        *ngFor="let alert of analysisAlerts; trackBy: trackByAlertMsg"
+        class="text-xs"
+      >
+        <span
+          [ngClass]="
+            alert.severity === 'critical'
+              ? 'text-red-700 dark:text-red-300'
+              : 'text-yellow-700 dark:text-yellow-300'
+          "
+        >
+          {{ alert.severity === "critical" ? "🔴" : "⚠️" }} {{ alert.message }}
         </span>
       </div>
     </div>
   </div>
 
   <!-- Indicador de loading da análise -->
-  <div *ngIf="analysisLoading" class="flex items-center gap-2 text-sm text-gray-400 py-8 justify-center">
-    <span class="material-symbols-rounded animate-spin text-base">progress_activity</span>
+  <div
+    *ngIf="analysisLoading"
+    class="flex items-center gap-2 text-sm text-gray-400 py-8 justify-center"
+  >
+    <span class="material-symbols-rounded animate-spin text-base"
+      >progress_activity</span
+    >
     Analisando dados dos últimos 7 dias...
   </div>
 
   <!-- Erro de carregamento -->
-  <div *ngIf="analysisError && !analysisLoading"
-       class="flex items-center gap-2 text-sm text-red-500 py-4">
+  <div
+    *ngIf="analysisError && !analysisLoading"
+    class="flex items-center gap-2 text-sm text-red-500 py-4"
+  >
     <span class="material-symbols-rounded">error</span>
     {{ analysisError }}
   </div>
 
   <!-- Cards priorizados por severidade -->
-  <div *ngIf="!analysisLoading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-    <ng-container *ngFor="let entry of sortedAnalysisEntries; trackBy: trackByAnalysisKey">
-      <article class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border transition-all hover:shadow-md"
-           [ngClass]="analysisCardBorder(entry.data)"
-           role="article"
-           [attr.aria-label]="getAnalysisInfo(entry.key)">
+  <div
+    *ngIf="!analysisLoading"
+    class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+  >
+    <ng-container
+      *ngFor="let entry of sortedAnalysisEntries; trackBy: trackByAnalysisKey"
+    >
+      <article
+        class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border transition-all hover:shadow-md"
+        [ngClass]="analysisCardBorder(entry.data)"
+        role="article"
+        [attr.aria-label]="getAnalysisInfo(entry.key)"
+      >
         <!-- Header: ícone + título + tooltip info + badge severidade -->
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-1.5 min-w-0">
-            <span class="material-symbols-rounded text-gray-400 dark:text-gray-500 text-base flex-shrink-0">
-              {{ getAnalysisMeta(entry.key)?.icon || 'analytics' }}
+            <span
+              class="material-symbols-rounded text-gray-400 dark:text-gray-500 text-base flex-shrink-0"
+            >
+              {{ getAnalysisMeta(entry.key)?.icon || "analytics" }}
             </span>
-            <h4 class="font-semibold text-gray-900 dark:text-white text-sm truncate">
+            <h4
+              class="font-semibold text-gray-900 dark:text-white text-sm truncate"
+            >
               {{ getAnalysisInfo(entry.key) || entry.key }}
             </h4>
             <app-icon-tooltip
               *ngIf="getAnalysisMeta(entry.key) as meta"
               icon="info"
               [title]="meta.label"
-              [description]="meta.description + ' — Interpretação: ' + meta.interpretation + ' — Utilidade: ' + meta.utility">
+              [description]="
+                meta.description +
+                ' — Interpretação: ' +
+                meta.interpretation +
+                ' — Utilidade: ' +
+                meta.utility
+              "
+            >
             </app-icon-tooltip>
           </div>
-          <span class="text-base flex-shrink-0">{{ analysisBadge(entry.data) }}</span>
+          <span class="text-base flex-shrink-0">{{
+            analysisBadge(entry.data)
+          }}</span>
         </div>
 
         <!-- Mensagem principal -->
-        <p class="text-sm text-gray-600 dark:text-gray-300">{{ entry.data.message }}</p>
+        <p class="text-sm text-gray-600 dark:text-gray-300">
+          {{ entry.data.message }}
+        </p>
 
         <!-- Detalhes específicos por tipo de análise -->
         <div class="mt-2 text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
           <!-- Tendência Óptica -->
           <div *ngIf="entry.data.rxTrend?.slopePerDay != null">
-            RX Slope: {{ entry.data.rxTrend.slopePerDay }} dBm/dia · R²: {{ entry.data.r2 }}
+            RX Slope: {{ entry.data.rxTrend.slopePerDay }} dBm/dia · R²:
+            {{ entry.data.r2 }}
           </div>
           <!-- Reboot Stability -->
-          <div *ngIf="entry.data.rebootCount != null">{{ entry.data.rebootCount }} reboot(s) em {{ entry.data.days }} dias · {{ entry.data.rebootsPerWeek }}/semana</div>
+          <div *ngIf="entry.data.rebootCount != null">
+            {{ entry.data.rebootCount }} reboot(s) em {{ entry.data.days }} dias
+            · {{ entry.data.rebootsPerWeek }}/semana
+          </div>
           <!-- Traffic Anomalies -->
-          <div *ngIf="entry.data.anomalyCount != null">{{ entry.data.anomalyCount }} pico(s) detectado(s) em {{ entry.data.hours }}h</div>
+          <div *ngIf="entry.data.anomalyCount != null">
+            {{ entry.data.anomalyCount }} pico(s) detectado(s) em
+            {{ entry.data.hours }}h
+          </div>
           <!-- WAN Errors -->
-          <div *ngIf="entry.data.errorRatePerHour != null">{{ entry.data.errorRatePerHour }} erros/hora</div>
+          <div *ngIf="entry.data.errorRatePerHour != null">
+            {{ entry.data.errorRatePerHour }} erros/hora
+          </div>
           <!-- Laser Health -->
-          <div *ngIf="entry.data.biasTrend?.currentBias != null">Bias atual: {{ entry.data.biasTrend.currentBias }} mA</div>
+          <div *ngIf="entry.data.biasTrend?.currentBias != null">
+            Bias atual: {{ entry.data.biasTrend.currentBias }} mA
+          </div>
           <!-- Memory Leak -->
-          <div *ngIf="entry.data.trend?.slopePerHour != null">Slope memória: {{ entry.data.trend.slopePerHour }}%/hora · RAM livre: {{ entry.data.trend?.currentFreePercent }}%</div>
+          <div *ngIf="entry.data.trend?.slopePerHour != null">
+            Slope memória: {{ entry.data.trend.slopePerHour }}%/hora · RAM
+            livre: {{ entry.data.trend?.currentFreePercent }}%
+          </div>
           <!-- Power Supply -->
-          <div *ngIf="entry.data.avgVoltage != null">Tensão: min {{ entry.data.minVoltage?.toFixed(2) }}V · máx {{ entry.data.maxVoltage?.toFixed(2) }}V · média {{ entry.data.avgVoltage?.toFixed(2) }}V</div>
+          <div *ngIf="entry.data.avgVoltage != null">
+            Tensão: min {{ entry.data.minVoltage?.toFixed(2) }}V · máx
+            {{ entry.data.maxVoltage?.toFixed(2) }}V · média
+            {{ entry.data.avgVoltage?.toFixed(2) }}V
+          </div>
           <!-- Top Destinations -->
-          <div *ngIf="entry.data.totalRxGb != null">RX: {{ entry.data.totalRxGb }} GB | TX: {{ entry.data.totalTxGb }} GB · Padrão: {{ entry.data.usagePattern }}</div>
+          <div *ngIf="entry.data.totalRxGb != null">
+            RX: {{ entry.data.totalRxGb }} GB | TX:
+            {{ entry.data.totalTxGb }} GB · Padrão:
+            {{ entry.data.usagePattern }}
+          </div>
           <!-- Thermal Correlation -->
-          <div *ngIf="entry.data.correlation != null">Correlação térmica: {{ entry.data.correlation }} · Temp média: {{ entry.data.tempStats?.avg }}°C</div>
+          <div *ngIf="entry.data.correlation != null">
+            Correlação térmica: {{ entry.data.correlation }} · Temp média:
+            {{ entry.data.tempStats?.avg }}°C
+          </div>
           <!-- Latency DNS -->
-          <div *ngIf="entry.data.latency?.measuredAt">Medido há {{ formatMeasuredAt(entry.data.latency.measuredAt) }} · {{ entry.data.latency?.avgMs }}ms</div>
+          <div *ngIf="entry.data.latency?.measuredAt">
+            Medido há {{ formatMeasuredAt(entry.data.latency.measuredAt) }} ·
+            {{ entry.data.latency?.avgMs }}ms
+          </div>
           <!-- OLT Comparison -->
-          <div *ngIf="entry.data.peerCount != null">{{ entry.data.peerCount }} peer(s) no /24 · Média grupo: {{ entry.data.peerAvgRx }} dBm</div>
+          <div *ngIf="entry.data.peerCount != null">
+            {{ entry.data.peerCount }} peer(s) no /24 · Média grupo:
+            {{ entry.data.peerAvgRx }} dBm
+          </div>
           <!-- Wi-Fi Quality -->
-          <div *ngIf="entry.data.snrAvg != null">SNR médio: {{ entry.data.snrAvg }} dB · mín: {{ entry.data.snrMin }} dB</div>
-          <div *ngIf="entry.data.noiseFloor != null">Piso de ruído: {{ entry.data.noiseFloor }} dBm</div>
-          <div *ngIf="entry.data.clientCount != null">Clientes: {{ entry.data.clientCount }}</div>
+          <div *ngIf="entry.data.snrAvg != null">
+            SNR médio: {{ entry.data.snrAvg }} dB · mín:
+            {{ entry.data.snrMin }} dB
+          </div>
+          <div *ngIf="entry.data.noiseFloor != null">
+            Piso de ruído: {{ entry.data.noiseFloor }} dBm
+          </div>
+          <div *ngIf="entry.data.clientCount != null">
+            Clientes: {{ entry.data.clientCount }}
+          </div>
           <!-- GPON Link Budget -->
-          <div *ngIf="entry.data.rxMargin != null">Margem RX: {{ entry.data.rxMargin }} dB · RX: {{ entry.data.rxPower }} dBm</div>
+          <div *ngIf="entry.data.rxMargin != null">
+            Margem RX: {{ entry.data.rxMargin }} dB · RX:
+            {{ entry.data.rxPower }} dBm
+          </div>
           <!-- Transceiver Aging -->
-          <div *ngIf="entry.data.biasSlopePerDay != null">Slope Bias: {{ entry.data.biasSlopePerDay > 0 ? '+' : '' }}{{ entry.data.biasSlopePerDay }} mA/dia</div>
-          <div *ngIf="entry.data.currentBias != null">Bias atual: {{ entry.data.currentBias }} mA</div>
+          <div *ngIf="entry.data.biasSlopePerDay != null">
+            Slope Bias: {{ entry.data.biasSlopePerDay > 0 ? "+" : ""
+            }}{{ entry.data.biasSlopePerDay }} mA/dia
+          </div>
+          <div *ngIf="entry.data.currentBias != null">
+            Bias atual: {{ entry.data.currentBias }} mA
+          </div>
           <!-- CPU Load -->
-          <div *ngIf="entry.data.cpuAvg != null">CPU média: {{ entry.data.cpuAvg }}% · máx: {{ entry.data.cpuMax }}% · >80%: {{ entry.data.highLoadPercent }}% do tempo</div>
+          <div *ngIf="entry.data.cpuAvg != null">
+            CPU média: {{ entry.data.cpuAvg }}% · máx: {{ entry.data.cpuMax }}%
+            · >80%: {{ entry.data.highLoadPercent }}% do tempo
+          </div>
           <!-- WAN Latency -->
-          <div *ngIf="entry.data.latencyAvg != null">Latência: {{ entry.data.latencyAvg }}ms (máx {{ entry.data.latencyMax }}ms) · Jitter: {{ entry.data.jitterAvg }}ms</div>
+          <div *ngIf="entry.data.latencyAvg != null">
+            Latência: {{ entry.data.latencyAvg }}ms (máx
+            {{ entry.data.latencyMax }}ms) · Jitter:
+            {{ entry.data.jitterAvg }}ms
+          </div>
           <!-- WiFi Band Distribution -->
-          <div *ngIf="entry.data.totalClients != null">2.4GHz: {{ entry.data.count2g }} ({{ entry.data.pct2g }}%) · 5GHz: {{ entry.data.count5g }} ({{ entry.data.pct5g }}%)</div>
+          <div *ngIf="entry.data.totalClients != null">
+            2.4GHz: {{ entry.data.count2g }} ({{ entry.data.pct2g }}%) · 5GHz:
+            {{ entry.data.count5g }} ({{ entry.data.pct5g }}%)
+          </div>
 
           <!-- Error Rate normalizado — só exibe quando relevante (> 0 erros/min) -->
-          <div *ngIf="entry.data.errorRateRx != null && entry.data.errorRateRx > 0"
-               [ngClass]="{
-                 'text-red-500 dark:text-red-400':    entry.data.errorRateRx >= entry.data.thresholdCritical,
-                 'text-yellow-500 dark:text-yellow-400': entry.data.errorRateRx >= entry.data.thresholdWarn && entry.data.errorRateRx < entry.data.thresholdCritical,
-                 'text-gray-500': entry.data.errorRateRx < entry.data.thresholdWarn
-               }">
-            Erros RX: {{ entry.data.errorRateRx | number:'1.0-0' }} /min
+          <div
+            *ngIf="entry.data.errorRateRx != null && entry.data.errorRateRx > 0"
+            [ngClass]="{
+              'text-red-500 dark:text-red-400':
+                entry.data.errorRateRx >= entry.data.thresholdCritical,
+              'text-yellow-500 dark:text-yellow-400':
+                entry.data.errorRateRx >= entry.data.thresholdWarn &&
+                entry.data.errorRateRx < entry.data.thresholdCritical,
+              'text-gray-500':
+                entry.data.errorRateRx < entry.data.thresholdWarn,
+            }"
+          >
+            Erros RX: {{ entry.data.errorRateRx | number: "1.0-0" }} /min
           </div>
-          <div *ngIf="entry.data.errorRateTx != null && entry.data.errorRateTx > 0"
-               [ngClass]="{
-                 'text-red-500 dark:text-red-400':    entry.data.errorRateTx >= entry.data.thresholdCritical,
-                 'text-yellow-500 dark:text-yellow-400': entry.data.errorRateTx >= entry.data.thresholdWarn && entry.data.errorRateTx < entry.data.thresholdCritical,
-                 'text-gray-500': entry.data.errorRateTx < entry.data.thresholdWarn
-               }">
-            Erros TX: {{ entry.data.errorRateTx | number:'1.0-0' }} /min
+          <div
+            *ngIf="entry.data.errorRateTx != null && entry.data.errorRateTx > 0"
+            [ngClass]="{
+              'text-red-500 dark:text-red-400':
+                entry.data.errorRateTx >= entry.data.thresholdCritical,
+              'text-yellow-500 dark:text-yellow-400':
+                entry.data.errorRateTx >= entry.data.thresholdWarn &&
+                entry.data.errorRateTx < entry.data.thresholdCritical,
+              'text-gray-500':
+                entry.data.errorRateTx < entry.data.thresholdWarn,
+            }"
+          >
+            Erros TX: {{ entry.data.errorRateTx | number: "1.0-0" }} /min
           </div>
           <div *ngIf="entry.data.intervalMinutes != null" class="text-gray-400">
             Intervalo de medição: {{ entry.data.intervalMinutes }} min
           </div>
 
           <!-- Badge de confiabilidade — informa o técnico sobre a qualidade da análise -->
-          <div *ngIf="entry.data.confidence === 'medium'"
-               class="text-blue-500 dark:text-blue-400 mt-1">
+          <div
+            *ngIf="entry.data.confidence === 'medium'"
+            class="text-blue-500 dark:text-blue-400 mt-1"
+          >
             ℹ Análise por erros de rede — SNR indisponível neste modelo
           </div>
-          <div *ngIf="entry.data.confidence === 'low'"
-               class="text-yellow-500 dark:text-yellow-400 mt-1">
+          <div
+            *ngIf="entry.data.confidence === 'low'"
+            class="text-yellow-500 dark:text-yellow-400 mt-1"
+          >
             ⚠ Análise parcial — apenas ruído ambiental disponível
           </div>
 
           <!-- Timestamp de atualização — padronizado para TODAS as análises -->
-          <div *ngIf="analysisUpdatedAt"
-               class="text-gray-400 dark:text-gray-500 mt-1 pt-1 border-t border-gray-100 dark:border-gray-700">
-            <span *ngIf="entry.data.sampleCount != null">{{ entry.data.sampleCount }} amostras · </span>{{ analysisUpdatedAt | date:'HH:mm:ss' }}
+          <div
+            *ngIf="analysisUpdatedAt"
+            class="text-gray-400 dark:text-gray-500 mt-1 pt-1 border-t border-gray-100 dark:border-gray-700"
+          >
+            <span *ngIf="entry.data.sampleCount != null"
+              >{{ entry.data.sampleCount }} amostras · </span
+            >{{ analysisUpdatedAt | date: "HH:mm:ss" }}
           </div>
         </div>
       </article>
     </ng-container>
 
     <!-- Placeholder quando analysisData existe mas analyses está vazio -->
-    <div *ngIf="sortedAnalysisEntries.length === 0 && !analysisLoading"
-         class="col-span-full text-center text-sm text-gray-400 py-8">
+    <div
+      *ngIf="sortedAnalysisEntries.length === 0 && !analysisLoading"
+      class="col-span-full text-center text-sm text-gray-400 py-8"
+    >
       Nenhum resultado de análise disponível para este período.
     </div>
   </div>

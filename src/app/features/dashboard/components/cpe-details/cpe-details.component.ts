@@ -1,4 +1,12 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, inject, DestroyRef } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  OnDestroy,
+  ChangeDetectorRef,
+  ChangeDetectionStrategy,
+  inject,
+  DestroyRef,
+} from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { Subscription, interval } from 'rxjs';
@@ -27,9 +35,22 @@ import { SkeletonComponent } from '../../../../core/components/skeleton/skeleton
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   // REGISTRO DOS FILHOS NO ARRAY DE IMPORTS
-  imports: [CommonModule, CpeInfoTabComponent, CpeWifiTabComponent, CpeRadioTabComponent, CpeDevicesTabComponent, CpeDiagnosticsTabNewComponent, CpeWifiAnalysisTabComponent, CpeAiTabComponent, CpePeriodicDiagnosticsTabComponent, ButtonComponent, SkeletonComponent, DataAgePipe],
+  imports: [
+    CommonModule,
+    CpeInfoTabComponent,
+    CpeWifiTabComponent,
+    CpeRadioTabComponent,
+    CpeDevicesTabComponent,
+    CpeDiagnosticsTabNewComponent,
+    CpeWifiAnalysisTabComponent,
+    CpeAiTabComponent,
+    CpePeriodicDiagnosticsTabComponent,
+    ButtonComponent,
+    SkeletonComponent,
+    DataAgePipe,
+  ],
   templateUrl: './cpe-details.component.html',
-  styleUrls: ['./cpe-details.component.scss']
+  styleUrls: ['./cpe-details.component.scss'],
 })
 export class CpeDetailsComponent implements OnInit, OnDestroy {
   serialNumber: string = '';
@@ -38,13 +59,21 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
   error: string | null = null;
 
   // Aba ativa na navegação
-  activeTab: 'info' | 'wifi' | 'radio' | 'devices' | 'diagnostics' | 'wifi-analysis' | 'ai' | 'periodic-diagnostics' = 'info';
+  activeTab:
+    | 'info'
+    | 'wifi'
+    | 'radio'
+    | 'devices'
+    | 'diagnostics'
+    | 'wifi-analysis'
+    | 'ai'
+    | 'periodic-diagnostics' = 'info';
   private wsSubscriptions = new Subscription();
 
   // LOCK-1: Sistema de lock entre técnicos — centralizado no componente pai.
   // Antes apenas cpe-info-tab tinha. Agora todas as tabs recebem via @Input.
   isViewOnly = false; // Se true, usuário está em modo de visualização (não é Driver)
-  isCpeBusy = false;  // Se true, CPE está em tráfego CWMP ativo (botões bloqueados)
+  isCpeBusy = false; // Se true, CPE está em tráfego CWMP ativo (botões bloqueados)
   viewers: string[] = []; // Lista de usernames visualizando a CPE
   private destroyRef = inject(DestroyRef);
   private readonly HEARTBEAT_INTERVAL_MS = 30_000;
@@ -55,10 +84,20 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
     private cpeService: CpeService,
     private wsService: WebSocketService,
     private toastService: ToastService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
   ) {}
 
-  setActiveTab(tab: 'info' | 'wifi' | 'radio' | 'devices' | 'diagnostics' | 'wifi-analysis' | 'ai' | 'periodic-diagnostics'): void {
+  setActiveTab(
+    tab:
+      | 'info'
+      | 'wifi'
+      | 'radio'
+      | 'devices'
+      | 'diagnostics'
+      | 'wifi-analysis'
+      | 'ai'
+      | 'periodic-diagnostics',
+  ): void {
     this.activeTab = tab;
   }
 
@@ -90,17 +129,29 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
 
     // Lê query param 'tab' para ativar a aba solicitada pelo dashboard
     const requestedTab = this.route.snapshot.queryParamMap.get('tab');
-    const validTabs: typeof this.activeTab[] = ['info', 'wifi', 'radio', 'devices', 'diagnostics', 'wifi-analysis', 'ai', 'periodic-diagnostics'];
-    if (requestedTab && validTabs.includes(requestedTab as typeof this.activeTab)) {
+    const validTabs: (typeof this.activeTab)[] = [
+      'info',
+      'wifi',
+      'radio',
+      'devices',
+      'diagnostics',
+      'wifi-analysis',
+      'ai',
+      'periodic-diagnostics',
+    ];
+    if (
+      requestedTab &&
+      validTabs.includes(requestedTab as typeof this.activeTab)
+    ) {
       this.activeTab = requestedTab as typeof this.activeTab;
     }
-    
+
     // Inscreve-se na sala da CPE. O WebSocketService enfileira a inscrição se ainda
     // não estiver conectado e a envia automaticamente quando o socket conectar.
     if (this.serialNumber) {
       this.wsService.subscribeToCpe(this.serialNumber);
     }
-    
+
     this.loadCpeDetails();
     this.setupRealTimeUpdates();
     this.listenForPresenceEvents();
@@ -116,7 +167,7 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
     this.isLoading = true;
     this.cpeService.getCpeDetails(this.serialNumber).subscribe({
       next: (data) => {
-        this.cpe = data;
+        this.cpe = this.normalizeLegacyFields(data);
         this.isLoading = false;
         this.cdr.markForCheck();
       },
@@ -124,70 +175,125 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
         this.error = 'Não foi possível carregar os dados desta CPE.';
         this.isLoading = false;
         this.cdr.markForCheck();
-      }
+      },
     });
   }
 
   setupRealTimeUpdates(): void {
     // cpe_updated: sincroniza dados gerais
     this.wsSubscriptions.add(
-      this.wsService.onCpeUpdated().subscribe(updatedCpe => {
+      this.wsService.onCpeUpdated().subscribe((updatedCpe) => {
         if (updatedCpe.serialNumber === this.serialNumber) {
-          this.cpe = this.cpe ? this.mergeCpe(this.cpe, updatedCpe) : updatedCpe as CpeDevice;
+          const merged = this.cpe
+            ? this.mergeCpe(this.cpe, updatedCpe)
+            : (updatedCpe as CpeDevice);
+          this.cpe = this.normalizeLegacyFields(merged);
           this.cdr.markForCheck();
         }
-      })
+      }),
     );
 
     // cpe_value_change: notifica o técnico sobre mudanças ativas (VALUE CHANGE)
     this.wsSubscriptions.add(
-      this.wsService.onCpeValueChange().subscribe(event => {
+      this.wsService.onCpeValueChange().subscribe((event) => {
         if (event.serialNumber !== this.serialNumber) return;
         const typeLabel: Record<string, string> = {
-          host_change:    'Dispositivos conectados mudaram',
-          wan_change:     'Status da WAN alterado',
-          gpon_change:    'Sinal óptico alterado',
-          wifi_change:    'Configuração Wi-Fi alterada',
+          host_change: 'Dispositivos conectados mudaram',
+          wan_change: 'Status da WAN alterado',
+          gpon_change: 'Sinal óptico alterado',
+          wifi_change: 'Configuração Wi-Fi alterada',
           generic_change: 'Parâmetro alterado',
-
         };
         const label = typeLabel[event.changeType] || 'Parâmetro alterado';
         this.toastService.info(`${label} na CPE ${this.serialNumber}`);
         this.cdr.markForCheck();
-      })
+      }),
     );
 
     // config_success: feedback positivo ao técnico
     this.wsSubscriptions.add(
-      this.wsService.on('config_success').subscribe(ev => {
+      this.wsService.on('config_success').subscribe((ev) => {
         if (ev.serialNumber === this.serialNumber) {
-          this.toastService.success(ev.message || 'Configuração aplicada com sucesso!');
+          this.toastService.success(
+            ev.message || 'Configuração aplicada com sucesso!',
+          );
           this.cdr.markForCheck();
         }
-      })
+      }),
     );
 
     // config_error: feedback de rejeição pela CPE
     this.wsSubscriptions.add(
-      this.wsService.on('config_error').subscribe(ev => {
+      this.wsService.on('config_error').subscribe((ev) => {
         if (ev.serialNumber === this.serialNumber) {
           this.toastService.error(ev.message || 'CPE rejeitou a configuração.');
           this.cdr.markForCheck();
         }
-      })
+      }),
     );
 
     // cpe_batch_update: durante mass reboot, a CPE sendo visualizada pode estar no array
     // Busca pelo serialNumber e faz merge profundo para preservar arrays/objetos aninhados.
     this.wsSubscriptions.add(
-      this.wsService.onCpeBatchUpdate().subscribe(batch => {
-        const item = batch.items.find((i: any) => i.serialNumber === this.serialNumber);
+      this.wsService.onCpeBatchUpdate().subscribe((batch) => {
+        const item = batch.items.find(
+          (i: any) => i.serialNumber === this.serialNumber,
+        );
         if (!item) return;
-        this.cpe = this.cpe ? this.mergeCpe(this.cpe, item) : item as CpeDevice;
+        const mergedBatch = this.cpe
+          ? this.mergeCpe(this.cpe, item)
+          : (item as CpeDevice);
+        this.cpe = this.normalizeLegacyFields(mergedBatch);
         if (batch.eventName === 'cpe_online') this.cpe!.isOnline = true;
         this.cdr.markForCheck();
-      })
+      }),
     );
+  }
+
+  /**
+   * Normaliza campos legados (wanIp, softwareVersion, productClass, etc.) a partir
+   * do novo schema EP 28 (wan.ip, deviceInfo.softwareVersion, etc.).
+   *
+   * Necessário porque a API retorna apenas o novo schema, mas vários templates
+   * (cpe-details.component.html, cpe-info-tab loadWanConfig) ainda referenciam
+   * campos legados via interpolação direta (cpe.wanIp, cpe.softwareVersion).
+   *
+   * Padrão seguido: dashboard.component.ts linhas 1252-1265 (normalizeCpeForWorker).
+   * Compatível com ambos os schemas — só popula o legacy field se ele estiver vazio.
+   */
+  private normalizeLegacyFields(cpe: CpeDevice): CpeDevice {
+    if (!cpe) return cpe;
+    const di = cpe.deviceInfo;
+    const wan = cpe.wan;
+    // Usa cast any para atribuir campos legados sem erros TS strict
+    const normalized = cpe as any;
+    if (!normalized.wanIp && wan?.ip) normalized.wanIp = wan.ip;
+    if (!normalized.wanGateway && wan?.gateway)
+      normalized.wanGateway = wan.gateway;
+    if (!normalized.wanDnsIsp && wan?.dnsIsp) normalized.wanDnsIsp = wan.dnsIsp;
+    if (!normalized.wanMtu && wan?.mtu) normalized.wanMtu = wan.mtu;
+    if (!normalized.wanVlanId && wan?.vlanId) normalized.wanVlanId = wan.vlanId;
+    if (!normalized.wanSubnetMask && wan?.subnetMask)
+      normalized.wanSubnetMask = wan.subnetMask;
+    if (!normalized.pppoeUsername && wan?.pppoeUsername)
+      normalized.pppoeUsername = wan.pppoeUsername;
+    if (!normalized.wanConfigUpdatedAt && wan?.updatedAt)
+      normalized.wanConfigUpdatedAt = wan.updatedAt;
+    if (!normalized.productClass && di?.productClass)
+      normalized.productClass = di.productClass;
+    if (!normalized.manufacturer && di?.manufacturer)
+      normalized.manufacturer = di.manufacturer;
+    if (!normalized.softwareVersion && di?.softwareVersion)
+      normalized.softwareVersion = di.softwareVersion;
+    if (!normalized.hardwareVersion && di?.hardwareVersion)
+      normalized.hardwareVersion = di.hardwareVersion;
+    if (
+      !normalized.connectionRequestURL &&
+      cpe.management?.connectionRequestURL
+    ) {
+      normalized.connectionRequestURL = cpe.management.connectionRequestURL;
+    }
+    return normalized as CpeDevice;
   }
 
   /**
@@ -217,44 +323,72 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
    * Replicado do cpe-info-tab (linhas 1488-1579) para que todas as tabs recebam o estado.
    */
   private listenForPresenceEvents(): void {
-    this.wsService.onDriverAcquired()
-      .pipe(takeUntilDestroyed(this.destroyRef), filter((event) => event.serialNumber === this.serialNumber))
+    this.wsService
+      .onDriverAcquired()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        filter((event) => event.serialNumber === this.serialNumber),
+      )
       .subscribe(() => {
         this.isViewOnly = false;
         this.cdr.markForCheck();
       });
 
-    this.wsService.onViewOnly()
-      .pipe(takeUntilDestroyed(this.destroyRef), filter((event) => event.serialNumber === this.serialNumber))
+    this.wsService
+      .onViewOnly()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        filter((event) => event.serialNumber === this.serialNumber),
+      )
       .subscribe((event) => this.handleViewOnlyEvent(event));
 
-    this.wsService.onForceViewOnly()
-      .pipe(takeUntilDestroyed(this.destroyRef), filter((event) => event.serialNumber === this.serialNumber))
+    this.wsService
+      .onForceViewOnly()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        filter((event) => event.serialNumber === this.serialNumber),
+      )
       .subscribe((event) => this.handleViewOnlyEvent(event));
 
-    this.wsService.onDriverReleased()
-      .pipe(takeUntilDestroyed(this.destroyRef), filter((event) => event.serialNumber === this.serialNumber))
+    this.wsService
+      .onDriverReleased()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        filter((event) => event.serialNumber === this.serialNumber),
+      )
       .subscribe(() => {
         this.isViewOnly = false;
         this.cdr.markForCheck();
       });
 
-    this.wsService.onViewersUpdated()
-      .pipe(takeUntilDestroyed(this.destroyRef), filter((event) => event.serialNumber === this.serialNumber))
+    this.wsService
+      .onViewersUpdated()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        filter((event) => event.serialNumber === this.serialNumber),
+      )
       .subscribe((event) => {
         this.viewers = event.viewers;
         this.cdr.markForCheck();
       });
 
-    this.wsService.onCpeLocked()
-      .pipe(takeUntilDestroyed(this.destroyRef), filter((event) => event.serialNumber === this.serialNumber))
+    this.wsService
+      .onCpeLocked()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        filter((event) => event.serialNumber === this.serialNumber),
+      )
       .subscribe(() => {
         this.isCpeBusy = true;
         this.cdr.markForCheck();
       });
 
-    this.wsService.onCpeUnlocked()
-      .pipe(takeUntilDestroyed(this.destroyRef), filter((event) => event.serialNumber === this.serialNumber))
+    this.wsService
+      .onCpeUnlocked()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        filter((event) => event.serialNumber === this.serialNumber),
+      )
       .subscribe(() => {
         this.isCpeBusy = false;
         this.cdr.markForCheck();
@@ -262,7 +396,11 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
   }
 
   /** Helper compartilhado para eventos ViewOnly (elimina duplicação de código) */
-  private handleViewOnlyEvent(event: { serialNumber: string; driver?: string; message: string }): void {
+  private handleViewOnlyEvent(event: {
+    serialNumber: string;
+    driver?: string;
+    message: string;
+  }): void {
     this.isViewOnly = true;
     this.toastService.warning(event.message);
     this.cdr.markForCheck();
@@ -272,7 +410,10 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
   private startHeartbeat(): void {
     if (!this.serialNumber) return;
     interval(this.HEARTBEAT_INTERVAL_MS)
-      .pipe(takeUntilDestroyed(this.destroyRef), filter(() => this.wsService.isConnected))
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        filter(() => this.wsService.isConnected),
+      )
       .subscribe(() => {
         try {
           this.wsService.emitDriverKeepalive(this.serialNumber);

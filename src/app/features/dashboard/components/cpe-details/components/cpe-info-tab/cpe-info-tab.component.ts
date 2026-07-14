@@ -1,12 +1,39 @@
-import { Component, Input, OnInit, OnDestroy, OnChanges, SimpleChanges, DestroyRef, inject, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import {
+  Component,
+  Input,
+  OnInit,
+  OnDestroy,
+  OnChanges,
+  SimpleChanges,
+  DestroyRef,
+  inject,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { filter, interval, Subject, EMPTY, timer, timeout, retry, switchMap } from 'rxjs';
+import {
+  filter,
+  interval,
+  Subject,
+  EMPTY,
+  timer,
+  timeout,
+  retry,
+  switchMap,
+} from 'rxjs';
 import { exhaustMap, catchError, bufferTime } from 'rxjs/operators';
 import { ChartDataset, ChartOptions } from 'chart.js';
 import { NgChartsModule } from 'ng2-charts';
-import { CpeDevice, TelemetryAlert, TelemetryAnalysis, TelemetryData, TelemetryMetric, TelemetrySnapshot } from '../../../../../../core/models';
+import {
+  CpeDevice,
+  TelemetryAlert,
+  TelemetryAnalysis,
+  TelemetryData,
+  TelemetryMetric,
+  TelemetrySnapshot,
+} from '../../../../../../core/models';
 import { environment } from '../../../../../../../environments/environment';
 import { CpeService } from '../../../../../../core/services/cpe.service';
 import { WebSocketService } from '../../../../../../core/services/websocket.service';
@@ -57,8 +84,8 @@ const TELEMETRY_CONFIG = {
 
 // ── Limites de listas e gráfico ──
 // Centralizados aqui para facilitar ajuste sem caçar magic numbers no código.
-const MAX_CHART_POINTS = 100;  // pontos máximos em tempo real no gráfico
-const MAX_ALERT_ENTRIES = 50;  // entradas máximas no array cpeAlerts
+const MAX_CHART_POINTS = 100; // pontos máximos em tempo real no gráfico
+const MAX_ALERT_ENTRIES = 50; // entradas máximas no array cpeAlerts
 
 // ── Thresholds ópticos (dBm) ──
 const RX_THRESHOLDS = {
@@ -94,11 +121,13 @@ const FLASH_VISIBLE_METRICS = new Set<string>([
 const LOG_PREFIX = '[CpeInfoTab]';
 
 function logInfo(message: string, data?: unknown): void {
-  if (!environment.production) console.log(`${LOG_PREFIX} ${message}`, data || '');
+  if (!environment.production)
+    console.log(`${LOG_PREFIX} ${message}`, data || '');
 }
 
 function logWarn(message: string, data?: unknown): void {
-  if (!environment.production) console.warn(`${LOG_PREFIX} ${message}`, data || '');
+  if (!environment.production)
+    console.warn(`${LOG_PREFIX} ${message}`, data || '');
 }
 
 function logError(message: string, error?: unknown): void {
@@ -113,7 +142,9 @@ function isValidTelemetryData(data: unknown): data is TelemetryData {
 }
 
 function isValidSerialNumber(serial: string): boolean {
-  return typeof serial === 'string' && serial.length >= 4 && serial.length <= 40;
+  return (
+    typeof serial === 'string' && serial.length >= 4 && serial.length <= 40
+  );
 }
 
 /** Valida se uma string é um endereço IPv4 válido */
@@ -121,7 +152,7 @@ function isValidIPv4(ip: string): boolean {
   if (!ip || typeof ip !== 'string') return false;
   const parts = ip.split('.');
   if (parts.length !== 4) return false;
-  return parts.every(part => {
+  return parts.every((part) => {
     const num = parseInt(part, 10);
     return !isNaN(num) && num >= 0 && num <= 255 && part === String(num);
   });
@@ -131,7 +162,11 @@ function isValidIPv4(ip: string): boolean {
 interface InterventionSnapshot {
   source: string;
   createdAt: string;
-  telemetry?: { optical?: { rxPower?: number }; system?: { cpuUsage?: number }; wan?: Record<string, unknown> };
+  telemetry?: {
+    optical?: { rxPower?: number };
+    system?: { cpuUsage?: number };
+    wan?: Record<string, unknown>;
+  };
 }
 
 // Configuração compartilhada de gráficos (estática para evitar recriação)
@@ -143,25 +178,25 @@ const CHART_COMMON_OPTIONS: ChartOptions<'line'> = {
   plugins: {
     legend: {
       display: true,
-      labels: { color: '#94a3b8', font: { size: 12 } }
+      labels: { color: '#94a3b8', font: { size: 12 } },
     },
     tooltip: {
       backgroundColor: 'rgba(15, 18, 39, 0.95)',
       titleColor: '#f8fafc',
       bodyColor: '#e2e8f0',
       borderWidth: 1,
-    }
+    },
   },
   scales: {
     x: {
       ticks: { color: '#94a3b8', maxTicksLimit: 8 },
-      grid: { color: 'rgba(255,255,255,0.05)' }
+      grid: { color: 'rgba(255,255,255,0.05)' },
     },
     y: {
       ticks: { color: '#94a3b8' },
-      grid: { color: 'rgba(255,255,255,0.05)' }
-    }
-  }
+      grid: { color: 'rgba(255,255,255,0.05)' },
+    },
+  },
 };
 
 // Map de suffixos para chaves de destino (estático para evitar recriação)
@@ -196,7 +231,11 @@ const hexToRgba = (hex: string, alpha: number): string => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
-const createChartDataset = (label: string, color: string, data: (number | null)[]): ChartDataset<'line'> => ({
+const createChartDataset = (
+  label: string,
+  color: string,
+  data: (number | null)[],
+): ChartDataset<'line'> => ({
   label,
   data,
   borderColor: color,
@@ -218,10 +257,16 @@ const createChartDataset = (label: string, color: string, data: (number | null)[
 @Component({
   selector: 'app-cpe-info-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, NgChartsModule, MetricPipe, IconTooltipComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    NgChartsModule,
+    MetricPipe,
+    IconTooltipComponent,
+  ],
   templateUrl: './cpe-info-tab.component.html',
   styleUrls: ['./cpe-info-tab.component.scss'],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   /** Dados da CPE vindo do componente pai. */
@@ -241,7 +286,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   telemetryError: string | null = null;
 
   // ── Two-Phase UI State (Vitals + Standard) ─────────────────────────────────
-  vitalsLoading = false;   // indicador rápido (vitals)
+  vitalsLoading = false; // indicador rápido (vitals)
 
   // ── Progresso de coleta por chunk ─────────────────────────────────────────
   telemetryProgress = 0; // 0-100%
@@ -297,7 +342,10 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   selectedPeriodHours = 6; // Período padrão
   // Subject que aciona loadHistory via switchMap — cancela request anterior automaticamente
   private readonly historyTrigger$ = new Subject<number>();
-  private readonly timeFormatter = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  private readonly timeFormatter = new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
   // ── Análise avançada agregada ──────────────────────────────────────────
   analysisData: TelemetryAnalysis | null = null;
@@ -306,21 +354,43 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   analysisUpdatedAt: Date | null = null;
 
   // ── Painéis suplementares (Health Score, Alertas, Incidente, Intervenção) ──
-  healthScoreBreakdown: { total: number; components: Record<string, { score: number; weight: number }> } | null = null;
+  healthScoreBreakdown: {
+    total: number;
+    components: Record<string, { score: number; weight: number }>;
+  } | null = null;
   cpeAlerts: TelemetryAlert[] = [];
-  incidentStatus: { active: boolean; expiresInSeconds: number | null } = { active: false, expiresInSeconds: null };
-  bootLoopAnomaly: { count: number; message: string; suggestion: string; timestamp: string } | null = null;
-  lastIntervention: { found: boolean; before?: InterventionSnapshot; after?: InterventionSnapshot; pending?: boolean } | null = null;
+  incidentStatus: { active: boolean; expiresInSeconds: number | null } = {
+    active: false,
+    expiresInSeconds: null,
+  };
+  bootLoopAnomaly: {
+    count: number;
+    message: string;
+    suggestion: string;
+    timestamp: string;
+  } | null = null;
+  lastIntervention: {
+    found: boolean;
+    before?: InterventionSnapshot;
+    after?: InterventionSnapshot;
+    pending?: boolean;
+  } | null = null;
 
   // Getter para filtrar apenas alertas ativos (status: 'active')
   get activeAlerts(): TelemetryAlert[] {
-    return this.cpeAlerts.filter(a => a.status === 'active').slice(0, 10);
+    return this.cpeAlerts.filter((a) => a.status === 'active').slice(0, 10);
   }
 
   // ── Configuração WAN ─────────────────────────────────────────────────────
-  wanConfigFields = { pppoeUsername: '', dnsServer1: '', dnsServer2: '', mtu: 1492, vlanId: 0 };
+  wanConfigFields = {
+    pppoeUsername: '',
+    dnsServer1: '',
+    dnsServer2: '',
+    mtu: 1492,
+    vlanId: 0,
+  };
   isEditingWanConfig = false;
-  wanConfigSaving    = false;
+  wanConfigSaving = false;
 
   // ── Configuração do gráfico CPU/Memória ────────────────────────────────
   chartLabels: string[] = [];
@@ -336,16 +406,16 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
       tooltip: {
         ...CHART_COMMON_OPTIONS.plugins!.tooltip,
         borderColor: 'rgba(124, 58, 237, 0.3)',
-      }
+      },
     },
     scales: {
       x: CHART_COMMON_OPTIONS.scales?.['x'],
       y: {
         ...(CHART_COMMON_OPTIONS.scales?.['y'] as any),
         beginAtZero: true,
-        max: 100
-      }
-    }
+        max: 100,
+      },
+    },
   };
 
   // ── Configuração do gráfico Óptico ─────────────────────────────────────
@@ -354,7 +424,10 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     createChartDataset('RX (dBm)', '#10b981', []),
     createChartDataset('TX (dBm)', '#f59e0b', []),
   ];
-  opticalChartData = { labels: this.opticalChartLabels, datasets: this.opticalChartDatasets };
+  opticalChartData = {
+    labels: this.opticalChartLabels,
+    datasets: this.opticalChartDatasets,
+  };
   opticalChartOptions: ChartOptions<'line'> = {
     ...CHART_COMMON_OPTIONS,
     plugins: {
@@ -362,15 +435,15 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
       tooltip: {
         ...CHART_COMMON_OPTIONS.plugins!.tooltip,
         borderColor: 'rgba(16, 185, 129, 0.3)',
-      }
+      },
     },
     scales: {
       x: CHART_COMMON_OPTIONS.scales?.['x'],
       y: {
         ...(CHART_COMMON_OPTIONS.scales?.['y'] as any),
-        title: { display: true, text: 'dBm', color: '#94a3b8' }
-      }
-    }
+        title: { display: true, text: 'dBm', color: '#94a3b8' },
+      },
+    },
   };
 
   constructor(
@@ -383,72 +456,87 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
   async ngOnInit(): Promise<void> {
     // ── Setup do barramento reativo com exhaustMap e catchError (prevenção de Efeito Eco) ──
-    this.monitorTrigger$.pipe(
-      takeUntilDestroyed(this.destroyRef),
-      exhaustMap(() => {
-        this.userRequestedTelemetry = true; // Marca intenção do usuário para distinguir de scheduler passivo
-        this.telemetryLoading = true; // Feedback visual imediato
-        this.vitalsLoading = true;    // Indicador de vitals
-        this.suppressChartUpdates = true; // Evita pontos parciais no gráfico durante coleta
+    this.monitorTrigger$
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        exhaustMap(() => {
+          this.userRequestedTelemetry = true; // Marca intenção do usuário para distinguir de scheduler passivo
+          this.telemetryLoading = true; // Feedback visual imediato
+          this.vitalsLoading = true; // Indicador de vitals
+          this.suppressChartUpdates = true; // Evita pontos parciais no gráfico durante coleta
 
-        // Fallback: simula progresso se backend não enviar telemetry_progress
-        this.telemetryProgress = 10;
-        this.cdr.markForCheck();
-
-        // Retorna o fluxo HTTP
-        return this.cpeService.requestTelemetry(this.serialNumber).pipe(
-          // CAPTURA INTERNA: Impede que o erro suba e mate o Subject monitorTrigger$
-          catchError((err) => {
-            this.telemetryLoading = false; // Desliga spinner em caso de erro
-            this.vitalsLoading = false;    // Desliga indicador de vitals
-            this.suppressChartUpdates = false; // Libera atualização de gráfico
-            this.telemetryProgress = 0; // Reseta progresso
-            this.toastService.error(err.error?.error || 'Erro ao conectar com a CPE.');
-            return EMPTY; // Retorna um fluxo vazio e finalizado de forma segura
-          })
-        );
-      })
-    ).subscribe({
-      next: (response: any) => {
-        // Source 'cache' ou 'mongodb_stale' = dado imediato, fecha spinner
-        if (response?.source === 'cache' || response?.source === 'mongodb_stale') {
-          this.telemetryLoading = false;
-          this.vitalsLoading = false;
-          if (response.telemetry || response.data) {
-            this.telemetryData = response.telemetry || response.data;
-          }
-          const msg = response.source === 'mongodb_stale'
-            ? 'Dados do banco (Redis offline) — podem estar desatualizados.'
-            : (response.message || 'Exibindo dados armazenados em cache.');
-          this.toastService.info(msg);
-          // Inicia contador regressivo de 60s (alinhado com TTL on-demand do backend).
-          // Para cache hit, usa cacheAgeMs para refletir o tempo restante real.
-          if (response.source === 'cache') {
-            this.startRefreshCooldown(response.cacheAgeMs ?? null);
-          }
+          // Fallback: simula progresso se backend não enviar telemetry_progress
+          this.telemetryProgress = 10;
           this.cdr.markForCheck();
-          return;
-        }
 
-        // Source 'in_progress' = coleta ativa em andamento (scheduler ou on-demand anterior)
-        // Mantém spinner true e aguarda WS — a coleta em andamento vai finalizar
-        if (response?.status === 'in_progress') {
-          this.toastService.info('Coleta em andamento. Aguardando dados via WebSocket...');
-          return; // telemetryLoading permanece true
-        }
+          // Retorna o fluxo HTTP
+          return this.cpeService.requestTelemetry(this.serialNumber).pipe(
+            // CAPTURA INTERNA: Impede que o erro suba e mate o Subject monitorTrigger$
+            catchError((err) => {
+              this.telemetryLoading = false; // Desliga spinner em caso de erro
+              this.vitalsLoading = false; // Desliga indicador de vitals
+              this.suppressChartUpdates = false; // Libera atualização de gráfico
+              this.telemetryProgress = 0; // Reseta progresso
+              this.toastService.error(
+                err.error?.error || 'Erro ao conectar com a CPE.',
+              );
+              return EMPTY; // Retorna um fluxo vazio e finalizado de forma segura
+            }),
+          );
+        }),
+      )
+      .subscribe({
+        next: (response: any) => {
+          // Source 'cache' ou 'mongodb_stale' = dado imediato, fecha spinner
+          if (
+            response?.source === 'cache' ||
+            response?.source === 'mongodb_stale'
+          ) {
+            this.telemetryLoading = false;
+            this.vitalsLoading = false;
+            if (response.telemetry || response.data) {
+              this.telemetryData = response.telemetry || response.data;
+            }
+            const msg =
+              response.source === 'mongodb_stale'
+                ? 'Dados do banco (Redis offline) — podem estar desatualizados.'
+                : response.message || 'Exibindo dados armazenados em cache.';
+            this.toastService.info(msg);
+            // Inicia contador regressivo de 60s (alinhado com TTL on-demand do backend).
+            // Para cache hit, usa cacheAgeMs para refletir o tempo restante real.
+            if (response.source === 'cache') {
+              this.startRefreshCooldown(response.cacheAgeMs ?? null);
+            }
+            this.cdr.markForCheck();
+            return;
+          }
 
-        // HTTP 202 aceito (idempotent bypass — lock ativo por outra requisição)
-        // A coleta ativa vai completar e enviar WS — mantém spinner por no máximo 120s
-        if (response?.status === 'accepted') {
-          this.toastService.info(response.message || 'Coleta já está em andamento. Aguarde a atualização na tela.');
-          return; // telemetryLoading permanece true — WS irá fechar
-        }
+          // Source 'in_progress' = coleta ativa em andamento (scheduler ou on-demand anterior)
+          // Mantém spinner true e aguarda WS — a coleta em andamento vai finalizar
+          if (response?.status === 'in_progress') {
+            this.toastService.info(
+              'Coleta em andamento. Aguardando dados via WebSocket...',
+            );
+            return; // telemetryLoading permanece true
+          }
 
-        // Qualquer outra resposta = coleta enfileirada ou iniciada
-        this.toastService.success('CPE online. Coleta em tempo real iniciada via TR-069...');
-        // telemetryLoading permanece true até telemetry_update ou telemetry_complete
-      }
-    });
+          // HTTP 202 aceito (idempotent bypass — lock ativo por outra requisição)
+          // A coleta ativa vai completar e enviar WS — mantém spinner por no máximo 120s
+          if (response?.status === 'accepted') {
+            this.toastService.info(
+              response.message ||
+                'Coleta já está em andamento. Aguarde a atualização na tela.',
+            );
+            return; // telemetryLoading permanece true — WS irá fechar
+          }
+
+          // Qualquer outra resposta = coleta enfileirada ou iniciada
+          this.toastService.success(
+            'CPE online. Coleta em tempo real iniciada via TR-069...',
+          );
+          // telemetryLoading permanece true até telemetry_update ou telemetry_complete
+        },
+      });
 
     // Inscreve-se na sala da CPE para receber eventos WebSocket específicos
     if (this.serialNumber) {
@@ -459,33 +547,49 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
     // ── Barramento de histórico com switchMap (cancela request anterior automaticamente) ──
     // Garante que mudanças rápidas de período não causam race condition de responses.
-    this.historyTrigger$.pipe(
-      takeUntilDestroyed(this.destroyRef),
-      switchMap((hours) => {
-        this.historyLoading = true;
-        logInfo('Carregando histórico de telemetria', { serialNumber: this.serialNumber, periodHours: hours });
-        return this.cpeService.getTelemetryVitalsHistory(this.serialNumber, hours).pipe(
-          timeout(30_000),
-          catchError((err) => {
-            logError('Erro ao carregar histórico de telemetria', err);
-            this.buildChart();
-            this.historyLoading = false;
-            this.cdr.detectChanges();
-            return EMPTY;
-          })
-        );
-      })
-    ).subscribe({
-      next: (res) => {
-        this.rawHistory = (res.data as TelemetrySnapshot[]) || [];
-        this.telemetryCacheService.saveHistory(this.serialNumber, this.selectedPeriodHours, this.rawHistory)
-          .catch(e => logError('Erro ao salvar histórico no cache local', e));
-        this.buildChart();
-        this.historyLoading = false;
-        logInfo('Histórico carregado com sucesso', { count: this.rawHistory.length });
-        this.cdr.detectChanges();
-      }
-    });
+    this.historyTrigger$
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        switchMap((hours) => {
+          this.historyLoading = true;
+          logInfo('Carregando histórico de telemetria', {
+            serialNumber: this.serialNumber,
+            periodHours: hours,
+          });
+          return this.cpeService
+            .getTelemetryVitalsHistory(this.serialNumber, hours)
+            .pipe(
+              timeout(30_000),
+              catchError((err) => {
+                logError('Erro ao carregar histórico de telemetria', err);
+                this.buildChart();
+                this.historyLoading = false;
+                this.cdr.detectChanges();
+                return EMPTY;
+              }),
+            );
+        }),
+      )
+      .subscribe({
+        next: (res) => {
+          this.rawHistory = (res.data as TelemetrySnapshot[]) || [];
+          this.telemetryCacheService
+            .saveHistory(
+              this.serialNumber,
+              this.selectedPeriodHours,
+              this.rawHistory,
+            )
+            .catch((e) =>
+              logError('Erro ao salvar histórico no cache local', e),
+            );
+          this.buildChart();
+          this.historyLoading = false;
+          logInfo('Histórico carregado com sucesso', {
+            count: this.rawHistory.length,
+          });
+          this.cdr.detectChanges();
+        },
+      });
 
     // Registra listeners WebSocket antes das chamadas HTTP
     this.listenForTelemetryUpdates();
@@ -498,11 +602,17 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     this.listenForBootLoopAnomaly(); // Listener para anomalia de boot loop (aviso ao técnico)
     this.startHeartbeat(); // Inicia heartbeat para manter controle de Driver
     // Escalonamento das chamadas HTTP para evitar burst (429 Too Many Requests)
-    this.loadLatestVitals();       // 0ms — carga imediata do snapshot TelemetryVitals
-    this.loadHistory();            // imediato — gráfico precisa de dados antes de qualquer update
-    timer(150).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.loadFromCache());
-    timer(300).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.loadAnalysis());
-    timer(450).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.loadSupplementaryPanels());
+    this.loadLatestVitals(); // 0ms — carga imediata do snapshot TelemetryVitals
+    this.loadHistory(); // imediato — gráfico precisa de dados antes de qualquer update
+    timer(150)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.loadFromCache());
+    timer(300)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.loadAnalysis());
+    timer(450)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.loadSupplementaryPanels());
   }
 
   ngOnDestroy(): void {
@@ -510,7 +620,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     if (this.serialNumber) {
       this.wsService.unsubscribeFromCpe(this.serialNumber);
     }
-    
+
     // Limpa timeout de telemetria
     if (this.telemetryTimeoutId) {
       clearTimeout(this.telemetryTimeoutId);
@@ -532,7 +642,10 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     if (changes['cpe'] && this.cpe) {
       // Só recarrega painéis suplementares quando healthScore ou isOnline mudaram
       const prevCpe = changes['cpe'].previousValue as CpeDevice | null;
-      if (prevCpe?.healthScore !== this.cpe.healthScore || prevCpe?.isOnline !== this.cpe.isOnline) {
+      if (
+        prevCpe?.healthScore !== this.cpe.healthScore ||
+        prevCpe?.isOnline !== this.cpe.isOnline
+      ) {
         this.loadSupplementaryPanels();
       }
     }
@@ -548,7 +661,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   /** Dispara um efeito visual de "piscar" para uma métrica específica */
   triggerFlash(metricKey: string): void {
     if (!metricKey || typeof metricKey !== 'string') return;
-    
+
     // Quando o limite de timers é atingido, expulsa o mais antigo (FIFO)
     // para liberar espaço em vez de silenciosamente descartar o novo flash.
     if (this.flashTimers.size >= TELEMETRY_CONFIG.MAX_FLASH_TIMERS) {
@@ -557,17 +670,17 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
       this.flashTimers.delete(oldestKey);
       this.flashingMetrics.delete(oldestKey);
     }
-    
+
     // Não recria timer já ativo para a mesma chave
     if (this.flashTimers.has(metricKey)) return;
-    
+
     this.flashingMetrics.add(metricKey);
     const timer = setTimeout(() => {
       this.flashingMetrics.delete(metricKey);
       this.flashTimers.delete(metricKey);
       this.cdr.markForCheck();
     }, TELEMETRY_CONFIG.FLASH_DURATION_MS);
-    
+
     this.flashTimers.set(metricKey, timer);
   }
 
@@ -578,13 +691,15 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
   /** Limpa todos os timers de flash (usado em ngOnDestroy) */
   private clearAllFlashTimers(): void {
-    this.flashTimers.forEach(timer => clearTimeout(timer));
+    this.flashTimers.forEach((timer) => clearTimeout(timer));
     this.flashTimers.clear();
     this.flashingMetrics.clear();
   }
 
   // ── Getters de Análise Avançada ────────────────────────────────────────
-  get analysisAlerts() { return this.analysisData?.summary?.alerts || []; }
+  get analysisAlerts() {
+    return this.analysisData?.summary?.alerts || [];
+  }
 
   // Traduz overallHealth para português
   get overallHealthLabel(): string {
@@ -593,7 +708,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
       good: 'Bom',
       warning: 'Atenção',
       critical: 'Crítico',
-      unknown: 'Desconhecido'
+      unknown: 'Desconhecido',
     };
     return labels[health] || health;
   }
@@ -601,10 +716,10 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   // ── Health Score ────────────────────────────────────────────────────────
   readonly healthScoreLabels: Record<string, string> = {
     connectivity: 'Conectividade WAN/GPON',
-    optical:      'Sinal Óptico',
-    system:       'Recursos do Sistema',
-    wifi:         'Ruído Wi-Fi',
-    stability:    'Estabilidade Histórica',
+    optical: 'Sinal Óptico',
+    system: 'Recursos do Sistema',
+    wifi: 'Ruído Wi-Fi',
+    stability: 'Estabilidade Histórica',
   };
 
   healthScoreColor(score: number): string {
@@ -634,21 +749,30 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   get ramUsagePercent(): number | null {
-    const free  = this.safeExtractValue(this.telemetryData as any, 'memoryFree');
-    const total = this.safeExtractValue(this.telemetryData as any, 'memoryTotal');
+    const free = this.safeExtractValue(this.telemetryData as any, 'memoryFree');
+    const total = this.safeExtractValue(
+      this.telemetryData as any,
+      'memoryTotal',
+    );
     if (free == null || total == null || total <= 0) return null;
     return Math.round(((total - free) / total) * 100);
   }
 
   get ramUsedMb(): number | null {
-    const free  = this.safeExtractValue(this.telemetryData as any, 'memoryFree');
-    const total = this.safeExtractValue(this.telemetryData as any, 'memoryTotal');
+    const free = this.safeExtractValue(this.telemetryData as any, 'memoryFree');
+    const total = this.safeExtractValue(
+      this.telemetryData as any,
+      'memoryTotal',
+    );
     if (free == null || total == null) return null;
     return Math.round((total - free) / 1024);
   }
 
   get ramTotalMb(): number | null {
-    const total = this.safeExtractValue(this.telemetryData as any, 'memoryTotal');
+    const total = this.safeExtractValue(
+      this.telemetryData as any,
+      'memoryTotal',
+    );
     if (total == null) return null;
     return Math.round(total / 1024);
   }
@@ -679,9 +803,9 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
   opticalZoneClass(zone: 'ok' | 'warning' | 'critical' | 'unknown'): string {
     return {
-      ok:      'text-green-500 font-semibold',
+      ok: 'text-green-500 font-semibold',
       warning: 'text-yellow-500 font-semibold',
-      critical:'text-red-500 font-bold',
+      critical: 'text-red-500 font-bold',
       unknown: 'text-gray-400',
     }[zone];
   }
@@ -692,7 +816,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   private autoSelectWifiTab(): void {
     const has5g = this.telemetryData?.['wifi5gChannel'] != null;
     const has2g = this.telemetryData?.['wifi2gChannel'] != null;
-    
+
     if (has5g && !has2g) {
       this.wifiTabSelected = '5g';
     } else if (has2g && !has5g) {
@@ -707,9 +831,19 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   exportHistoryCsv(): void {
     if (!this.rawHistory.length) return;
 
-    const headers = ['timestamp', 'cpuUsage', 'memoryFreeKb', 'memoryTotalKb', 'uptime_s', 'opticalRx_dBm', 'wanStatus', 'gponStatus', 'hostCount'];
+    const headers = [
+      'timestamp',
+      'cpuUsage',
+      'memoryFreeKb',
+      'memoryTotalKb',
+      'uptime_s',
+      'opticalRx_dBm',
+      'wanStatus',
+      'gponStatus',
+      'hostCount',
+    ];
 
-    const rows = this.rawHistory.map(snap => {
+    const rows = this.rawHistory.map((snap) => {
       return [
         new Date(snap.timestamp).toISOString(),
         (snap as any)['cpuUsage'] ?? '',
@@ -720,128 +854,211 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
         (snap as any)['wanStatus'] ?? '',
         (snap as any)['gponStatus'] ?? '',
         (snap as any)['hostCount'] ?? '',
-      ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',');
+      ]
+        .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`)
+        .join(',');
     });
 
     const csv = [headers.join(','), ...rows].join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `telemetria_${this.serialNumber}_${this.selectedPeriodHours}h_${new Date().toISOString().slice(0,10)}.csv`;
+    link.download = `telemetria_${this.serialNumber}_${this.selectedPeriodHours}h_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
 
   // Step 6: Análise priorizada — metadados completos (label, ícone, descrição, interpretação, utilidade)
-  readonly analysisInfoMap: Record<string, { label: string; icon: string; description: string; interpretation: string; utility: string }> = {
+  readonly analysisInfoMap: Record<
+    string,
+    {
+      label: string;
+      icon: string;
+      description: string;
+      interpretation: string;
+      utility: string;
+    }
+  > = {
     opticalTrend: {
-      label: 'Tendência Óptica', icon: 'fiber_manual_record',
-      description: 'Regressão linear da potência óptica RX em 7 dias para detectar degradação gradual.',
-      interpretation: 'Slope negativo = sinal piorando. Pode ser sujeira no conector, dobra na fibra ou splitter degradando.',
-      utility: 'Intervenção preventiva ANTES do LOS. Combine com GPON Link Budget para priorizar dispatch.',
+      label: 'Tendência Óptica',
+      icon: 'fiber_manual_record',
+      description:
+        'Regressão linear da potência óptica RX em 7 dias para detectar degradação gradual.',
+      interpretation:
+        'Slope negativo = sinal piorando. Pode ser sujeira no conector, dobra na fibra ou splitter degradando.',
+      utility:
+        'Intervenção preventiva ANTES do LOS. Combine com GPON Link Budget para priorizar dispatch.',
     },
     rebootStability: {
-      label: 'Estabilidade de Reboot', icon: 'restart_alt',
-      description: 'Conta reboots por queda de uptime em 7 dias. Reboots frequentes indicam instabilidade.',
-      interpretation: '> 2 reboots/semana é anormal. Pode ser fonte defeituosa, firmware bugado ou pane térmica.',
-      utility: 'CPE com reboots frequentes tem prioridade de dispatch. Verifique correlação com temperatura e fonte.',
+      label: 'Estabilidade de Reboot',
+      icon: 'restart_alt',
+      description:
+        'Conta reboots por queda de uptime em 7 dias. Reboots frequentes indicam instabilidade.',
+      interpretation:
+        '> 2 reboots/semana é anormal. Pode ser fonte defeituosa, firmware bugado ou pane térmica.',
+      utility:
+        'CPE com reboots frequentes tem prioridade de dispatch. Verifique correlação com temperatura e fonte.',
     },
     trafficAnomalies: {
-      label: 'Anomalias de Tráfego', icon: 'trending_up',
-      description: 'Detecta picos anômalos via regra 3-sigma com piso mínimo de 30 Mbps.',
-      interpretation: 'Picos podem ser downloads grandes, streaming 4K ou, em casos extremos, botnet/DDoS.',
-      utility: 'Explica lentidão relatada pelo cliente. Compare com Top Destinos para entender o padrão.',
+      label: 'Anomalias de Tráfego',
+      icon: 'trending_up',
+      description:
+        'Detecta picos anômalos via regra 3-sigma com piso mínimo de 30 Mbps.',
+      interpretation:
+        'Picos podem ser downloads grandes, streaming 4K ou, em casos extremos, botnet/DDoS.',
+      utility:
+        'Explica lentidão relatada pelo cliente. Compare com Top Destinos para entender o padrão.',
     },
     oltComparison: {
-      label: 'Comparação com OLT', icon: 'compare',
-      description: 'Compara sinal óptico RX com CPEs vizinhas no mesmo /24 (mesma OLT/splitter).',
-      interpretation: 'Média do grupo baixa = problema na infraestrutura. Só esta CPE baixa = problema local.',
-      utility: 'Diferencia problema de infraestrutura (dispatch de campo) de problema local (troca de ONT).',
+      label: 'Comparação com OLT',
+      icon: 'compare',
+      description:
+        'Compara sinal óptico RX com CPEs vizinhas no mesmo /24 (mesma OLT/splitter).',
+      interpretation:
+        'Média do grupo baixa = problema na infraestrutura. Só esta CPE baixa = problema local.',
+      utility:
+        'Diferencia problema de infraestrutura (dispatch de campo) de problema local (troca de ONT).',
     },
     thermalCorrelation: {
-      label: 'Correlação Térmica', icon: 'thermostat',
-      description: 'Correlação de Pearson entre temperatura do transceptor e CPU. Temp alta + CPU baixa = falha de ventilação.',
-      interpretation: 'Temp > 85°C = superaquecimento. Temp alta + CPU baixa + baixa correlação = ventilação defeituosa.',
-      utility: 'Identifica CPEs em ambientes quentes que precisam realocação ou ventilação adicional.',
+      label: 'Correlação Térmica',
+      icon: 'thermostat',
+      description:
+        'Correlação de Pearson entre temperatura do transceptor e CPU. Temp alta + CPU baixa = falha de ventilação.',
+      interpretation:
+        'Temp > 85°C = superaquecimento. Temp alta + CPU baixa + baixa correlação = ventilação defeituosa.',
+      utility:
+        'Identifica CPEs em ambientes quentes que precisam realocação ou ventilação adicional.',
     },
     latencyDns: {
-      label: 'Latência DNS', icon: 'speed',
-      description: 'Latência via IPPingDiagnostics em cache. Requer diagnóstico de ping executado.',
-      interpretation: '> 100ms = congestionamento ou rota subótima. < 20ms excelente. < 50ms normal.',
-      utility: 'Explica lentidão de navegação. Execute ping diagnóstico para atualizar os dados.',
+      label: 'Latência DNS',
+      icon: 'speed',
+      description:
+        'Latência via IPPingDiagnostics em cache. Requer diagnóstico de ping executado.',
+      interpretation:
+        '> 100ms = congestionamento ou rota subótima. < 20ms excelente. < 50ms normal.',
+      utility:
+        'Explica lentidão de navegação. Execute ping diagnóstico para atualizar os dados.',
     },
     topDestinations: {
-      label: 'Top Destinos de Tráfego', icon: 'analytics',
-      description: 'Inferência de padrão de uso por horário de pico (streaming, gaming, trabalho).',
-      interpretation: 'Baseado em volume por hora. Não identifica sites específicos — requer NetFlow/DPI.',
-      utility: 'Entende o perfil do cliente. Streaming noturno é esperado em residências.',
+      label: 'Top Destinos de Tráfego',
+      icon: 'analytics',
+      description:
+        'Inferência de padrão de uso por horário de pico (streaming, gaming, trabalho).',
+      interpretation:
+        'Baseado em volume por hora. Não identifica sites específicos — requer NetFlow/DPI.',
+      utility:
+        'Entende o perfil do cliente. Streaming noturno é esperado em residências.',
     },
     wanErrors: {
-      label: 'Erros WAN', icon: 'error_outline',
-      description: 'Taxa de erros CRC/FCS na interface óptica. Erros indicam degradação física L1/L2.',
-      interpretation: '> 100/h warning, > 1000/h crítico. Indica fibra suja, conector oxidado ou cabo danificado.',
-      utility: 'Erros crescentes justificam dispatch para limpeza de conector ou troca de drop cable.',
+      label: 'Erros WAN',
+      icon: 'error_outline',
+      description:
+        'Taxa de erros CRC/FCS na interface óptica. Erros indicam degradação física L1/L2.',
+      interpretation:
+        '> 100/h warning, > 1000/h crítico. Indica fibra suja, conector oxidado ou cabo danificado.',
+      utility:
+        'Erros crescentes justificam dispatch para limpeza de conector ou troca de drop cable.',
     },
     laserHealth: {
-      label: 'Saúde do Laser', icon: 'highlight',
-      description: 'Tendência da corrente de bias (mA) do laser. Aumento progressivo indica envelhecimento.',
-      interpretation: 'Bias > 30mA = fim de vida. Slope > 0.5 mA/dia = envelhecimento acelerado.',
-      utility: 'Troca preventiva do transceptor ANTES da falha. Combine com Envelhecimento do Laser.',
+      label: 'Saúde do Laser',
+      icon: 'highlight',
+      description:
+        'Tendência da corrente de bias (mA) do laser. Aumento progressivo indica envelhecimento.',
+      interpretation:
+        'Bias > 30mA = fim de vida. Slope > 0.5 mA/dia = envelhecimento acelerado.',
+      utility:
+        'Troca preventiva do transceptor ANTES da falha. Combine com Envelhecimento do Laser.',
     },
     memoryLeak: {
-      label: 'Vazamento de Memória', icon: 'memory',
-      description: 'Detecta leak de RAM via regressão linear, isolando o maior bloco de uptime contínuo.',
-      interpretation: 'Perda > 0.3%/hora com R² > 0.8 = leak. RAM < 10% = crítica, o roteador vai travar.',
-      utility: 'Identifica firmware bugado. CPE com leak precisa de reboot programado ou update de firmware.',
+      label: 'Vazamento de Memória',
+      icon: 'memory',
+      description:
+        'Detecta leak de RAM via regressão linear, isolando o maior bloco de uptime contínuo.',
+      interpretation:
+        'Perda > 0.3%/hora com R² > 0.8 = leak. RAM < 10% = crítica, o roteador vai travar.',
+      utility:
+        'Identifica firmware bugado. CPE com leak precisa de reboot programado ou update de firmware.',
     },
     powerSupply: {
-      label: 'Fonte de Energia', icon: 'power',
-      description: 'Monitora tensão (V) do módulo óptico. Quedas ou picos indicam problema na fonte.',
-      interpretation: 'Normal: 3.2-3.4V. < 3.1V = subtensão (fonte defeituosa). > 3.5V = sobretensão (risco de queima).',
-      utility: 'Subtensão causa reboots aleatórios. Sobretensão pode queimar o equipamento.',
+      label: 'Fonte de Energia',
+      icon: 'power',
+      description:
+        'Monitora tensão (V) do módulo óptico. Quedas ou picos indicam problema na fonte.',
+      interpretation:
+        'Normal: 3.2-3.4V. < 3.1V = subtensão (fonte defeituosa). > 3.5V = sobretensão (risco de queima).',
+      utility:
+        'Subtensão causa reboots aleatórios. Sobretensão pode queimar o equipamento.',
     },
     wifiQuality2g: {
-      label: 'Qualidade Wi-Fi 2.4 GHz', icon: 'wifi',
-      description: 'SNR, ruído, taxa de erros e densidade de clientes na banda 2.4GHz (CWNA/IEEE 802.11).',
-      interpretation: 'SNR < 10dB crítico. Ruído > -65dBm interferência severa. Erros > 2000/min link degradado.',
-      utility: '2.4GHz é mais congestionada. Alta densidade + ruído alto = migrar clientes para 5GHz.',
+      label: 'Qualidade Wi-Fi 2.4 GHz',
+      icon: 'wifi',
+      description:
+        'SNR, ruído, taxa de erros e densidade de clientes na banda 2.4GHz (CWNA/IEEE 802.11).',
+      interpretation:
+        'SNR < 10dB crítico. Ruído > -65dBm interferência severa. Erros > 2000/min link degradado.',
+      utility:
+        '2.4GHz é mais congestionada. Alta densidade + ruído alto = migrar clientes para 5GHz.',
     },
     wifiQuality5g: {
-      label: 'Qualidade Wi-Fi 5 GHz', icon: 'wifi',
-      description: 'SNR, ruído, taxa de erros e densidade de clientes na banda 5GHz.',
-      interpretation: 'SNR < 10dB crítico. Ruído > -75dBm interferência severa. Erros > 800/min link degradado.',
-      utility: '5GHz tem menos interferência mas menor alcance. Se baixo, verificar obstáculos físicos.',
+      label: 'Qualidade Wi-Fi 5 GHz',
+      icon: 'wifi',
+      description:
+        'SNR, ruído, taxa de erros e densidade de clientes na banda 5GHz.',
+      interpretation:
+        'SNR < 10dB crítico. Ruído > -75dBm interferência severa. Erros > 800/min link degradado.',
+      utility:
+        '5GHz tem menos interferência mas menor alcance. Se baixo, verificar obstáculos físicos.',
     },
     gponLinkBudget: {
-      label: 'Margem Óptica GPON', icon: 'straighten',
-      description: 'Margem entre RX atual e threshold crítico de -27 dBm. Margem baixa = proximidade de LOS.',
-      interpretation: '< 1dB crítica (LOS iminente). < 3dB warning. > 3dB adequada.',
-      utility: 'Margem baixa = dispatch urgente. Combine com Tendência Óptica para prever quando chegará a zero.',
+      label: 'Margem Óptica GPON',
+      icon: 'straighten',
+      description:
+        'Margem entre RX atual e threshold crítico de -27 dBm. Margem baixa = proximidade de LOS.',
+      interpretation:
+        '< 1dB crítica (LOS iminente). < 3dB warning. > 3dB adequada.',
+      utility:
+        'Margem baixa = dispatch urgente. Combine com Tendência Óptica para prever quando chegará a zero.',
     },
     transceiverAging: {
-      label: 'Envelhecimento do Laser', icon: 'schedule',
-      description: 'Tendência da corrente de bias em 30 dias para detectar envelhecimento acelerado.',
-      interpretation: 'Bias > 30mA ou slope > 1.0 mA/dia = fim de vida próximo.',
-      utility: 'Visão de longo prazo. Transceptor envelhecendo deve ser trocado preventivamente.',
+      label: 'Envelhecimento do Laser',
+      icon: 'schedule',
+      description:
+        'Tendência da corrente de bias em 30 dias para detectar envelhecimento acelerado.',
+      interpretation:
+        'Bias > 30mA ou slope > 1.0 mA/dia = fim de vida próximo.',
+      utility:
+        'Visão de longo prazo. Transceptor envelhecendo deve ser trocado preventivamente.',
     },
     cpuLoad: {
-      label: 'Carga de CPU', icon: 'developer_board',
-      description: 'Uso de CPU sustentado em 7 dias. CPU cronicamente alta indica CPE sobrecarregada.',
-      interpretation: '> 80% em 30% das amostras = warning. > 90% médio = crítico.',
-      utility: 'CPE com CPU alta pode precisar de modelo mais potente. Verifique clientes e throughput.',
+      label: 'Carga de CPU',
+      icon: 'developer_board',
+      description:
+        'Uso de CPU sustentado em 7 dias. CPU cronicamente alta indica CPE sobrecarregada.',
+      interpretation:
+        '> 80% em 30% das amostras = warning. > 90% médio = crítico.',
+      utility:
+        'CPE com CPU alta pode precisar de modelo mais potente. Verifique clientes e throughput.',
     },
     wanLatency: {
-      label: 'Latência WAN Nativa', icon: 'network_ping',
-      description: 'Latência e jitter nativos da WAN (coletados passivamente). Detecta degradação de rota.',
-      interpretation: '> 50ms latência ou > 20ms jitter = crítico. > 20ms latência = warning.',
-      utility: 'Latência alta afeta tudo. Pode indicar congestionamento, rota BGP subótima ou problema na OLT.',
+      label: 'Latência WAN Nativa',
+      icon: 'network_ping',
+      description:
+        'Latência e jitter nativos da WAN (coletados passivamente). Detecta degradação de rota.',
+      interpretation:
+        '> 50ms latência ou > 20ms jitter = crítico. > 20ms latência = warning.',
+      utility:
+        'Latência alta afeta tudo. Pode indicar congestionamento, rota BGP subótima ou problema na OLT.',
     },
     wifiBandDistribution: {
-      label: 'Distribuição Wi-Fi por Banda', icon: 'device_hub',
-      description: 'Distribuição de clientes entre 2.4GHz e 5GHz. Concentração em 2.4GHz causa congestionamento.',
-      interpretation: '> 80% em 2.4GHz com > 5 clientes = warning. > 90% com > 10 = crítico.',
-      utility: 'Recomendar migração para 5GHz. Verificar se SSID 5GHz está ativo e com potência adequada.',
+      label: 'Distribuição Wi-Fi por Banda',
+      icon: 'device_hub',
+      description:
+        'Distribuição de clientes entre 2.4GHz e 5GHz. Concentração em 2.4GHz causa congestionamento.',
+      interpretation:
+        '> 80% em 2.4GHz com > 5 clientes = warning. > 90% com > 10 = crítico.',
+      utility:
+        'Recomendar migração para 5GHz. Verificar se SSID 5GHz está ativo e com potência adequada.',
     },
   };
 
@@ -849,27 +1066,41 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     return this.analysisInfoMap[key]?.label || key;
   }
 
-  getAnalysisMeta(key: string): { label: string; icon: string; description: string; interpretation: string; utility: string } | null {
+  getAnalysisMeta(key: string): {
+    label: string;
+    icon: string;
+    description: string;
+    interpretation: string;
+    utility: string;
+  } | null {
     return this.analysisInfoMap[key] || null;
   }
 
   formatMeasuredAt(measuredAt: string): string {
-    const seconds = Math.floor((Date.now() - new Date(measuredAt).getTime()) / 1000);
+    const seconds = Math.floor(
+      (Date.now() - new Date(measuredAt).getTime()) / 1000,
+    );
     if (seconds < 60) return `${seconds}s`;
     if (seconds < 3600) return `${Math.floor(seconds / 60)}min`;
     return `${Math.floor(seconds / 3600)}h`;
   }
 
-
   get sortedAnalysisEntries(): Array<{ key: string; data: any }> {
     if (!this.analysisData?.analyses) return [];
-    const severityOrder: Record<string, number> = { critical: 0, warning: 1, ok: 2, normal: 2 };
+    const severityOrder: Record<string, number> = {
+      critical: 0,
+      warning: 1,
+      ok: 2,
+      normal: 2,
+    };
     return Object.entries(this.analysisData.analyses)
       .filter(([, v]) => v != null)
       .map(([key, data]) => ({ key, data }))
       .sort((a, b) => {
-        const sa = severityOrder[a.data?.severity ?? a.data?.status ?? 'ok'] ?? 2;
-        const sb = severityOrder[b.data?.severity ?? b.data?.status ?? 'ok'] ?? 2;
+        const sa =
+          severityOrder[a.data?.severity ?? a.data?.status ?? 'ok'] ?? 2;
+        const sb =
+          severityOrder[b.data?.severity ?? b.data?.status ?? 'ok'] ?? 2;
         return sa - sb;
       });
   }
@@ -877,24 +1108,34 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   analysisCardBorder(data: any): string {
     const sev = data?.severity ?? data?.status ?? 'ok';
     if (sev === 'critical') return 'border-red-400 dark:border-red-600';
-    if (sev === 'warning')  return 'border-yellow-400 dark:border-yellow-600';
+    if (sev === 'warning') return 'border-yellow-400 dark:border-yellow-600';
     return 'border-gray-200 dark:border-gray-700';
   }
 
   analysisBadge(data: any): string {
     const sev = data?.severity ?? data?.status ?? '';
     if (sev === 'critical') return '🔴';
-    if (sev === 'warning')  return '⚠️';
+    if (sev === 'warning') return '⚠️';
     if (sev === 'ok' || sev === 'normal') return '✅';
     return '';
   }
 
-
   // ── TrackBy helpers para *ngFor (evita re-render desnecessário) ──────────
-  trackByAnalysisKey(_: number, item: { key: string; data: unknown }): string { return item.key; }
-  trackByAlertSeverityMsg(_: number, alert: TelemetryAlert): string { return alert.metric + alert.triggeredAt; }
-  trackByAlertMsg(index: number, alert: { severity: string; message: string }): string { return `${index}-${alert.severity}`; }
-  trackByKvKey(_: number, kv: { key: string }): string { return kv.key; }
+  trackByAnalysisKey(_: number, item: { key: string; data: unknown }): string {
+    return item.key;
+  }
+  trackByAlertSeverityMsg(_: number, alert: TelemetryAlert): string {
+    return alert.metric + alert.triggeredAt;
+  }
+  trackByAlertMsg(
+    index: number,
+    alert: { severity: string; message: string },
+  ): string {
+    return `${index}-${alert.severity}`;
+  }
+  trackByKvKey(_: number, kv: { key: string }): string {
+    return kv.key;
+  }
 
   // ── Alertas enriquecidos ─────────────────────────────────────────────────
   /** Ícone de severidade para o card de alertas */
@@ -906,24 +1147,29 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   timeAgo(timestamp: string | Date | undefined): string {
     if (!timestamp) return '';
     const diff = Date.now() - new Date(timestamp).getTime();
-    const min  = Math.floor(diff / 60000);
-    if (min < 1)   return 'agora';
-    if (min < 60)  return `há ${min}min`;
+    const min = Math.floor(diff / 60000);
+    if (min < 1) return 'agora';
+    if (min < 60) return `há ${min}min`;
     const h = Math.floor(min / 60);
-    if (h < 24)    return `há ${h}h`;
+    if (h < 24) return `há ${h}h`;
     return `há ${Math.floor(h / 24)}d`;
   }
 
   // ── Getters legados (WAN, Óptica, Hardware) ────────────────────────────
   get isRxCritical(): boolean {
-    const rxPower = this.safeExtractValue(this.telemetryData as any, 'opticalRx');
+    const rxPower = this.safeExtractValue(
+      this.telemetryData as any,
+      'opticalRx',
+    );
     return rxPower !== null && rxPower < RX_THRESHOLDS.WARNING; // alinhado com RX_THRESHOLDS
   }
 
   /** Retorna label de cache (ex: "Atualizado há 12s · cache"). */
   get cacheLabel(): string {
     if (!this.lastUpdated) return 'Nenhuma telemetria disponível';
-    const seconds = Math.floor((Date.now() - this.lastUpdated.getTime()) / 1000);
+    const seconds = Math.floor(
+      (Date.now() - this.lastUpdated.getTime()) / 1000,
+    );
     if (seconds < 5) return 'Atualizado agora · via TR-069';
     if (seconds < 60) return `Atualizado há ${seconds}s`;
     const minutes = Math.floor(seconds / 60);
@@ -936,12 +1182,12 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     if (m === undefined || m === null) return null;
 
     // Trata caso onde m é um primitivo (backend/cache) ou um objeto TelemetryMetric
-    const val = typeof m === 'object' && 'value' in m ? (m as TelemetryMetric).value : m;
+    const val =
+      typeof m === 'object' && 'value' in m ? (m as TelemetryMetric).value : m;
     if (val === undefined || val === null) return null;
 
     return String(val);
   }
-
 
   // ── Ações ────────────────────────────────────────────────────────────────
 
@@ -957,7 +1203,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     for (const p of this.cpe.parameters) {
       if (!p.name) continue;
       const nameLower = p.name.toLowerCase();
-      
+
       // Encontra o sufixo correspondente no array estático (O(n) com n pequeno)
       for (const [suffix, key] of PARAM_MAP) {
         if (nameLower.endsWith(suffix)) {
@@ -970,26 +1216,96 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     if (!this.telemetryData) this.telemetryData = {};
     const t = this.telemetryData;
 
-    const valRx = values['rxPower'] ? this.diagnosticParser.parseOmciRx(values['rxPower']) : null;
-    const valTx = values['txPower'] ? this.diagnosticParser.parseOmciTx(values['txPower']) : null;
-    const valTemp = values['temp'] ? this.diagnosticParser.parseOmciTemp(values['temp']) : null;
-    const valVoltage = values['voltage'] ? this.diagnosticParser.parseOmciVoltage(values['voltage']) : null;
-    const valBias = values['bias'] ? this.diagnosticParser.parseOmciBias(values['bias']) : null;
+    const valRx = values['rxPower']
+      ? this.diagnosticParser.parseOmciRx(values['rxPower'])
+      : null;
+    const valTx = values['txPower']
+      ? this.diagnosticParser.parseOmciTx(values['txPower'])
+      : null;
+    const valTemp = values['temp']
+      ? this.diagnosticParser.parseOmciTemp(values['temp'])
+      : null;
+    const valVoltage = values['voltage']
+      ? this.diagnosticParser.parseOmciVoltage(values['voltage'])
+      : null;
+    const valBias = values['bias']
+      ? this.diagnosticParser.parseOmciBias(values['bias'])
+      : null;
 
     // CORREÇÃO: Adicionado 'unit' e 'description' exigidos estritamente pela interface TelemetryMetric (TS2739)
     // Processa dados do fallback local (parâmetros da CPE)
-    if (!t['cpuUsage'] && values['cpu']) t['cpuUsage'] = { value: String(parseFloat(values['cpu'])), unit: '%', description: 'CPU Usage' };
-    if (!t['memoryFree'] && values['memFree']) t['memoryFree'] = { value: String(parseFloat(values['memFree'])), unit: 'KB', description: 'Free Memory' };
-    if (!t['memoryTotal'] && values['memTotal']) t['memoryTotal'] = { value: String(parseFloat(values['memTotal'])), unit: 'KB', description: 'Total Memory' };
-    if (!t['uptime'] && values['uptime']) t['uptime'] = { value: String(parseFloat(values['uptime'])), unit: 's', description: 'Uptime' };
-    if (!t['gponStatus'] && values['gponStatus']) t['gponStatus'] = { value: values['gponStatus'], unit: '', description: 'GPON Status' };
-    if (!t['opticalRx'] && valRx !== null) t['opticalRx'] = { value: String(valRx), unit: 'dBm', description: 'Optical RX' };
-    if (!t['opticalTx'] && valTx !== null) t['opticalTx'] = { value: String(valTx), unit: 'dBm', description: 'Optical TX' };
-    if (!t['opticalTemperature'] && valTemp !== null) t['opticalTemperature'] = { value: String(valTemp), unit: '°C', description: 'Optical Temperature' };
-    if (!t['opticalVoltage'] && valVoltage !== null) t['opticalVoltage'] = { value: String(valVoltage), unit: 'V', description: 'Optical Voltage' };
-    if (!t['biasCurrent'] && valBias !== null) t['biasCurrent'] = { value: String(valBias), unit: 'mA', description: 'Bias Current' };
-    if (!t['wanBytesReceived'] && values['bytesRx']) t['wanBytesReceived'] = { value: String(parseFloat(values['bytesRx'])), unit: 'B', description: 'WAN Bytes Received' };
-    if (!t['wanBytesSent'] && values['bytesTx']) t['wanBytesSent'] = { value: String(parseFloat(values['bytesTx'])), unit: 'B', description: 'WAN Bytes Sent' };
+    if (!t['cpuUsage'] && values['cpu'])
+      t['cpuUsage'] = {
+        value: String(parseFloat(values['cpu'])),
+        unit: '%',
+        description: 'CPU Usage',
+      };
+    if (!t['memoryFree'] && values['memFree'])
+      t['memoryFree'] = {
+        value: String(parseFloat(values['memFree'])),
+        unit: 'KB',
+        description: 'Free Memory',
+      };
+    if (!t['memoryTotal'] && values['memTotal'])
+      t['memoryTotal'] = {
+        value: String(parseFloat(values['memTotal'])),
+        unit: 'KB',
+        description: 'Total Memory',
+      };
+    if (!t['uptime'] && values['uptime'])
+      t['uptime'] = {
+        value: String(parseFloat(values['uptime'])),
+        unit: 's',
+        description: 'Uptime',
+      };
+    if (!t['gponStatus'] && values['gponStatus'])
+      t['gponStatus'] = {
+        value: values['gponStatus'],
+        unit: '',
+        description: 'GPON Status',
+      };
+    if (!t['opticalRx'] && valRx !== null)
+      t['opticalRx'] = {
+        value: String(valRx),
+        unit: 'dBm',
+        description: 'Optical RX',
+      };
+    if (!t['opticalTx'] && valTx !== null)
+      t['opticalTx'] = {
+        value: String(valTx),
+        unit: 'dBm',
+        description: 'Optical TX',
+      };
+    if (!t['opticalTemperature'] && valTemp !== null)
+      t['opticalTemperature'] = {
+        value: String(valTemp),
+        unit: '°C',
+        description: 'Optical Temperature',
+      };
+    if (!t['opticalVoltage'] && valVoltage !== null)
+      t['opticalVoltage'] = {
+        value: String(valVoltage),
+        unit: 'V',
+        description: 'Optical Voltage',
+      };
+    if (!t['biasCurrent'] && valBias !== null)
+      t['biasCurrent'] = {
+        value: String(valBias),
+        unit: 'mA',
+        description: 'Bias Current',
+      };
+    if (!t['wanBytesReceived'] && values['bytesRx'])
+      t['wanBytesReceived'] = {
+        value: String(parseFloat(values['bytesRx'])),
+        unit: 'B',
+        description: 'WAN Bytes Received',
+      };
+    if (!t['wanBytesSent'] && values['bytesTx'])
+      t['wanBytesSent'] = {
+        value: String(parseFloat(values['bytesTx'])),
+        unit: 'B',
+        description: 'WAN Bytes Sent',
+      };
 
     this.cdr.markForCheck(); // Atualiza interface com os fallbacks
   }
@@ -1003,16 +1319,21 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   private loadLatestVitals(): void {
     if (!isValidSerialNumber(this.serialNumber)) return;
 
-    logInfo('Carregando vitals mais recentes', { serialNumber: this.serialNumber });
+    logInfo('Carregando vitals mais recentes', {
+      serialNumber: this.serialNumber,
+    });
 
-    this.cpeService.getLatestVitals(this.serialNumber)
+    this.cpeService
+      .getLatestVitals(this.serialNumber)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         timeout(10_000),
         catchError((err) => {
-          logWarn('Erro ao carregar vitals (fallback silencioso)', { error: err.message });
+          logWarn('Erro ao carregar vitals (fallback silencioso)', {
+            error: err.message,
+          });
           return EMPTY;
-        })
+        }),
       )
       .subscribe({
         next: (res) => {
@@ -1024,27 +1345,30 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
           const vitalsFields: Partial<TelemetryData> = {};
 
-          if (d.cpuUsage   != null) vitalsFields['cpuUsage']   = d.cpuUsage;
-          if (d.memoryFree != null) vitalsFields['memoryFree']  = d.memoryFree;
-          if (d.memoryTotal!= null) vitalsFields['memoryTotal'] = d.memoryTotal;
-          if (d.opticalRx  != null) vitalsFields['opticalRx']   = d.opticalRx;
-          if (d.uptime      != null) vitalsFields['uptime']      = d.uptime;
-          if (d.wanStatus)           vitalsFields['wanStatus']   = d.wanStatus;
-          if (d.gponStatus)          vitalsFields['gponStatus']  = d.gponStatus;
-          if (d.hostCount   != null) vitalsFields['hostCount']   = d.hostCount;
+          if (d.cpuUsage != null) vitalsFields['cpuUsage'] = d.cpuUsage;
+          if (d.memoryFree != null) vitalsFields['memoryFree'] = d.memoryFree;
+          if (d.memoryTotal != null)
+            vitalsFields['memoryTotal'] = d.memoryTotal;
+          if (d.opticalRx != null) vitalsFields['opticalRx'] = d.opticalRx;
+          if (d.uptime != null) vitalsFields['uptime'] = d.uptime;
+          if (d.wanStatus) vitalsFields['wanStatus'] = d.wanStatus;
+          if (d.gponStatus) vitalsFields['gponStatus'] = d.gponStatus;
+          if (d.hostCount != null) vitalsFields['hostCount'] = d.hostCount;
 
           this.telemetryData = {
-            ...vitalsFields,
             ...(this.telemetryData || {}),
+            ...vitalsFields,
           } as TelemetryData;
 
           if (!this.lastUpdated && d.timestamp) {
             this.lastUpdated = new Date(d.timestamp);
           }
 
-          logInfo('Vitals carregados com sucesso', { fieldsCount: Object.keys(vitalsFields).length });
+          logInfo('Vitals carregados com sucesso', {
+            fieldsCount: Object.keys(vitalsFields).length,
+          });
           this.cdr.markForCheck();
-        }
+        },
       });
   }
 
@@ -1053,9 +1377,12 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   private loadFromCache(): void {
     if (!isValidSerialNumber(this.serialNumber)) return;
 
-    logInfo('Carregando telemetria do cache Redis', { serialNumber: this.serialNumber });
+    logInfo('Carregando telemetria do cache Redis', {
+      serialNumber: this.serialNumber,
+    });
 
-    this.cpeService.getTelemetryCache(this.serialNumber)
+    this.cpeService
+      .getTelemetryCache(this.serialNumber)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         timeout(10_000),
@@ -1068,25 +1395,32 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
           }
           this.cdr.markForCheck();
           return EMPTY;
-        })
+        }),
       )
       .subscribe({
         next: (res) => {
           if (res.success && res.data) {
-            this.telemetryData = { ...(this.telemetryData || {}), ...(res.data as TelemetryData) };
+            this.telemetryData = {
+              ...(this.telemetryData || {}),
+              ...(res.data as TelemetryData),
+            };
             this.lastUpdated = new Date(res.timestamp);
-            
+
             try {
-              this.telemetryCacheService.saveLatestTelemetry(this.serialNumber, this.telemetryData, this.lastUpdated);
+              this.telemetryCacheService.saveLatestTelemetry(
+                this.serialNumber,
+                this.telemetryData,
+                this.lastUpdated,
+              );
             } catch (e) {
               logError('Erro ao salvar telemetria no cache local', e);
             }
-            
+
             this.telemetryLoading = false;
             logInfo('Telemetria carregada do cache com sucesso');
             this.cdr.markForCheck();
           }
-        }
+        },
       });
   }
 
@@ -1097,14 +1431,23 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   private async loadFromFrontendCache(): Promise<void> {
     if (!isValidSerialNumber(this.serialNumber)) return;
 
-    logInfo('Carregando dados do cache do navegador', { serialNumber: this.serialNumber });
+    logInfo('Carregando dados do cache do navegador', {
+      serialNumber: this.serialNumber,
+    });
 
     try {
-      const cachedTelemetry = this.telemetryCacheService.loadLatestTelemetry(this.serialNumber);
+      const cachedTelemetry = this.telemetryCacheService.loadLatestTelemetry(
+        this.serialNumber,
+      );
       if (cachedTelemetry) {
-        this.telemetryData = { ...(this.telemetryData || {}), ...(cachedTelemetry.data as TelemetryData) };
+        this.telemetryData = {
+          ...(this.telemetryData || {}),
+          ...(cachedTelemetry.data as TelemetryData),
+        };
         this.lastUpdated = new Date(cachedTelemetry.lastUpdated);
-        logInfo('Telemetria carregada do cache local', { lastUpdated: cachedTelemetry.lastUpdated });
+        logInfo('Telemetria carregada do cache local', {
+          lastUpdated: cachedTelemetry.lastUpdated,
+        });
         this.cdr.markForCheck();
       }
     } catch (e) {
@@ -1112,11 +1455,17 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     }
 
     try {
-      const cachedHistory = await this.telemetryCacheService.loadHistory(this.serialNumber, this.selectedPeriodHours);
+      const cachedHistory = await this.telemetryCacheService.loadHistory(
+        this.serialNumber,
+        this.selectedPeriodHours,
+      );
       if (cachedHistory) {
         this.rawHistory = cachedHistory;
         this.buildChart();
-        logInfo('Histórico carregado do cache local', { periodHours: this.selectedPeriodHours, count: cachedHistory.length });
+        logInfo('Histórico carregado do cache local', {
+          periodHours: this.selectedPeriodHours,
+          count: cachedHistory.length,
+        });
         this.cdr.markForCheck();
       }
     } catch (e) {
@@ -1137,9 +1486,13 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   private startRefreshCooldown(cacheAgeMs: number | null = null): void {
     this.stopRefreshCooldown();
     // Se o backend informou a idade do cache, o cooldown é o tempo restante até 60s
-    const remainingSeconds = (cacheAgeMs !== null && cacheAgeMs >= 0)
-      ? Math.max(0, this.REFRESH_COOLDOWN_SECONDS - Math.floor(cacheAgeMs / 1000))
-      : this.REFRESH_COOLDOWN_SECONDS;
+    const remainingSeconds =
+      cacheAgeMs !== null && cacheAgeMs >= 0
+        ? Math.max(
+            0,
+            this.REFRESH_COOLDOWN_SECONDS - Math.floor(cacheAgeMs / 1000),
+          )
+        : this.REFRESH_COOLDOWN_SECONDS;
     this.refreshCountdownSeconds = remainingSeconds;
     if (this.refreshCountdownSeconds <= 0) {
       this.cdr.markForCheck();
@@ -1167,13 +1520,17 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   /** Solicita telemetria sob demanda ao backend (botão de refresh manual). */
   requestTelemetry(): void {
     if (!isValidSerialNumber(this.serialNumber)) {
-      this.toastService.error('Número de série inválido para solicitação de telemetria.');
+      this.toastService.error(
+        'Número de série inválido para solicitação de telemetria.',
+      );
       return;
     }
 
     // Bloqueia clique durante cooldown do contador regressivo
     if (this.isRefreshInCooldown) {
-      this.toastService.info(`Aguarde ${this.refreshCountdownSeconds}s para nova coleta.`);
+      this.toastService.info(
+        `Aguarde ${this.refreshCountdownSeconds}s para nova coleta.`,
+      );
       return;
     }
 
@@ -1194,7 +1551,9 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
         this.vitalsLoading = false;
         this.suppressChartUpdates = false; // Libera atualização de gráfico
         this.telemetryProgress = 0; // Reseta progresso
-        this.toastService.warning(`Tempo esgotado: CPE não respondeu em ${TELEMETRY_CONFIG.REQUEST_TIMEOUT_MS / 1000}s. Verifique a conexão da CPE.`);
+        this.toastService.warning(
+          `Tempo esgotado: CPE não respondeu em ${TELEMETRY_CONFIG.REQUEST_TIMEOUT_MS / 1000}s. Verifique a conexão da CPE.`,
+        );
         this.cdr.markForCheck();
       }
       this.telemetryTimeoutId = null;
@@ -1204,7 +1563,9 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   /** Solicita telemetria vitals (8 campos críticos) para resposta rápida (~2s). */
   requestVitals(): void {
     if (!isValidSerialNumber(this.serialNumber)) {
-      this.toastService.error('Número de série inválido para solicitação de vitals.');
+      this.toastService.error(
+        'Número de série inválido para solicitação de vitals.',
+      );
       return;
     }
 
@@ -1212,98 +1573,115 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     this.vitalsLoading = true;
 
     // Failsafe: libera o botão se WebSocket não chegar após timeout
-    timer(TELEMETRY_CONFIG.VITALS_TIMEOUT_MS).pipe(
-      takeUntilDestroyed(this.destroyRef)
-    ).subscribe(() => {
-      if (this.vitalsLoading) {
-        this.vitalsLoading = false;
-        this.cdr.markForCheck();
-      }
-    });
+    timer(TELEMETRY_CONFIG.VITALS_TIMEOUT_MS)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        if (this.vitalsLoading) {
+          this.vitalsLoading = false;
+          this.cdr.markForCheck();
+        }
+      });
 
-    this.cpeService.requestVitals(this.serialNumber).pipe(
-      takeUntilDestroyed(this.destroyRef),
-      timeout(TELEMETRY_CONFIG.VITALS_TIMEOUT_MS),
-      retry({
-        count: TELEMETRY_CONFIG.RETRY_ATTEMPTS,
-        delay: TELEMETRY_CONFIG.RETRY_DELAY_MS,
-        resetOnSuccess: true,
-      }),
-      catchError((err) => {
-        this.vitalsLoading = false;
-        const errorMsg = err.error?.error || err.message || 'Erro ao conectar com a CPE.';
-        this.toastService.error(errorMsg);
-        logError('Erro na requisição de vitals', err);
-        return EMPTY;
-      })
-    ).subscribe({
-      next: (response: any) => {
-        this.vitalsLoading = false;
-        if (!response) {
-          this.toastService.error('Resposta inválida do servidor.');
-          return;
-        }
-        
-        if (response.source === 'cache' || response.source === 'mongodb_stale') {
-          this.toastService.info('Vitals: dados em cache (< 60s).');
-        } else if (response.status === 'accepted') {
-          this.toastService.info('Vitals já em andamento. Aguarde o WebSocket.');
-        } else if (response.status === 'queued') {
-          this.toastService.info('Coleta vitals enfileirada. Aguarde atualização via WebSocket.');
-        } else {
-          this.toastService.success('Vitals iniciado na CPE.');
-        }
-        this.cdr.markForCheck();
-      }
-    });
+    this.cpeService
+      .requestVitals(this.serialNumber)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        timeout(TELEMETRY_CONFIG.VITALS_TIMEOUT_MS),
+        retry({
+          count: TELEMETRY_CONFIG.RETRY_ATTEMPTS,
+          delay: TELEMETRY_CONFIG.RETRY_DELAY_MS,
+          resetOnSuccess: true,
+        }),
+        catchError((err) => {
+          this.vitalsLoading = false;
+          const errorMsg =
+            err.error?.error || err.message || 'Erro ao conectar com a CPE.';
+          this.toastService.error(errorMsg);
+          logError('Erro na requisição de vitals', err);
+          return EMPTY;
+        }),
+      )
+      .subscribe({
+        next: (response: any) => {
+          this.vitalsLoading = false;
+          if (!response) {
+            this.toastService.error('Resposta inválida do servidor.');
+            return;
+          }
+
+          if (
+            response.source === 'cache' ||
+            response.source === 'mongodb_stale'
+          ) {
+            this.toastService.info('Vitals: dados em cache (< 60s).');
+          } else if (response.status === 'accepted') {
+            this.toastService.info(
+              'Vitals já em andamento. Aguarde o WebSocket.',
+            );
+          } else if (response.status === 'queued') {
+            this.toastService.info(
+              'Coleta vitals enfileirada. Aguarde atualização via WebSocket.',
+            );
+          } else {
+            this.toastService.success('Vitals iniciado na CPE.');
+          }
+          this.cdr.markForCheck();
+        },
+      });
   }
 
   /** Carrega análise avançada agregada do backend. */
   loadAnalysis(): void {
     if (!isValidSerialNumber(this.serialNumber)) return;
-    
+
     this.analysisLoading = true;
     this.analysisError = null;
-    
-    this.cpeService.getTelemetryAnalysis(this.serialNumber).pipe(
-      takeUntilDestroyed(this.destroyRef),
-      timeout(30_000),
-      retry({
-        count: TELEMETRY_CONFIG.RETRY_ATTEMPTS,
-        delay: TELEMETRY_CONFIG.RETRY_DELAY_MS,
-      }),
-      catchError((err) => {
-        this.analysisLoading = false;
-        this.analysisError = 'Erro ao carregar análise avançada.';
-        logError('Erro na requisição de análise', err);
-        this.cdr.markForCheck();
-        return EMPTY;
-      })
-    ).subscribe({
-      next: (res) => {
-        if (!res || typeof res !== 'object') {
+
+    this.cpeService
+      .getTelemetryAnalysis(this.serialNumber)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        timeout(30_000),
+        retry({
+          count: TELEMETRY_CONFIG.RETRY_ATTEMPTS,
+          delay: TELEMETRY_CONFIG.RETRY_DELAY_MS,
+        }),
+        catchError((err) => {
           this.analysisLoading = false;
-          this.analysisError = 'Resposta inválida do servidor.';
+          this.analysisError = 'Erro ao carregar análise avançada.';
+          logError('Erro na requisição de análise', err);
           this.cdr.markForCheck();
-          return;
-        }
-        
-        this.analysisData = res as TelemetryAnalysis;
-        this.analysisUpdatedAt = new Date();
-        this.analysisLoading = false;
-        this.cdr.markForCheck();
-      }
-    });
+          return EMPTY;
+        }),
+      )
+      .subscribe({
+        next: (res) => {
+          if (!res || typeof res !== 'object') {
+            this.analysisLoading = false;
+            this.analysisError = 'Resposta inválida do servidor.';
+            this.cdr.markForCheck();
+            return;
+          }
+
+          this.analysisData = res as TelemetryAnalysis;
+          this.analysisUpdatedAt = new Date();
+          this.analysisLoading = false;
+          this.cdr.markForCheck();
+        },
+      });
   }
 
   loadWanConfig(): void {
     if (!this.cpe) return;
+    const c = this.cpe as any;
+    // Compatível com ambos os schemas: novo (cpe.wan.*) e legacy (cpe.wanMtu, etc.)
+    // cpe-details.component.ts normaliza legacy fields via normalizeLegacyFields()
     this.wanConfigFields = {
-      pppoeUsername: this.cpe.pppoeUsername || '',
-      dnsServer1:   this.cpe.wanDnsIsp || '',
-      dnsServer2:   '', // Campo wanDnsIsp2 não existe no modelo CpeDevice
-      mtu:          this.cpe.wanMtu    || 1492,
-      vlanId:       this.cpe.wanVlanId || 0,
+      pppoeUsername: c.pppoeUsername || c.wan?.pppoeUsername || '',
+      dnsServer1: c.wanDnsIsp || c.wan?.dnsIsp || '',
+      dnsServer2: '', // Campo wanDnsIsp2 não existe no modelo CpeDevice
+      mtu: c.wanMtu || c.wan?.mtu || 1492,
+      vlanId: c.wanVlanId || c.wan?.vlanId || 0,
     };
     this.isEditingWanConfig = true;
   }
@@ -1316,23 +1694,32 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
     // Validação IPv4 para servidores DNS
     if (f.dnsServer1 && !isValidIPv4(f.dnsServer1)) {
-      this.toastService.error('DNS Primário inválido. Use um endereço IPv4 válido (ex: 8.8.8.8).');
+      this.toastService.error(
+        'DNS Primário inválido. Use um endereço IPv4 válido (ex: 8.8.8.8).',
+      );
       return;
     }
     if (f.dnsServer2 && !isValidIPv4(f.dnsServer2)) {
-      this.toastService.error('DNS Secundário inválido. Use um endereço IPv4 válido (ex: 8.8.4.4).');
+      this.toastService.error(
+        'DNS Secundário inválido. Use um endereço IPv4 válido (ex: 8.8.4.4).',
+      );
       return;
     }
 
-    if (f.pppoeUsername !== (c?.pppoeUsername || ''))
+    if (
+      f.pppoeUsername !==
+      (c?.pppoeUsername || (c as any)?.wan?.pppoeUsername || '')
+    )
       payload['pppoeUsername'] = f.pppoeUsername;
-    if (f.dnsServer1 !== (c?.wanDnsIsp || ''))
+    if (f.dnsServer1 !== (c?.wanDnsIsp || (c as any)?.wan?.dnsIsp || ''))
       payload['dnsServer1'] = f.dnsServer1;
-    if (f.dnsServer2 !== '')
-      payload['dnsServer2'] = f.dnsServer2;
-    if (f.mtu && f.mtu !== (c?.wanMtu || 1492))
+    if (f.dnsServer2 !== '') payload['dnsServer2'] = f.dnsServer2;
+    if (f.mtu && f.mtu !== (c?.wanMtu || (c as any)?.wan?.mtu || 1492))
       payload['mtu'] = f.mtu;
-    if (f.vlanId !== undefined && f.vlanId !== (c?.wanVlanId || 0))
+    if (
+      f.vlanId !== undefined &&
+      f.vlanId !== (c?.wanVlanId || (c as any)?.wan?.vlanId || 0)
+    )
       payload['vlanId'] = f.vlanId;
 
     if (!Object.keys(payload).length) {
@@ -1342,93 +1729,135 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     }
 
     this.wanConfigSaving = true;
-    this.cpeService.updateWanConfig(this.serialNumber, payload).pipe(
-      takeUntilDestroyed(this.destroyRef),
-      catchError((err: { error?: { error?: string } }) => {
-        this.wanConfigSaving = false;
-        this.toastService.error(err.error?.error || 'Erro ao atualizar configuração WAN.');
-        return EMPTY;
-      })
-    ).subscribe({
-      next: () => {
-        this.wanConfigSaving   = false;
-        this.isEditingWanConfig = false;
-        this.toastService.success('Configuração WAN enviada. A CPE será atualizada na próxima conexão.');
-        this.cdr.markForCheck();
-      }
-    });
+    this.cpeService
+      .updateWanConfig(this.serialNumber, payload)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError((err: { error?: { error?: string } }) => {
+          this.wanConfigSaving = false;
+          this.toastService.error(
+            err.error?.error || 'Erro ao atualizar configuração WAN.',
+          );
+          return EMPTY;
+        }),
+      )
+      .subscribe({
+        next: () => {
+          this.wanConfigSaving = false;
+          this.isEditingWanConfig = false;
+          this.toastService.success(
+            'Configuração WAN enviada. A CPE será atualizada na próxima conexão.',
+          );
+          this.cdr.markForCheck();
+        },
+      });
   }
 
   /** Carrega painéis suplementares (Health Score, Alertas, Incidente, Intervenção). */
   private loadSupplementaryPanels(): void {
     if (!isValidSerialNumber(this.serialNumber)) return;
 
-    logInfo('Carregando painéis suplementares', { serialNumber: this.serialNumber });
-
-    this.cpeService.getHealthScoreBreakdown(this.serialNumber).pipe(
-      takeUntilDestroyed(this.destroyRef),
-      timeout(10_000),
-      catchError((err) => {
-        logWarn('Erro ao carregar Health Score (painel opcional)', err);
-        return EMPTY;
-      })
-    ).subscribe({
-      next: (res) => { this.healthScoreBreakdown = res; this.cdr.markForCheck(); },
+    logInfo('Carregando painéis suplementares', {
+      serialNumber: this.serialNumber,
     });
 
-    this.cpeService.getCpeAlerts(this.serialNumber).pipe(
-      takeUntilDestroyed(this.destroyRef),
-      timeout(10_000),
-      catchError((err) => {
-        logWarn('Erro ao carregar alertas (painel opcional)', err);
-        return EMPTY;
-      })
-    ).subscribe({
-      next: (res) => { this.cpeAlerts = res.data; this.cdr.markForCheck(); },
-    });
+    this.cpeService
+      .getHealthScoreBreakdown(this.serialNumber)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        timeout(10_000),
+        catchError((err) => {
+          logWarn('Erro ao carregar Health Score (painel opcional)', err);
+          return EMPTY;
+        }),
+      )
+      .subscribe({
+        next: (res) => {
+          this.healthScoreBreakdown = res;
+          this.cdr.markForCheck();
+        },
+      });
 
-    this.cpeService.getIncidentStatus(this.serialNumber).pipe(
-      takeUntilDestroyed(this.destroyRef),
-      timeout(10_000),
-      catchError((err) => {
-        logWarn('Erro ao carregar status de incidente (painel opcional)', err);
-        return EMPTY;
-      })
-    ).subscribe({
-      next: (res) => { this.incidentStatus = res; this.cdr.markForCheck(); },
-    });
+    this.cpeService
+      .getCpeAlerts(this.serialNumber)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        timeout(10_000),
+        catchError((err) => {
+          logWarn('Erro ao carregar alertas (painel opcional)', err);
+          return EMPTY;
+        }),
+      )
+      .subscribe({
+        next: (res) => {
+          this.cpeAlerts = res.data;
+          this.cdr.markForCheck();
+        },
+      });
 
-    this.cpeService.getLastIntervention(this.serialNumber).pipe(
-      takeUntilDestroyed(this.destroyRef),
-      timeout(10_000),
-      catchError((err) => {
-        logWarn('Erro ao carregar última intervenção (painel opcional)', err);
-        return EMPTY;
-      })
-    ).subscribe({
-      next: (res) => { this.lastIntervention = res; this.cdr.markForCheck(); },
-    });
+    this.cpeService
+      .getIncidentStatus(this.serialNumber)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        timeout(10_000),
+        catchError((err) => {
+          logWarn(
+            'Erro ao carregar status de incidente (painel opcional)',
+            err,
+          );
+          return EMPTY;
+        }),
+      )
+      .subscribe({
+        next: (res) => {
+          this.incidentStatus = res;
+          this.cdr.markForCheck();
+        },
+      });
+
+    this.cpeService
+      .getLastIntervention(this.serialNumber)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        timeout(10_000),
+        catchError((err) => {
+          logWarn('Erro ao carregar última intervenção (painel opcional)', err);
+          return EMPTY;
+        }),
+      )
+      .subscribe({
+        next: (res) => {
+          this.lastIntervention = res;
+          this.cdr.markForCheck();
+        },
+      });
   }
 
   /** Escuta o evento específico bruto de VALUE CHANGE (TR-181) */
   private listenForCpeValueChange(): void {
-    this.wsService.onCpeValueChange()
+    this.wsService
+      .onCpeValueChange()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         bufferTime(TELEMETRY_CONFIG.VALUE_CHANGE_BUFFER_MS),
-        filter((events: ValueChangeEvent[]) => events.length > 0)
+        filter((events: ValueChangeEvent[]) => events.length > 0),
       )
       .subscribe((events: ValueChangeEvent[]) => {
-        const cpeEvents = events.filter((e: ValueChangeEvent) => e.serialNumber === this.serialNumber);
+        const cpeEvents = events.filter(
+          (e: ValueChangeEvent) => e.serialNumber === this.serialNumber,
+        );
         if (cpeEvents.length === 0) return;
 
         let hasWanStatusChange = false;
         cpeEvents.forEach((event: ValueChangeEvent) => {
-          if (event.changeType === 'wan_status_change') hasWanStatusChange = true;
+          if (event.changeType === 'wan_status_change')
+            hasWanStatusChange = true;
         });
 
         if (hasWanStatusChange) {
-          this.toastService.warning('Mudança de Rede: O status da interface WAN da CPE foi alterado.');
+          this.toastService.warning(
+            'Mudança de Rede: O status da interface WAN da CPE foi alterado.',
+          );
         }
         this.cdr.detectChanges();
       });
@@ -1436,53 +1865,68 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
   /** Escuta alertas de telemetria (onTelemetryAlert, onTelemetryAlertResolved, onTelemetryAlertBatch) */
   private listenForAlerts(): void {
-    this.wsService.onTelemetryAlert()
+    this.wsService
+      .onTelemetryAlert()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        filter((alert) => alert.serialNumber === this.serialNumber)
+        filter((alert) => alert.serialNumber === this.serialNumber),
       )
       .subscribe((alert) => {
-        this.cpeAlerts = [{
-          serialNumber: alert.serialNumber,
-          metric: alert.metric,
-          severity: alert.severity,
-          status: 'active' as const,
-          value: alert.value,
-          triggeredAt: alert.timestamp,
-          message: alert.message,
-        }, ...this.cpeAlerts].slice(0, MAX_ALERT_ENTRIES);
+        this.cpeAlerts = [
+          {
+            serialNumber: alert.serialNumber,
+            metric: alert.metric,
+            severity: alert.severity,
+            status: 'active' as const,
+            value: alert.value,
+            triggeredAt: alert.timestamp,
+            message: alert.message,
+          },
+          ...this.cpeAlerts,
+        ].slice(0, MAX_ALERT_ENTRIES);
         this.cdr.detectChanges();
       });
 
-    this.wsService.onTelemetryAlertResolved()
+    this.wsService
+      .onTelemetryAlertResolved()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        filter((event) => event.serialNumber === this.serialNumber)
+        filter((event) => event.serialNumber === this.serialNumber),
       )
       .subscribe((event) => {
-        this.cpeAlerts = this.cpeAlerts.filter(a => a.metric !== event.metric);
+        this.cpeAlerts = this.cpeAlerts.filter(
+          (a) => a.metric !== event.metric,
+        );
         this.cdr.detectChanges();
       });
 
-    this.wsService.onTelemetryAlertBatch()
+    this.wsService
+      .onTelemetryAlertBatch()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        filter((batch) => batch.alerts.some(a => a.serialNumber === this.serialNumber))
+        filter((batch) =>
+          batch.alerts.some((a) => a.serialNumber === this.serialNumber),
+        ),
       )
       .subscribe((batch) => {
         const cpeAlerts = batch.alerts
           .filter((a) => a.serialNumber === this.serialNumber)
-          .map((event): TelemetryAlert => ({
-            serialNumber: event.serialNumber,
-            metric: event.metric,
-            severity: event.severity as 'warning' | 'critical',
-            status: 'active' as const,
-            value: event.value,
-            triggeredAt: event.timestamp,
-            message: event.message,
-          }));
+          .map(
+            (event): TelemetryAlert => ({
+              serialNumber: event.serialNumber,
+              metric: event.metric,
+              severity: event.severity as 'warning' | 'critical',
+              status: 'active' as const,
+              value: event.value,
+              triggeredAt: event.timestamp,
+              message: event.message,
+            }),
+          );
         if (cpeAlerts.length > 0) {
-          this.cpeAlerts = [...cpeAlerts, ...this.cpeAlerts].slice(0, MAX_ALERT_ENTRIES);
+          this.cpeAlerts = [...cpeAlerts, ...this.cpeAlerts].slice(
+            0,
+            MAX_ALERT_ENTRIES,
+          );
           this.cdr.detectChanges();
         }
       });
@@ -1490,64 +1934,71 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
   /** Escuta eventos de presença Single Driver (presence_conflict e driver_promoted) */
   private listenForPresenceEvents(): void {
-    this.wsService.onDriverAcquired()
+    this.wsService
+      .onDriverAcquired()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        filter((event) => event.serialNumber === this.serialNumber)
+        filter((event) => event.serialNumber === this.serialNumber),
       )
       .subscribe((event) => {
         this.isViewOnly = false;
         this.cdr.markForCheck();
       });
 
-    this.wsService.onViewOnly()
+    this.wsService
+      .onViewOnly()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        filter((event) => event.serialNumber === this.serialNumber)
+        filter((event) => event.serialNumber === this.serialNumber),
       )
       .subscribe((event) => this.handleViewOnlyEvent(event));
 
-    this.wsService.onForceViewOnly()
+    this.wsService
+      .onForceViewOnly()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        filter((event) => event.serialNumber === this.serialNumber)
+        filter((event) => event.serialNumber === this.serialNumber),
       )
       .subscribe((event) => this.handleViewOnlyEvent(event));
 
-    this.wsService.onDriverReleased()
+    this.wsService
+      .onDriverReleased()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        filter((event) => event.serialNumber === this.serialNumber)
+        filter((event) => event.serialNumber === this.serialNumber),
       )
       .subscribe(() => {
         this.isViewOnly = false;
         this.cdr.markForCheck();
       });
 
-    this.wsService.onViewersUpdated()
+    this.wsService
+      .onViewersUpdated()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        filter((event) => event.serialNumber === this.serialNumber)
+        filter((event) => event.serialNumber === this.serialNumber),
       )
       .subscribe((event) => {
         this.viewers = event.viewers;
         this.cdr.markForCheck();
       });
 
-    this.wsService.onCpeLocked()
+    this.wsService
+      .onCpeLocked()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        filter((event) => event.serialNumber === this.serialNumber)
+        filter((event) => event.serialNumber === this.serialNumber),
       )
       .subscribe(() => {
         this.isCpeBusy = true;
         this.cdr.markForCheck();
       });
 
-    this.wsService.onCpeUnlocked()
+    this.wsService
+      .onCpeUnlocked()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        filter((event) => event.serialNumber === this.serialNumber)
+        filter((event) => event.serialNumber === this.serialNumber),
       )
       .subscribe(() => {
         this.isCpeBusy = false;
@@ -1556,7 +2007,11 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   /** Helper compartilhado para eventos ViewOnly (elimina duplicação de código) */
-  private handleViewOnlyEvent(event: { serialNumber: string; driver?: string; message: string }): void {
+  private handleViewOnlyEvent(event: {
+    serialNumber: string;
+    driver?: string;
+    message: string;
+  }): void {
     this.isViewOnly = true;
     this.toastService.warning(event.message);
     this.cdr.markForCheck();
@@ -1565,11 +2020,11 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   /** Inicia ciclo de heartbeat para manter controle de Driver */
   private startHeartbeat(): void {
     if (!isValidSerialNumber(this.serialNumber)) return;
-    
+
     interval(TELEMETRY_CONFIG.HEARTBEAT_INTERVAL_MS)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        filter(() => this.wsService.isConnected)
+        filter(() => this.wsService.isConnected),
       )
       .subscribe(() => {
         try {
@@ -1582,15 +2037,18 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
   /** Escuta WebSocket de telemetria para esta CPE. */
   private listenForTelemetryUpdates(): void {
-    this.wsService.onTelemetryUpdate()
+    this.wsService
+      .onTelemetryUpdate()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         filter((event: TelemetryUpdateEvent) => {
           // Validação básica do evento
-          return event && 
-                 typeof event.serialNumber === 'string' && 
-                 event.serialNumber === this.serialNumber;
-        })
+          return (
+            event &&
+            typeof event.serialNumber === 'string' &&
+            event.serialNumber === this.serialNumber
+          );
+        }),
       )
       .subscribe((event: TelemetryUpdateEvent) => {
         // Limpa timeout se dados chegaram
@@ -1611,15 +2069,22 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
         // são processados no else branch (source='standard' ou outros)
         if (event.source === 'vitals' || event.source === 'on-demand-vitals') {
           const vitalsKeys = [
-            'wanStatus', 'cpuUsage', 'memoryFree', 'memoryTotal',
-            'opticalRx', 'gponStatus',
-            'uptime',              // TelemetryVitals (lowercase) — backend envia minúsculo
+            'wanStatus',
+            'cpuUsage',
+            'memoryFree',
+            'memoryTotal',
+            'opticalRx',
+            'gponStatus',
+            'uptime', // TelemetryVitals (lowercase) — backend envia minúsculo
             'opticalTemperature',
             'biasCurrent',
             'opticalVoltage',
-            'wifi2gNoise', 'wifi5gNoise',
-            'wifi2gSnr', 'wifi5gSnr',
-            'wifi2gSignalStrength', 'wifi5gSignalStrength',
+            'wifi2gNoise',
+            'wifi5gNoise',
+            'wifi2gSnr',
+            'wifi5gSnr',
+            'wifi2gSignalStrength',
+            'wifi5gSignalStrength',
             'hostCount',
           ];
           const vitalsData: Partial<TelemetryData> = {};
@@ -1637,12 +2102,18 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
         }
 
         // Valida timestamp
-        const timestamp = event.timestamp ? new Date(event.timestamp) : new Date();
+        const timestamp = event.timestamp
+          ? new Date(event.timestamp)
+          : new Date();
         this.lastUpdated = timestamp;
-        
+
         // Salva no cache com tratamento de erro
         try {
-          this.telemetryCacheService.saveLatestTelemetry(this.serialNumber, this.telemetryData!, this.lastUpdated);
+          this.telemetryCacheService.saveLatestTelemetry(
+            this.serialNumber,
+            this.telemetryData!,
+            this.lastUpdated,
+          );
         } catch (e) {
           logError('Erro ao salvar telemetria no cache', e);
         }
@@ -1658,7 +2129,7 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
         // Flash visual para métricas atualizadas (apenas métricas visíveis para não esgotar MAX_FLASH_TIMERS)
         if (event.data) {
-          Object.keys(event.data).forEach(key => {
+          Object.keys(event.data).forEach((key) => {
             if (typeof key === 'string' && FLASH_VISIBLE_METRICS.has(key)) {
               this.triggerFlash(key);
             }
@@ -1666,15 +2137,19 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
         }
 
         this.telemetryLoading = false;
-        this.vitalsLoading = false;  // Reset para qualquer source de update
+        this.vitalsLoading = false; // Reset para qualquer source de update
         this.autoSelectWifiTab();
         this.isPartialResult = hasPartial;
 
         // Notificações consolidadas (evita spam)
         if (hasPartial) {
-          this.toastService.warning(event.message || 'Coleta parcial — alguns lotes não responderam.');
+          this.toastService.warning(
+            event.message || 'Coleta parcial — alguns lotes não responderam.',
+          );
         } else if (hasPassive) {
-          this.toastService.info('Active Notification: A CPE atualizou dados de telemetria passivamente.');
+          this.toastService.info(
+            'Active Notification: A CPE atualizou dados de telemetria passivamente.',
+          );
         } else if (!isBackground) {
           this.toastService.success('Telemetria recebida em tempo real.');
         }
@@ -1685,20 +2160,24 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
   /** Escuta evento de conclusão de telemetria via WebSocket para desligar spinner */
   private listenForTelemetryComplete(): void {
-    this.wsService.onTelemetryComplete()
+    this.wsService
+      .onTelemetryComplete()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         filter((data) => {
-          return data && 
-                 typeof data.serialNumber === 'string' && 
-                 data.serialNumber === this.serialNumber;
-        })
+          return (
+            data &&
+            typeof data.serialNumber === 'string' &&
+            data.serialNumber === this.serialNumber
+          );
+        }),
       )
       .subscribe((data) => {
         // Fontes que NÃO devem fechar o spinner on-demand: scheduler e inform passivo
         // Se usuário solicitou explicitamente, ignora passividade da source
-        const isPassiveSource = (data.source === 'standard' || data.source === 'scheduler')
-          && !this.userRequestedTelemetry;
+        const isPassiveSource =
+          (data.source === 'standard' || data.source === 'scheduler') &&
+          !this.userRequestedTelemetry;
 
         if (!isPassiveSource) {
           this.userRequestedTelemetry = false; // Consome a flag após resetar spinner
@@ -1710,9 +2189,13 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
           this.suppressChartUpdates = false; // Libera atualização de gráfico
 
           if (data.partial) {
-            this.toastService.warning('Coleta parcial concluída — alguns parâmetros não responderam.');
+            this.toastService.warning(
+              'Coleta parcial concluída — alguns parâmetros não responderam.',
+            );
           } else {
-            this.toastService.success('Coleta de telemetria concluída com sucesso.');
+            this.toastService.success(
+              'Coleta de telemetria concluída com sucesso.',
+            );
           }
 
           // Inicia contador regressivo de 60s — novo cache fresco (TTL 60s no backend)
@@ -1721,29 +2204,30 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
           // Recarrega gráfico completo após coleta on-demand para garantir dados consistentes
           this.loadHistory();
         }
-        
+
         if (data.partial) {
           this.isPartialResult = true;
           this.isPartialCollection = true;
         }
-        
+
         if (this.telemetryTimeoutId) {
           clearTimeout(this.telemetryTimeoutId);
           this.telemetryTimeoutId = null;
         }
-        
+
         this.cdr.markForCheck();
       });
   }
 
   /** Escuta análise em tempo real — disparada pelo backend após cada nova coleta */
   private listenForAnalysisUpdates(): void {
-    this.wsService.onAnalysisUpdate()
+    this.wsService
+      .onAnalysisUpdate()
       .pipe(
-        filter(event => event.serialNumber === this.serialNumber),
-        takeUntilDestroyed(this.destroyRef)
+        filter((event) => event.serialNumber === this.serialNumber),
+        takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe(event => {
+      .subscribe((event) => {
         this.analysisData = event.analysis;
         this.analysisUpdatedAt = new Date(event.timestamp);
         this.analysisLoading = false;
@@ -1753,12 +2237,13 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
   /** Escuta anomalia de boot loop — exibe banner com sugestão ao técnico */
   private listenForBootLoopAnomaly(): void {
-    this.wsService.onBootLoopAnomaly()
+    this.wsService
+      .onBootLoopAnomaly()
       .pipe(
-        filter(event => event.serialNumber === this.serialNumber),
-        takeUntilDestroyed(this.destroyRef)
+        filter((event) => event.serialNumber === this.serialNumber),
+        takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe(event => {
+      .subscribe((event) => {
         this.bootLoopAnomaly = {
           count: event.count,
           message: event.message,
@@ -1771,28 +2256,35 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
   /** Escuta evento de progresso de telemetria por chunk para atualizar barra de progresso */
   private listenForTelemetryProgress(): void {
-    this.wsService.onTelemetryProgress()
+    this.wsService
+      .onTelemetryProgress()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         filter((data) => {
-          return data && 
-                 typeof data.serialNumber === 'string' && 
-                 data.serialNumber === this.serialNumber;
-        })
+          return (
+            data &&
+            typeof data.serialNumber === 'string' &&
+            data.serialNumber === this.serialNumber
+          );
+        }),
       )
       .subscribe((data) => {
         // Log de debug para confirmar recebimento de progresso
-        logInfo('Progresso de telemetria recebido', { percent: data.percent, completed: data.completedChunks, total: data.totalChunks });
+        logInfo('Progresso de telemetria recebido', {
+          percent: data.percent,
+          completed: data.completedChunks,
+          total: data.totalChunks,
+        });
 
         // Validação de dados numéricos
         this.telemetryProgress = Math.max(0, Math.min(100, data.percent || 0));
         this.completedChunks = Math.max(0, data.completedChunks || 0);
         this.totalChunks = Math.max(0, data.totalChunks || 0);
-        
+
         if (data.partial) {
           this.isPartialCollection = true;
         }
-        
+
         this.cdr.markForCheck();
       });
   }
@@ -1806,29 +2298,33 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
    * @param key - Chave da métrica (ex: 'cpuUsage', 'memoryFree')
    * @returns Valor numérico ou null se inválido
    */
-  private safeExtractValue(data: TelemetryData | null | undefined, key: string): number | null {
+  private safeExtractValue(
+    data: TelemetryData | null | undefined,
+    key: string,
+  ): number | null {
     if (data == null) return null;
     const item = data[key];
     if (item === null || item === undefined) return null;
-    
+
     // Suporta ambos os formatos do backend:
     //   { value: "27", unit: "%" }  ← WebSocket (string)
     //   { value: 27, unit: "%" }    ← possível futuro (number direto)
     if (typeof item === 'object' && 'value' in item) {
-      if (item.value === null || item.value === undefined || item.value === '') return null;
+      if (item.value === null || item.value === undefined || item.value === '')
+        return null;
       const num = Number(item.value);
       return isNaN(num) ? null : num;
     }
-    
+
     // Suporta plain number (compatibilidade com dados já numéricos)
     if (typeof item === 'number') return item;
-    
+
     // Suporta string sem wrapper (edge case de normalização futura)
     if (typeof item === 'string' && item.trim() !== '') {
       const num = Number(item);
       return isNaN(num) ? null : num;
     }
-    
+
     return null;
   }
 
@@ -1854,7 +2350,10 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
       createChartDataset('TX (dBm)', '#f59e0b', []),
     ];
     this.chartData = { labels: this.chartLabels, datasets: this.chartDatasets };
-    this.opticalChartData = { labels: this.opticalChartLabels, datasets: this.opticalChartDatasets };
+    this.opticalChartData = {
+      labels: this.opticalChartLabels,
+      datasets: this.opticalChartDatasets,
+    };
     this.cdr.detectChanges(); // Limpa gráfico enquanto HTTP carrega
 
     this.loadHistory();
@@ -1871,10 +2370,17 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   /** Extrai valor de documento TelemetryRaw (nested) ou evento WebSocket (flat) */
-  private extractHistoryValue(d: any, flatKey: string, nestedPath: string[]): number | null {
+  private extractHistoryValue(
+    d: any,
+    flatKey: string,
+    nestedPath: string[],
+  ): number | null {
     const toNum = (v: any): number | null => {
       if (typeof v === 'number' && !isNaN(v)) return v;
-      if (typeof v === 'string') { const n = Number(v); return !isNaN(n) ? n : null; }
+      if (typeof v === 'string') {
+        const n = Number(v);
+        return !isNaN(n) ? n : null;
+      }
       return null;
     };
     // Tenta flat primeiro (TelemetryVitals / eventos WebSocket ao vivo)
@@ -1903,8 +2409,14 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
         createChartDataset('TX (dBm)', '#f59e0b', []),
       ];
       // Novas referências dos objetos wrapper
-      this.chartData         = { labels: this.chartLabels, datasets: this.chartDatasets };
-      this.opticalChartData = { labels: this.opticalChartLabels, datasets: this.opticalChartDatasets };
+      this.chartData = {
+        labels: this.chartLabels,
+        datasets: this.chartDatasets,
+      };
+      this.opticalChartData = {
+        labels: this.opticalChartLabels,
+        datasets: this.opticalChartDatasets,
+      };
       this.cdr.detectChanges();
       return;
     }
@@ -1916,20 +2428,48 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     const txData: (number | null)[] = [];
 
     for (const d of data) {
-        labels.push(this.timeFormatter.format(new Date(d.timestamp)));
+      labels.push(this.timeFormatter.format(new Date(d.timestamp)));
 
-        cpuData.push(this.extractHistoryValue(d, 'cpuUsage', ['telemetry','system','cpuUsage']));
+      cpuData.push(
+        this.extractHistoryValue(d, 'cpuUsage', [
+          'telemetry',
+          'system',
+          'cpuUsage',
+        ]),
+      );
 
-        const memFree = this.extractHistoryValue(d, 'memoryFree', ['telemetry','system','memoryFree']);
-        const memTotal = this.extractHistoryValue(d, 'memoryTotal', ['telemetry','system','memoryTotal']);
-        memData.push(memFree !== null && memTotal !== null && memTotal > 0
+      const memFree = this.extractHistoryValue(d, 'memoryFree', [
+        'telemetry',
+        'system',
+        'memoryFree',
+      ]);
+      const memTotal = this.extractHistoryValue(d, 'memoryTotal', [
+        'telemetry',
+        'system',
+        'memoryTotal',
+      ]);
+      memData.push(
+        memFree !== null && memTotal !== null && memTotal > 0
           ? Math.round(((memTotal - memFree) / memTotal) * 100)
-          : null);
+          : null,
+      );
 
-        rxData.push(this.extractHistoryValue(d, 'opticalRx', ['telemetry','optical','rxPower']));  // ← nome diferente!
-        // opticalTx está disponível em TelemetryRaw/TelemetryHourly/TelemetryDaily, mas não em TelemetryVitals
-        // extractHistoryValue retorna null se campo não existe, gráfico lida com null corretamente
-        txData.push(this.extractHistoryValue(d, 'opticalTx', ['telemetry','optical','txPower']));  // ← nome diferente!
+      rxData.push(
+        this.extractHistoryValue(d, 'opticalRx', [
+          'telemetry',
+          'optical',
+          'rxPower',
+        ]),
+      ); // ← nome diferente!
+      // opticalTx está disponível em TelemetryRaw/TelemetryHourly/TelemetryDaily, mas não em TelemetryVitals
+      // extractHistoryValue retorna null se campo não existe, gráfico lida com null corretamente
+      txData.push(
+        this.extractHistoryValue(d, 'opticalTx', [
+          'telemetry',
+          'optical',
+          'txPower',
+        ]),
+      ); // ← nome diferente!
     }
 
     this.chartLabels = labels;
@@ -1946,8 +2486,11 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     ];
 
     // Novas referências dos objetos wrapper (ng2-charts detecta mudança no input [data])
-    this.chartData         = { labels: this.chartLabels, datasets: this.chartDatasets };
-    this.opticalChartData = { labels: this.opticalChartLabels, datasets: this.opticalChartDatasets };
+    this.chartData = { labels: this.chartLabels, datasets: this.chartDatasets };
+    this.opticalChartData = {
+      labels: this.opticalChartLabels,
+      datasets: this.opticalChartDatasets,
+    };
 
     this.cdr.detectChanges(); // Renderiza imediatamente o gráfico
   }
@@ -1958,14 +2501,18 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
    * @param data - Dados de telemetria recebidos via WebSocket
    * @param timestamp - Timestamp do dado
    */
-  private addTelemetryPointToChart(data: TelemetryData, timestamp: string): void {
+  private addTelemetryPointToChart(
+    data: TelemetryData,
+    timestamp: string,
+  ): void {
     // ── PARTE SÍNCRONA: atualiza gráfico imediatamente (antes do detectChanges) ──
     const cpuValue = this.safeExtractValue(data, 'cpuUsage');
     const memFree = this.safeExtractValue(data, 'memoryFree');
     const memTotal = this.safeExtractValue(data, 'memoryTotal');
-    const memValue = (memFree !== null && memTotal !== null && memTotal > 0)
-      ? Math.round(((memTotal - memFree) / memTotal) * 100)
-      : null;
+    const memValue =
+      memFree !== null && memTotal !== null && memTotal > 0
+        ? Math.round(((memTotal - memFree) / memTotal) * 100)
+        : null;
     const rxValue = this.safeExtractValue(data, 'opticalRx');
     const txValue = this.safeExtractValue(data, 'opticalTx');
 
@@ -1976,25 +2523,36 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
 
     if (this.chartDatasets[0]) this.chartDatasets[0].data.push(cpuValue);
     if (this.chartDatasets[1]) this.chartDatasets[1].data.push(memValue);
-    if (this.opticalChartDatasets[0]) this.opticalChartDatasets[0].data.push(rxValue);
-    if (this.opticalChartDatasets[1]) this.opticalChartDatasets[1].data.push(txValue);
+    if (this.opticalChartDatasets[0])
+      this.opticalChartDatasets[0].data.push(rxValue);
+    if (this.opticalChartDatasets[1])
+      this.opticalChartDatasets[1].data.push(txValue);
 
     if (this.chartLabels.length > MAX_CHART_POINTS) {
       this.chartLabels.shift();
       this.opticalChartLabels.shift();
-      this.chartDatasets.forEach(ds => ds.data.shift());
-      this.opticalChartDatasets.forEach(ds => ds.data.shift());
+      this.chartDatasets.forEach((ds) => ds.data.shift());
+      this.opticalChartDatasets.forEach((ds) => ds.data.shift());
     }
 
     // Novas referências para ng2-charts detectar a mudança (OnPush)
-    this.chartLabels           = [...this.chartLabels];
-    this.chartDatasets         = this.chartDatasets.map(ds => ({ ...ds, data: [...ds.data] }));
-    this.opticalChartLabels    = [...this.opticalChartLabels];
-    this.opticalChartDatasets  = this.opticalChartDatasets.map(ds => ({ ...ds, data: [...ds.data] }));
+    this.chartLabels = [...this.chartLabels];
+    this.chartDatasets = this.chartDatasets.map((ds) => ({
+      ...ds,
+      data: [...ds.data],
+    }));
+    this.opticalChartLabels = [...this.opticalChartLabels];
+    this.opticalChartDatasets = this.opticalChartDatasets.map((ds) => ({
+      ...ds,
+      data: [...ds.data],
+    }));
 
     // Novas referências dos objetos wrapper (ng2-charts detecta mudança no input [data])
-    this.chartData             = { labels: this.chartLabels, datasets: this.chartDatasets };
-    this.opticalChartData     = { labels: this.opticalChartLabels, datasets: this.opticalChartDatasets };
+    this.chartData = { labels: this.chartLabels, datasets: this.chartDatasets };
+    this.opticalChartData = {
+      labels: this.opticalChartLabels,
+      datasets: this.opticalChartDatasets,
+    };
 
     // ── PARTE ASSÍNCRONA: persiste no cache (fire-and-forget, não bloqueia CD) ──
     const newSnapshot: TelemetrySnapshot = {
@@ -2004,15 +2562,19 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
       opticalRx: rxValue ?? undefined,
     };
 
-    this.telemetryCacheService.loadHistory(this.serialNumber, this.selectedPeriodHours)
-      .then(currentHistory => {
+    this.telemetryCacheService
+      .loadHistory(this.serialNumber, this.selectedPeriodHours)
+      .then((currentHistory) => {
         const updatedHistory = [...(currentHistory || []), newSnapshot];
         if (updatedHistory.length > MAX_CHART_POINTS) {
           updatedHistory.splice(0, updatedHistory.length - MAX_CHART_POINTS);
         }
-        return this.telemetryCacheService.saveHistory(this.serialNumber, this.selectedPeriodHours, updatedHistory);
+        return this.telemetryCacheService.saveHistory(
+          this.serialNumber,
+          this.selectedPeriodHours,
+          updatedHistory,
+        );
       })
-      .catch(err => logWarn('Erro ao persistir snapshot no cache', err));
+      .catch((err) => logWarn('Erro ao persistir snapshot no cache', err));
   }
-
 }
