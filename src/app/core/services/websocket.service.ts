@@ -332,8 +332,10 @@ export class WebSocketService {
    * Backend envia 'server_log_batch' com histórico recente + 'server_log' para cada nova entrada.
    * RBAC: apenas admin e supervisor podem subscrever (backend rejeita otherwise).
    * Se o socket ainda não estiver conectado, emite assim que a conexão for estabelecida.
+   * Adiciona 'server_logs' ao activeRooms para que reemitHeartbeatOnReconnect reemitir após reconexão.
    */
   subscribeServerLogs(): void {
+    this.activeRooms.add('server_logs');
     if (this.socket.connected) {
       this.socket.emit('subscribe_server_logs');
     } else {
@@ -344,8 +346,10 @@ export class WebSocketService {
 
   /**
    * Cancela inscrição nos logs do servidor.
+   * Remove 'server_logs' de activeRooms e pendingRooms para evitar reemissão indesejada na reconexão.
    */
   unsubscribeServerLogs(): void {
+    this.activeRooms.delete('server_logs');
     this.pendingRooms.delete('server_logs');
     if (this.socket.connected) {
       this.socket.emit('unsubscribe_server_logs');

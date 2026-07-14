@@ -73,6 +73,9 @@ export class AuditLogsComponent implements OnInit, OnDestroy {
   private readonly MAX_SERVER_LOGS = 500;
   private serverLogBatchSub?: Subscription;
   private serverLogSub?: Subscription;
+  // Contador de versão para invalidar cache do filteredServerLogs — incrementado
+  // a cada push/clear/batch. Necessário porque push()+shift() mantém length igual.
+  private _serverLogsVersion = 0;
 
   // Entrada expandida (detalhes)
   expandedLogId: string | null = null;
@@ -129,6 +132,11 @@ export class AuditLogsComponent implements OnInit, OnDestroy {
           this.auditTotal = res.pagination.total;
           this.auditTotalPages = res.pagination.totalPages;
           this.auditLoading = false;
+          // Invalida cache do log expandido — o log pode ter saído da lista após reload
+          if (this.expandedLogId && !this.auditLogs.find(l => l._id === this.expandedLogId)) {
+            this.expandedLogId = null;
+            this.expandedLogCache = null;
+          }
           this.cdr.markForCheck();
         },
         error: (err) => {
@@ -234,6 +242,7 @@ export class AuditLogsComponent implements OnInit, OnDestroy {
     this.serverLogPaused = false;
     this.serverLogs = [];
     this.expandedServerLogSeq = null;
+    this._serverLogsVersion++;
 
     // Subscreve na sala de server logs
     this.wsService.subscribeServerLogs();
@@ -243,6 +252,7 @@ export class AuditLogsComponent implements OnInit, OnDestroy {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((batch) => {
         this.serverLogs = batch.entries.slice(-this.MAX_SERVER_LOGS);
+        this._serverLogsVersion++;
         this.cdr.markForCheck();
       });
 
@@ -256,6 +266,7 @@ export class AuditLogsComponent implements OnInit, OnDestroy {
         if (this.serverLogs.length > this.MAX_SERVER_LOGS) {
           this.serverLogs.shift();
         }
+        this._serverLogsVersion++;
         this.cdr.markForCheck();
       });
 
@@ -285,6 +296,7 @@ export class AuditLogsComponent implements OnInit, OnDestroy {
   clearServerLogs(): void {
     this.serverLogs = [];
     this.expandedServerLogSeq = null;
+    this._serverLogsVersion++;
   }
 
   // Cache do filtro — recalculado apenas quando logs, nível ou evento mudam
@@ -293,7 +305,9 @@ export class AuditLogsComponent implements OnInit, OnDestroy {
 
   /** Filtra logs por nível e evento — memoizado para evitar recompute a cada CD cycle */
   get filteredServerLogs(): ServerLogEntry[] {
-    const sig = `${this.serverLogs.length}|${this.serverLogLevelFilter}|${this.serverLogEventFilter}`;
+    // Assinatura usa _serverLogsVersion (incrementado a cada modificação) em vez de length,
+    // porque push()+shift() no ring buffer cheio mantém length igual mas conteúdo muda.
+    const sig = `${this._serverLogsVersion}|${this.serverLogLevelFilter}|${this.serverLogEventFilter}`;
     if (sig === this._filteredServerLogsSig) {
       return this._filteredServerLogsCache;
     }
