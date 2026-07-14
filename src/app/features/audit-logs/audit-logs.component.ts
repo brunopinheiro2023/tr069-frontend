@@ -71,10 +71,13 @@ export class AuditLogsComponent implements OnInit, OnDestroy {
   serverLogLevelFilter: ServerLogLevel | 'all' = 'all';
   serverLogEventFilter = '';
   private readonly MAX_SERVER_LOGS = 500;
+  private serverLogBatchSub?: Subscription;
+  private serverLogSub?: Subscription;
 
   // Entrada expandida (detalhes)
   expandedLogId: string | null = null;
   expandedServerLogSeq: number | null = null;
+  private expandedLogCache: AuditLog | null = null;
 
   get isAdmin(): boolean { return this.authService.isAdmin(); }
 
@@ -210,12 +213,14 @@ export class AuditLogsComponent implements OnInit, OnDestroy {
   /** Expande/recolhe detalhes de um log */
   toggleLogDetails(id: string): void {
     this.expandedLogId = this.expandedLogId === id ? null : id;
+    this.expandedLogCache = this.expandedLogId
+      ? (this.auditLogs.find(l => l._id === this.expandedLogId) ?? null)
+      : null;
   }
 
-  /** Retorna o log atualmente expandido (ou null) */
+  /** Retorna o log atualmente expandido (cacheado para evitar re-find no template) */
   getExpandedLog(): AuditLog | null {
-    if (!this.expandedLogId) return null;
-    return this.auditLogs.find(l => l._id === this.expandedLogId) ?? null;
+    return this.expandedLogCache;
   }
 
   // ===========================================================================
@@ -228,20 +233,21 @@ export class AuditLogsComponent implements OnInit, OnDestroy {
     this.serverLogStreaming = true;
     this.serverLogPaused = false;
     this.serverLogs = [];
+    this.expandedServerLogSeq = null;
 
     // Subscreve na sala de server logs
     this.wsService.subscribeServerLogs();
 
-    // Recebe batch inicial (histórico recente)
-    this.wsService.onServerLogBatch()
+    // Recebe batch inicial (histórico recente) — armazena subscription para desfazer
+    this.serverLogBatchSub = this.wsService.onServerLogBatch()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((batch) => {
         this.serverLogs = batch.entries.slice(-this.MAX_SERVER_LOGS);
         this.cdr.markForCheck();
       });
 
-    // Recebe cada nova entrada de log em tempo real
-    this.wsService.onServerLog()
+    // Recebe cada nova entrada de log em tempo real — armazena subscription para desfazer
+    this.serverLogSub = this.wsService.onServerLog()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((entry) => {
         if (this.serverLogPaused) return;
@@ -256,11 +262,17 @@ export class AuditLogsComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  /** Para streaming de logs do servidor */
+  /** Para streaming de logs do servidor e desinscreve Observables */
   stopServerLogStream(): void {
     if (!this.serverLogStreaming) return;
     this.serverLogStreaming = false;
+    this.serverLogPaused = false;
     this.wsService.unsubscribeServerLogs();
+    // Desinscreve Observables para evitar duplicação ao reiniciar o stream
+    this.serverLogBatchSub?.unsubscribe();
+    this.serverLogSub?.unsubscribe();
+    this.serverLogBatchSub = undefined;
+    this.serverLogSub = undefined;
     this.cdr.markForCheck();
   }
 
@@ -272,6 +284,7 @@ export class AuditLogsComponent implements OnInit, OnDestroy {
   /** Limpa logs exibidos na tela */
   clearServerLogs(): void {
     this.serverLogs = [];
+    this.expandedServerLogSeq = null;
   }
 
   /** Filtra logs por nível (aplicado no template via pipe) */
