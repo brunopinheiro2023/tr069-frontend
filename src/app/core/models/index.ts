@@ -1323,3 +1323,105 @@ export interface DiagnosticTargetAnalysis {
   topFailingCpes: { serialNumber: string; failures: number; lastError: string | null; lastErrorAt: string | null }[];
   dailySeries: { day: string; success: number; error: number; total: number }[];
 }
+
+/** Visão geral agregada de todos os destinos ativos — gráfico do dashboard. */
+export interface DiagnosticOverview {
+  days: number;
+  totalExecutions: number;
+  successRateGlobal: number;
+  latencyAvgGlobal: number | null;
+  affectedCpesCount: number;
+  totalTargets: number;
+  perTarget: {
+    targetId: string;
+    host: string;
+    type: string;
+    successRate: number;
+    latencyAvg: number | null;
+    totalExecutions: number;
+  }[];
+  dailySeriesAggregated: { day: string; success: number; error: number; total: number }[];
+  topFailingCpes: { serialNumber: string; failures: number; lastError: string | null; lastErrorAt: string | null }[];
+  analysisText: string;
+  generatedAt: string;
+}
+
+// ============================================================================
+// AUDIT LOGS — Trilha de auditoria (GET /api/audit-logs)
+// ============================================================================
+
+/** Entrada individual de log de auditoria (schema AuditLog do MongoDB). */
+export interface AuditLog {
+  _id: string;
+  userId: string;
+  username: string;
+  role?: string;
+  action: string;
+  serialNumber: string;
+  payload?: any;
+  ip?: string;
+  channel: 'rest' | 'socket' | 'cwmp' | 'scheduler' | 'auth';
+  method?: string;
+  route?: string;
+  statusCode?: number;
+  durationMs?: number;
+  userAgent?: string;
+  requestId?: string;
+  result: 'requested' | 'success' | 'error' | 'conflict' | 'confirmed' | 'inconclusive';
+  errorMessage?: string;
+  createdAt: string;
+}
+
+/** Filtros para consulta de audit logs (query params do GET /api/audit-logs). */
+export interface AuditLogFilters {
+  page?: number;
+  limit?: number;
+  serialNumber?: string;
+  userId?: string;
+  username?: string;
+  action?: string;
+  channel?: string;
+  result?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+/** Resposta paginada do GET /api/audit-logs. */
+export interface AuditLogPaginatedResponse {
+  data: AuditLog[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+/** Estatísticas agregadas do GET /api/audit-logs/stats. */
+export interface AuditLogStats {
+  total: number;
+  byAction: { action: string; count: number }[];
+  byChannel: { channel: string; count: number }[];
+  byResult: { result: string; count: number }[];
+}
+
+// ============================================================================
+// SERVER LOGS — Streaming de logs do servidor em tempo real (WebSocket)
+// ============================================================================
+
+/** Nível de log do servidor (Pino). */
+export type ServerLogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+/** Entrada individual de log do servidor (via WebSocket evento 'server_log'). */
+export interface ServerLogEntry {
+  seq: number;
+  level: ServerLogLevel;
+  timestamp: string;
+  data: any;
+}
+
+/** Batch inicial enviado ao subscrever (evento 'server_log_batch'). */
+export interface ServerLogBatch {
+  entries: ServerLogEntry[];
+  count: number;
+}

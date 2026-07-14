@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { Observable, BehaviorSubject, share, merge } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Router } from '@angular/router';
+import { ServerLogEntry, ServerLogBatch } from '../models';
 
 export type WsConnectionStatus = 'connected' | 'disconnected' | 'reconnecting';
 
@@ -194,6 +195,12 @@ export class WebSocketService {
   onDiagnosticsComplete(): Observable<{ serialNumber: string; timestamp: string }> { return this.on('diagnostics_complete'); }
   onAnalysisUpdate(): Observable<{ serialNumber: string; analysis: any; timestamp: string }> { return this.on('analysis_update'); }
 
+  // ── Server Log Streaming (tempo real) ──
+  // Evento 'server_log': cada nova entrada de log do servidor (Pino).
+  onServerLog(): Observable<ServerLogEntry> { return this.on('server_log'); }
+  // Evento 'server_log_batch': buffer recente enviado ao subscrever.
+  onServerLogBatch(): Observable<ServerLogBatch> { return this.on('server_log_batch'); }
+
   /** Getter para verificar se socket está conectado sem expor campo privado */
   get isConnected(): boolean {
     return this.socket?.connected ?? false;
@@ -313,6 +320,22 @@ export class WebSocketService {
   emitDriverKeepalive(serialNumber: string): void {
     // sessionId e username são extraídos no middleware backend (socket.data)
     this.socket.emit('driver_keepalive', { serialNumber });
+  }
+
+  /**
+   * Subscreve nos logs do servidor em tempo real (sala 'server_logs').
+   * Backend envia 'server_log_batch' com histórico recente + 'server_log' para cada nova entrada.
+   * RBAC: apenas admin e supervisor podem subscrever (backend rejeita otherwise).
+   */
+  subscribeServerLogs(): void {
+    this.socket.emit('subscribe_server_logs');
+  }
+
+  /**
+   * Cancela inscrição nos logs do servidor.
+   */
+  unsubscribeServerLogs(): void {
+    this.socket.emit('unsubscribe_server_logs');
   }
 
   disconnect() {

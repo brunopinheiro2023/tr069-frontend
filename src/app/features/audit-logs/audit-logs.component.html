@@ -1,0 +1,274 @@
+<!-- Caminho: src/app/features/audit-logs/audit-logs.component.html -->
+<!-- Página de Logs: Audit Logs (HTTP) + Server Logs (WebSocket tempo real) -->
+
+<div class="page-wrapper">
+  <!-- Cabeçalho -->
+  <div class="page-header">
+    <span class="material-symbols-rounded">receipt_long</span>
+    <div>
+      <h1>Logs & Auditoria</h1>
+      <p>Trilha de auditoria e logs do servidor em tempo real</p>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab" [class.tab--active]="activeTab === 'audit'" (click)="switchTab('audit')">
+      <span class="material-symbols-rounded">shield</span>
+      Auditoria
+    </button>
+    <button class="tab" [class.tab--active]="activeTab === 'server'" (click)="switchTab('server')">
+      <span class="material-symbols-rounded">terminal</span>
+      Servidor
+      <span *ngIf="serverLogStreaming && !serverLogPaused" class="live-dot"></span>
+    </button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- TAB: AUDIT LOGS -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <div *ngIf="activeTab === 'audit'">
+    <!-- Estatísticas -->
+    <div class="stats-grid" *ngIf="auditStats">
+      <div class="stat-card">
+        <span class="stat-value">{{ auditStats.total | number }}</span>
+        <span class="stat-label">Total</span>
+      </div>
+      <div class="stat-card" *ngIf="auditStats.byResult[0]">
+        <span class="stat-value">{{ auditStats.byResult[0].count | number }}</span>
+        <span class="stat-label">{{ auditStats.byResult[0].result }}</span>
+      </div>
+      <div class="stat-card" *ngIf="auditStats.byAction[0]">
+        <span class="stat-value">{{ auditStats.byAction[0].count | number }}</span>
+        <span class="stat-label">{{ auditStats.byAction[0].action }}</span>
+      </div>
+      <div class="stat-card" *ngIf="auditStats.byChannel[0]">
+        <span class="stat-value">{{ auditStats.byChannel[0].count | number }}</span>
+        <span class="stat-label">{{ auditStats.byChannel[0].channel }}</span>
+      </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card">
+      <h2>Filtros</h2>
+      <div class="filter-grid">
+        <label>
+          <span>CPE (Serial)</span>
+          <input type="text" [(ngModel)]="filterSerial" placeholder="Ex: ITBS5F9B8B8E" (keyup.enter)="applyFilters()" />
+        </label>
+        <label>
+          <span>Operador</span>
+          <input type="text" [(ngModel)]="filterUsername" placeholder="Nome do usuário" (keyup.enter)="applyFilters()" />
+        </label>
+        <label>
+          <span>Ação</span>
+          <select [(ngModel)]="filterAction">
+            <option value="">Todas</option>
+            <option *ngFor="let a of actionOptions" [value]="a">{{ a }}</option>
+          </select>
+        </label>
+        <label>
+          <span>Canal</span>
+          <select [(ngModel)]="filterChannel">
+            <option value="">Todos</option>
+            <option *ngFor="let c of channelOptions" [value]="c">{{ c }}</option>
+          </select>
+        </label>
+        <label>
+          <span>Resultado</span>
+          <select [(ngModel)]="filterResult">
+            <option value="">Todos</option>
+            <option *ngFor="let r of resultOptions" [value]="r">{{ r }}</option>
+          </select>
+        </label>
+        <label>
+          <span>Data Inicial</span>
+          <input type="date" [(ngModel)]="filterDateFrom" />
+        </label>
+        <label>
+          <span>Data Final</span>
+          <input type="date" [(ngModel)]="filterDateTo" />
+        </label>
+      </div>
+      <div class="filter-actions">
+        <button class="btn-primary" (click)="applyFilters()">
+          <span class="material-symbols-rounded">search</span>
+          Aplicar
+        </button>
+        <button class="btn-secondary" (click)="clearFilters()">
+          <span class="material-symbols-rounded">clear</span>
+          Limpar
+        </button>
+        <button class="btn-secondary" [class.btn-secondary--active]="autoRefresh" (click)="toggleAutoRefresh()">
+          <span class="material-symbols-rounded">{{ autoRefresh ? 'pause' : 'autorenew' }}</span>
+          Auto-refresh {{ autoRefresh ? 'ON' : 'OFF' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Tabela de Audit Logs -->
+    <div class="card">
+      <div class="table-header">
+        <h2>Registros de Auditoria</h2>
+        <span class="table-count">{{ auditTotal | number }} registros</span>
+      </div>
+
+      <!-- Skeleton -->
+      <div *ngIf="auditLoading" class="skeleton-block"></div>
+
+      <!-- Tabela -->
+      <div class="table-scroll" *ngIf="!auditLoading && auditLogs.length > 0">
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Operador</th>
+              <th>Ação</th>
+              <th>Canal</th>
+              <th>Resultado</th>
+              <th>CPE</th>
+              <th>Detalhes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let log of auditLogs; trackBy: trackByLogId" (click)="toggleLogDetails(log._id)" class="log-row">
+              <td class="col-time">{{ formatDate(log.createdAt) }}</td>
+              <td class="col-user">
+                <span class="user-name">{{ log.username }}</span>
+                <span class="user-role" *ngIf="log.role">{{ log.role }}</span>
+              </td>
+              <td><span class="action-tag">{{ log.action }}</span></td>
+              <td><span class="badge" [ngClass]="channelClass(log.channel)">{{ log.channel }}</span></td>
+              <td><span class="badge" [ngClass]="resultClass(log.result)">{{ log.result }}</span></td>
+              <td class="col-serial">{{ log.serialNumber === 'N/A' ? '—' : log.serialNumber }}</td>
+              <td class="col-details">
+                <span class="material-symbols-rounded expand-icon" [class.expand-icon--open]="expandedLogId === log._id">
+                  expand_more
+                </span>
+              </td>
+            </tr>
+            <!-- Linha expansível com detalhes -->
+            <tr *ngIf="expandedLogId && getExpandedLog()" class="detail-row">
+              <td colspan="7">
+                <div class="detail-grid">
+                  <div *ngIf="getExpandedLog()?.ip"><strong>IP:</strong> {{ getExpandedLog()?.ip }}</div>
+                  <div *ngIf="getExpandedLog()?.method"><strong>Método:</strong> {{ getExpandedLog()?.method }}</div>
+                  <div *ngIf="getExpandedLog()?.route"><strong>Rota:</strong> {{ getExpandedLog()?.route }}</div>
+                  <div *ngIf="getExpandedLog()?.statusCode"><strong>Status:</strong> {{ getExpandedLog()?.statusCode }}</div>
+                  <div *ngIf="getExpandedLog()?.durationMs != null"><strong>Duração:</strong> {{ getExpandedLog()?.durationMs }}ms</div>
+                  <div *ngIf="getExpandedLog()?.userAgent"><strong>User-Agent:</strong> {{ getExpandedLog()?.userAgent }}</div>
+                  <div *ngIf="getExpandedLog()?.requestId"><strong>Request ID:</strong> {{ getExpandedLog()?.requestId }}</div>
+                  <div *ngIf="getExpandedLog()?.errorMessage" class="detail-error"><strong>Erro:</strong> {{ getExpandedLog()?.errorMessage }}</div>
+                  <div *ngIf="getExpandedLog()?.payload" class="detail-payload">
+                    <strong>Payload:</strong>
+                    <pre>{{ formatDetails(getExpandedLog()?.payload) }}</pre>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty state -->
+      <div class="empty-state" *ngIf="!auditLoading && auditLogs.length === 0">
+        <span class="material-symbols-rounded">inbox</span>
+        <p>Nenhum log de auditoria encontrado com os filtros atuais.</p>
+      </div>
+
+      <!-- Paginação -->
+      <div class="pagination" *ngIf="auditTotalPages > 1">
+        <button class="btn-page" [disabled]="auditPage <= 1" (click)="prevPage()">
+          <span class="material-symbols-rounded">chevron_left</span>
+        </button>
+        <span class="page-info">Página {{ auditPage }} de {{ auditTotalPages }}</span>
+        <button class="btn-page" [disabled]="auditPage >= auditTotalPages" (click)="nextPage()">
+          <span class="material-symbols-rounded">chevron_right</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- TAB: SERVER LOGS -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <div *ngIf="activeTab === 'server'">
+    <div class="card">
+      <!-- Controles do stream -->
+      <div class="server-controls">
+        <div class="server-actions">
+          <button *ngIf="!serverLogStreaming" class="btn-primary" (click)="startServerLogStream()">
+            <span class="material-symbols-rounded">play_arrow</span>
+            Iniciar Stream
+          </button>
+          <button *ngIf="serverLogStreaming" class="btn-danger" (click)="stopServerLogStream()">
+            <span class="material-symbols-rounded">stop</span>
+            Parar
+          </button>
+          <button *ngIf="serverLogStreaming" class="btn-secondary" (click)="togglePause()">
+            <span class="material-symbols-rounded">{{ serverLogPaused ? 'play_arrow' : 'pause' }}</span>
+            {{ serverLogPaused ? 'Retomar' : 'Pausar' }}
+          </button>
+          <button class="btn-secondary" (click)="clearServerLogs()" [disabled]="serverLogs.length === 0">
+            <span class="material-symbols-rounded">delete_sweep</span>
+            Limpar
+          </button>
+        </div>
+
+        <!-- Filtros de server log -->
+        <div class="server-filters" *ngIf="serverLogStreaming || serverLogs.length > 0">
+          <label>
+            <span>Nível</span>
+            <select [(ngModel)]="serverLogLevelFilter">
+              <option value="all">Todos</option>
+              <option value="error">Error</option>
+              <option value="warn">Warn</option>
+              <option value="info">Info</option>
+              <option value="debug">Debug</option>
+            </select>
+          </label>
+          <label>
+            <span>Evento (busca)</span>
+            <input type="text" [(ngModel)]="serverLogEventFilter" placeholder="Ex: wifi, cwmp, telemetry" />
+          </label>
+        </div>
+      </div>
+
+      <!-- Status do stream -->
+      <div class="stream-status" *ngIf="serverLogStreaming">
+        <span class="status-dot" [class.status-dot--paused]="serverLogPaused"></span>
+        <span *ngIf="!serverLogPaused">Streaming ativo — {{ serverLogs.length }} entradas no buffer</span>
+        <span *ngIf="serverLogPaused">Pausado — {{ serverLogs.length }} entradas no buffer</span>
+      </div>
+
+      <!-- Console de logs -->
+      <div class="log-console" *ngIf="serverLogs.length > 0">
+        <div
+          *ngFor="let log of filteredServerLogs; trackBy: trackByLogSeq"
+          class="console-line console-line--{{ log.level }}"
+          (click)="toggleServerLogDetails(log.seq)"
+        >
+          <span class="console-time">{{ formatTime(log.timestamp) }}</span>
+          <span class="console-level badge" [ngClass]="levelClass(log.level)">{{ log.level | uppercase }}</span>
+          <span class="console-event">{{ log.data?.event || '—' }}</span>
+          <span class="console-msg" *ngIf="log.data?.message">{{ log.data.message }}</span>
+          <span class="material-symbols-rounded console-expand" [class.console-expand--open]="expandedServerLogSeq === log.seq">
+            expand_more
+          </span>
+
+          <!-- Detalhes expandidos -->
+          <div *ngIf="expandedServerLogSeq === log.seq" class="console-detail">
+            <pre>{{ formatDetails(log.data) }}</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div class="empty-state" *ngIf="serverLogs.length === 0">
+        <span class="material-symbols-rounded">terminal</span>
+        <p *ngIf="!serverLogStreaming">Clique em "Iniciar Stream" para ver logs do servidor em tempo real.</p>
+        <p *ngIf="serverLogStreaming">Aguardando logs... (o buffer será preenchido conforme novos eventos chegam)</p>
+      </div>
+    </div>
+  </div>
+</div>

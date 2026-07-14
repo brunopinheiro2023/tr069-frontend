@@ -55,5 +55,15 @@
       <span class="material-symbols-rounded">monitor_heart</span>
       <span class="nav-label">Diagnósticos Periódicos</span>
     </li>
+    <li
+      *ngIf="isAdmin"
+      class="nav-item"
+      routerLink="/audit-logs"
+      routerLinkActive="active"
+      (click)="onNavClick()"
+    >
+      <span class="material-symbols-rounded">receipt_long</span>
+      <span class="nav-label">Logs & Auditoria</span>
+    </li>
   </ul>
 </aside>

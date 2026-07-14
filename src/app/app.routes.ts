@@ -44,6 +44,15 @@ const routes: Routes = [
     canActivate: [authGuard],
   },
 
+  // Logs & Auditoria — trilha de auditoria + logs do servidor em tempo real (admin/supervisor)
+  {
+    path: 'audit-logs',
+    loadComponent: () =>
+      import('./features/audit-logs/audit-logs.component')
+        .then(m => m.AuditLogsComponent),
+    canActivate: [authGuard],
+  },
+
   // Rota fallback
   { path: '**', redirectTo: '/dashboard' }
 ];
