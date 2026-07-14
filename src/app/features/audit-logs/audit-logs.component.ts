@@ -287,8 +287,18 @@ export class AuditLogsComponent implements OnInit, OnDestroy {
     this.expandedServerLogSeq = null;
   }
 
-  /** Filtra logs por nível (aplicado no template via pipe) */
+  // Cache do filtro — recalculado apenas quando logs, nível ou evento mudam
+  private _filteredServerLogsCache: ServerLogEntry[] = [];
+  private _filteredServerLogsSig = ''; // assinatura para detectar mudanças
+
+  /** Filtra logs por nível e evento — memoizado para evitar recompute a cada CD cycle */
   get filteredServerLogs(): ServerLogEntry[] {
+    const sig = `${this.serverLogs.length}|${this.serverLogLevelFilter}|${this.serverLogEventFilter}`;
+    if (sig === this._filteredServerLogsSig) {
+      return this._filteredServerLogsCache;
+    }
+    this._filteredServerLogsSig = sig;
+
     let logs = this.serverLogs;
 
     // Filtro por nível
@@ -305,6 +315,7 @@ export class AuditLogsComponent implements OnInit, OnDestroy {
       });
     }
 
+    this._filteredServerLogsCache = logs;
     return logs;
   }
 
@@ -320,9 +331,7 @@ export class AuditLogsComponent implements OnInit, OnDestroy {
   /** Troca de aba */
   switchTab(tab: Tab): void {
     this.activeTab = tab;
-    if (tab === 'server' && !this.serverLogStreaming) {
-      // Não inicia automaticamente — usuário clica em "Iniciar"
-    }
+    // Streaming de server logs não inicia automaticamente — usuário clica em "Iniciar"
     this.cdr.markForCheck();
   }
 

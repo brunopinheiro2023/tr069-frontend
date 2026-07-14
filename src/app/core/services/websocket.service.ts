@@ -105,6 +105,8 @@ export class WebSocketService {
         this.socket.emit('subscribe_all_cpes');
       } else if (room.startsWith('cpe_')) {
         this.socket.emit('subscribe_cpe', { serialNumber: room.slice(4) });
+      } else if (room === 'server_logs') {
+        this.socket.emit('subscribe_server_logs');
       }
     }
   }
@@ -122,6 +124,8 @@ export class WebSocketService {
         this.socket.emit('subscribe_all_cpes');
       } else if (room.startsWith('cpe_')) {
         this.socket.emit('subscribe_cpe', { serialNumber: room.slice(4) });
+      } else if (room === 'server_logs') {
+        this.socket.emit('subscribe_server_logs');
       }
     }
     this.pendingRooms.clear();
@@ -194,6 +198,7 @@ export class WebSocketService {
   onDownloadTestError(): Observable<{ deviceId: string; direction: string; error: string; results?: any; timestamp: string }> { return this.on('download_test_error'); }
   onDiagnosticsComplete(): Observable<{ serialNumber: string; timestamp: string }> { return this.on('diagnostics_complete'); }
   onAnalysisUpdate(): Observable<{ serialNumber: string; analysis: any; timestamp: string }> { return this.on('analysis_update'); }
+  onBootLoopAnomaly(): Observable<{ serialNumber: string; count: number; windowSeconds: number; severity: 'critical'; message: string; suggestion: string; timestamp: string }> { return this.on('boot_loop_anomaly'); }
 
   // ── Server Log Streaming (tempo real) ──
   // Evento 'server_log': cada nova entrada de log do servidor (Pino).
@@ -326,16 +331,25 @@ export class WebSocketService {
    * Subscreve nos logs do servidor em tempo real (sala 'server_logs').
    * Backend envia 'server_log_batch' com histórico recente + 'server_log' para cada nova entrada.
    * RBAC: apenas admin e supervisor podem subscrever (backend rejeita otherwise).
+   * Se o socket ainda não estiver conectado, emite assim que a conexão for estabelecida.
    */
   subscribeServerLogs(): void {
-    this.socket.emit('subscribe_server_logs');
+    if (this.socket.connected) {
+      this.socket.emit('subscribe_server_logs');
+    } else {
+      // Enfileira para enviar após reconexão (padrão já usado em subscribeToCpe)
+      this.pendingRooms.add('server_logs');
+    }
   }
 
   /**
    * Cancela inscrição nos logs do servidor.
    */
   unsubscribeServerLogs(): void {
-    this.socket.emit('unsubscribe_server_logs');
+    this.pendingRooms.delete('server_logs');
+    if (this.socket.connected) {
+      this.socket.emit('unsubscribe_server_logs');
+    }
   }
 
   disconnect() {
