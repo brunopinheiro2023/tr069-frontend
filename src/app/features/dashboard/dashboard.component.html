@@ -507,6 +507,92 @@
                 </cdk-virtual-scroll-viewport>
             </div>
         </div>
+
+        <!-- ════════════════════════════════════════════════════════════════════
+             SEÇÃO 5: Saúde da Rede — Diagnósticos Periódicos
+             ════════════════════════════════════════════════════════════════════ -->
+        <div class="content-card diagnostics-card" *ngIf="diagnosticOverview || diagEmptyMessage">
+            <div class="diagnostics-header">
+                <h2 class="table-title">
+                    <span class="material-symbols-rounded">network_check</span>
+                    Saúde da Rede — Diagnósticos Periódicos
+                </h2>
+                <div class="diagnostics-meta">
+                    <span class="last-update" *ngIf="diagLastUpdate">
+                        <span class="material-symbols-rounded update-icon">schedule</span>
+                        Atualizado às {{ diagLastUpdate }}
+                    </span>
+                    <span class="material-symbols-rounded info-icon"
+                          [title]="diagnosticRefreshText">autorenew</span>
+                    <span class="material-symbols-rounded info-icon"
+                          [title]="diagnosticTooltipText">info</span>
+                </div>
+            </div>
+
+            <!-- Estado vazio: sem destinos ativos ou sem execuções -->
+            <div class="diagnostics-empty-state" *ngIf="!diagnosticOverview">
+                <span class="material-symbols-rounded empty-icon">cloud_off</span>
+                <p>{{ diagEmptyMessage }}</p>
+            </div>
+
+            <!-- Conteúdo: só exibe quando há dados -->
+            <ng-container *ngIf="diagnosticOverview">
+            <!-- Cards de resumo (4 métricas) -->
+            <div class="diagnostics-summary-grid">
+                <div class="diag-metric"
+                     [class.success]="diagnosticOverview.successRateGlobal >= 95"
+                     [class.warning]="diagnosticOverview.successRateGlobal >= 80 && diagnosticOverview.successRateGlobal < 95"
+                     [class.danger]="diagnosticOverview.successRateGlobal < 80">
+                    <span class="metric-value">{{ diagnosticOverview.successRateGlobal }}%</span>
+                    <span class="metric-label">Taxa de Sucesso ({{ diagnosticOverview.days }}d)</span>
+                </div>
+                <div class="diag-metric">
+                    <span class="metric-value">{{ diagnosticOverview.latencyAvgGlobal != null ? (diagnosticOverview.latencyAvgGlobal | number:'1.0-0') + 'ms' : '—' }}</span>
+                    <span class="metric-label">Latência Média</span>
+                </div>
+                <div class="diag-metric">
+                    <span class="metric-value">{{ diagnosticOverview.totalExecutions }}</span>
+                    <span class="metric-label">Execuções Totais</span>
+                </div>
+                <div class="diag-metric" [class.danger]="diagnosticOverview.affectedCpesCount > 0">
+                    <span class="metric-value">{{ diagnosticOverview.affectedCpesCount }}</span>
+                    <span class="metric-label">CPEs com Falhas</span>
+                </div>
+            </div>
+
+            <!-- Gráfico Chart.js: barras empilhadas sucesso/erro por dia -->
+            <div class="diagnostics-chart-container" *ngIf="diagChartLabels.length > 0">
+                <canvas baseChart
+                    [datasets]="diagChartDatasets"
+                    [labels]="diagChartLabels"
+                    [options]="diagChartOptions"
+                    type="bar">
+                </canvas>
+            </div>
+
+            <!-- Análise textual interpretativa -->
+            <div class="diagnostics-analysis-text">
+                <span class="material-symbols-rounded analysis-icon">lightbulb</span>
+                <p>{{ diagnosticOverview.analysisText }}</p>
+            </div>
+
+            <!-- Breakdown por destino -->
+            <div class="diagnostics-per-target" *ngIf="diagnosticOverview.perTarget.length > 0">
+                <h3 class="filter-title">Por Destino</h3>
+                <div class="target-row" *ngFor="let t of diagnosticOverview.perTarget">
+                    <span class="target-host">{{ t.host }}</span>
+                    <span class="target-type-badge">{{ t.type }}</span>
+                    <span class="target-rate"
+                          [class.success]="t.successRate >= 95"
+                          [class.warning]="t.successRate >= 80 && t.successRate < 95"
+                          [class.danger]="t.successRate < 80">{{ t.successRate }}%</span>
+                    <span class="target-latency" *ngIf="t.latencyAvg != null">{{ t.latencyAvg | number:'1.0-0' }}ms</span>
+                    <span class="target-latency" *ngIf="t.latencyAvg == null">—</span>
+                    <span class="target-total">{{ t.totalExecutions }} exec.</span>
+                </div>
+            </div>
+            </ng-container>
+        </div>
     </div>
 
     </div>

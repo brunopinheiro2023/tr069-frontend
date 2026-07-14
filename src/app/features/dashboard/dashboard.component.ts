@@ -16,9 +16,10 @@ import { ToastService } from '../../core/services/toast.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ButtonComponent } from '../../core/components/button/button.component';
 import { SkeletonComponent } from '../../core/components/skeleton/skeleton.component';
-import { CpeDevice, PaginatedResponse, CpePrediction } from '../../core/models';
+import { CpeDevice, PaginatedResponse, CpePrediction, DiagnosticOverview } from '../../core/models';
 import { Router } from '@angular/router';
 import { AlertsPanelComponent } from './components/alerts-panel/alerts-panel.component';
+import { DiagnosticTargetService } from '../../core/services/diagnostic-target.service';
 
 // Extensão da interface para suportar valores pré-computados em tela
 interface DashboardCpe extends CpeDevice {
@@ -214,6 +215,34 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private worker?: Worker;
   private destroyRef = inject(DestroyRef); // Gerenciador de ciclo de vida moderno do Angular 17+
 
+  // ─── DIAGNÓSTICOS PERIÓDICOS — SAÚDE DA REDE ──────────────────────────────
+  diagnosticOverview: DiagnosticOverview | null = null;
+  diagLastUpdate: string | null = null;
+  diagEmptyMessage: string | null = null;
+  private diagnosticInterval?: ReturnType<typeof setInterval>;
+  readonly diagnosticTooltipText = 'Diagnósticos periódicos (IPPing, TraceRoute, DNSLookup) executados automaticamente pelo scheduler a cada hora contra destinos cadastrados. A taxa de sucesso indica quantos diagnósticos completaram sem erro. A latência média reflete o tempo de resposta da rede. CPEs com falhas são equipamentos que falharam em pelo menos 1 diagnóstico no período.';
+  readonly diagnosticRefreshText = 'Este gráfico é atualizado automaticamente a cada 5 minutos. A próxima atualização ocorrerá após o intervalo. Você também pode atualizar a página para ver os dados mais recentes.';
+
+  // Gráfico de barras empilhadas: sucesso/erro por dia
+  diagChartLabels: string[] = [];
+  diagChartDatasets: ChartConfiguration<'bar'>['data']['datasets'] = [
+    { data: [], label: 'Sucesso', backgroundColor: 'rgba(16, 185, 129, 0.7)', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y', type: 'bar' as const },
+    { data: [], label: 'Erro', backgroundColor: 'rgba(239, 68, 68, 0.7)', borderColor: '#ef4444', borderWidth: 1, yAxisID: 'y', type: 'bar' as const },
+  ];
+  diagChartOptions: ChartOptions<'bar'> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    plugins: {
+      legend: { display: true, position: 'top' as const },
+      tooltip: { enabled: true, mode: 'index' as const, intersect: false },
+    },
+    scales: {
+      x: { stacked: true, title: { display: true, text: 'Data' } },
+      y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Execuções' }, position: 'left' as const },
+    },
+  };
+
   // Gráfico de Saúde do ACS
   xmlChartOptions: ChartOptions<'line'> = {
     responsive: true,
@@ -238,7 +267,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private toastService: ToastService,
     private router: Router,
     private cdr: ChangeDetectorRef,
-    public authService: AuthService
+    public authService: AuthService,
+    private diagnosticTargetService: DiagnosticTargetService
   ) {}
 
   get workerHealthSeverity(): 'ok' | 'warning' | 'critical' {
@@ -303,6 +333,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     this.loadInitialData();
     this.loadHealthSummary();
+    this.loadDiagnosticOverview();
     this.setupRealTimeUpdates();
     // Entra na sala global para receber eventos de qualquer CPE no dashboard
     this.wsService.subscribeToAllCpes();
@@ -345,11 +376,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.loadHealthSummary();
     }, 30000); // Atualiza a cada 30 segundos
 
+    // Polling para visão geral de diagnósticos periódicos (5min — muda lentamente)
+    this.diagnosticInterval = setInterval(() => {
+      this.loadDiagnosticOverview();
+    }, 300000);
+
     // OTIMIZAÇÃO P5: Pausar polling quando a aba está ociosa (Page Visibility API)
     // Reduz carga no backend quando o técnico alterna entre abas do navegador
     this.visibilityHandler = () => {
       if (document.hidden) {
         clearInterval(this.metricsInterval);
+        clearInterval(this.healthSummaryInterval);
+        clearInterval(this.diagnosticInterval);
+        this.diagnosticInterval = undefined;
         clearInterval(this.healthSummaryInterval);
         this.metricsInterval = undefined;
         this.healthSummaryInterval = undefined;
@@ -364,6 +403,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
           }, 30000);
           // Atualiza imediatamente ao retornar
           this.loadHealthSummary();
+        }
+        if (!this.diagnosticInterval) {
+          this.diagnosticInterval = setInterval(() => {
+            this.loadDiagnosticOverview();
+          }, 300000);
+          this.loadDiagnosticOverview();
         }
       }
     };
@@ -494,6 +539,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     clearInterval(this.timeAgoInterval);
     clearInterval(this.metricsInterval);
     clearInterval(this.healthSummaryInterval);
+    clearInterval(this.diagnosticInterval);
     if (this.visibilityHandler) {
       document.removeEventListener('visibilitychange', this.visibilityHandler);
     }
@@ -1001,6 +1047,32 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.globalPendingTasksCount = this.allCpes.reduce((acc, cpe) => {
       return acc + (cpe.pendingTasks ? cpe.pendingTasks.length : 0);
     }, 0);
+  }
+
+  /**
+   * Carrega a visão geral de diagnósticos periódicos do endpoint /api/diagnostic-targets/overview.
+   * Falha silenciosa — não quebra o dashboard se o endpoint falhar.
+   */
+  private loadDiagnosticOverview(): void {
+    this.diagnosticTargetService.overview(7).pipe(
+      catchError(() => of({ data: null, message: 'Falha ao carregar visão geral de diagnósticos.' })),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(({ data, message }) => {
+      this.diagnosticOverview = data;
+      this.diagEmptyMessage = data ? null : (message || 'Nenhum dado de diagnóstico disponível.');
+      if (data) {
+        this.diagChartLabels = data.dailySeriesAggregated.map(d => {
+          const parts = d.day.split('-');
+          return `${parts[2]}/${parts[1]}`;
+        });
+        this.diagChartDatasets[0].data = data.dailySeriesAggregated.map(d => d.success);
+        this.diagChartDatasets[1].data = data.dailySeriesAggregated.map(d => d.error);
+        this.diagChartDatasets = [...this.diagChartDatasets];
+        // Registra o horário da última atualização para exibir no header
+        this.diagLastUpdate = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+      this.cdr.markForCheck();
+    });
   }
 
   /**

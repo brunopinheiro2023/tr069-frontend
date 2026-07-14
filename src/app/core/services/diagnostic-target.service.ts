@@ -9,6 +9,7 @@ import {
   DiagnosticTargetUpdate,
   DiagnosticTargetHistoryEntry,
   DiagnosticTargetAnalysis,
+  DiagnosticOverview,
 } from '../models';
 
 @Injectable({ providedIn: 'root' })
@@ -58,5 +59,12 @@ export class DiagnosticTargetService {
     return this.http.get<{ success: boolean; data: DiagnosticTargetAnalysis | null }>(
       `${this.BASE_URL}/${id}/analysis?days=${days}`
     ).pipe(map(res => res.data));
+  }
+
+  /** Visão geral agregada de todos os destinos ativos (gráfico do dashboard). */
+  overview(days: number = 7): Observable<{ data: DiagnosticOverview | null; message?: string }> {
+    return this.http.get<{ success: boolean; data: DiagnosticOverview | null; message?: string }>(
+      `${this.BASE_URL}/overview?days=${days}`
+    ).pipe(map(res => ({ data: res.data, message: res.message })));
   }
 }
