@@ -15,7 +15,9 @@
     <!-- Banner de erro - mantém último dado visível mas avisa que está desatualizado -->
     <div *ngIf="diagnosticsError" class="error-banner">
       <span class="material-symbols-rounded">warning</span>
-      <span>⚠ Falha ao atualizar diagnóstico — exibindo último dado conhecido</span>
+      <span
+        >Falha ao atualizar diagnóstico — exibindo último dado conhecido</span
+      >
     </div>
 
     <!-- Header da aba -->
@@ -25,7 +27,8 @@
         <h3>Análise Wi-Fi</h3>
       </div>
       <p class="header-description">
-        Análise completa do ambiente Wi-Fi: configuração atual, varredura de redes vizinhas, saturação de canais e recomendações de otimização.
+        Análise completa do ambiente Wi-Fi: configuração atual, varredura de
+        redes vizinhas, saturação de canais e recomendações de otimização.
       </p>
     </div>
 
@@ -41,9 +44,22 @@
           <div class="config-card-header">
             <span class="material-symbols-rounded">wifi</span>
             <h5>2.4 GHz</h5>
-            <span *ngIf="wifi2gAutoMode" class="data-badge auto" title="Rádio em modo automático — a CPE gerencia o canal">Automático</span>
-            <span *ngIf="hasLive2gData && !wifi2gAutoMode" class="data-badge live">Dados ao vivo</span>
-            <span *ngIf="!hasLive2gData && !wifi2gAutoMode" class="data-badge unknown">Desconhecido</span>
+            <span
+              *ngIf="wifi2gAutoMode"
+              class="data-badge auto"
+              title="Rádio em modo automático — a CPE gerencia o canal"
+              >Automático</span
+            >
+            <span
+              *ngIf="hasLive2gData && !wifi2gAutoMode"
+              class="data-badge live"
+              >Dados ao vivo</span
+            >
+            <span
+              *ngIf="!hasLive2gData && !wifi2gAutoMode"
+              class="data-badge unknown"
+              >Desconhecido</span
+            >
           </div>
           <div class="config-details">
             <div class="config-item">
@@ -66,9 +82,22 @@
           <div class="config-card-header">
             <span class="material-symbols-rounded">wifi</span>
             <h5>5 GHz</h5>
-            <span *ngIf="wifi5gAutoMode" class="data-badge auto" title="Rádio em modo automático — a CPE gerencia o canal">Automático</span>
-            <span *ngIf="hasLive5gData && !wifi5gAutoMode" class="data-badge live">Dados ao vivo</span>
-            <span *ngIf="!hasLive5gData && !wifi5gAutoMode" class="data-badge unknown">Desconhecido</span>
+            <span
+              *ngIf="wifi5gAutoMode"
+              class="data-badge auto"
+              title="Rádio em modo automático — a CPE gerencia o canal"
+              >Automático</span
+            >
+            <span
+              *ngIf="hasLive5gData && !wifi5gAutoMode"
+              class="data-badge live"
+              >Dados ao vivo</span
+            >
+            <span
+              *ngIf="!hasLive5gData && !wifi5gAutoMode"
+              class="data-badge unknown"
+              >Desconhecido</span
+            >
           </div>
           <div class="config-details">
             <div class="config-item">
@@ -89,20 +118,24 @@
     </div>
 
     <!-- Loading insights — feedback visual enquanto carrega -->
-    <div *ngIf="insightsLoading" class="flex items-center gap-2 text-sm text-gray-400 py-4 justify-center">
-      <span class="material-symbols-rounded text-base animate-spin">progress_activity</span>
-      Carregando insights...
+    <div *ngIf="insightsLoading" class="insights-loading">
+      <span class="material-symbols-rounded animate-spin"
+        >progress_activity</span
+      >
+      <span>Carregando insights...</span>
     </div>
 
     <!-- Apply feedback global — fica acima do card para visibilidade -->
-    <div *ngIf="applySuccess" class="text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded p-3 border border-green-300">
-      ✅ {{ applySuccess }}
+    <div *ngIf="applySuccess" class="apply-feedback apply-success">
+      <span class="material-symbols-rounded">check_circle</span>
+      <span>{{ applySuccess }}</span>
     </div>
-    <div *ngIf="applyError" class="text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded p-3 border border-red-300">
-      ❌ {{ applyError }}
+    <div *ngIf="applyError" class="apply-feedback apply-error">
+      <span class="material-symbols-rounded">error</span>
+      <span>{{ applyError }}</span>
     </div>
 
-    <!-- Card de Varredura de Redes Vizinhas (inclui TODOS os insights/diagnósticos) -->
+    <!-- Card de Varredura de Redes Vizinhas (insights de canal/saturação apenas) -->
     <div class="analysis-section">
       <app-neighbor-scan-card
         [serialNumber]="serialNumber"
@@ -113,92 +146,159 @@
         [insights]="wifiInsights"
         [applyInProgress]="applyInProgress"
         (runScan)="triggerNeighborScan()"
-        (applyRecommendation)="applyWifiRecommendation($event)">
+        (applyRecommendation)="applyWifiRecommendation($event)"
+      >
       </app-neighbor-scan-card>
     </div>
 
     <!-- ── SEÇÃO: Histórico de Scans ──────────────────────────────────────────── -->
-    <div class="mt-4">
-      <button (click)="showHistory = !showHistory"
-              class="w-full flex items-center justify-between px-3 py-2 rounded-lg
-                     border border-gray-200 dark:border-gray-700
-                     hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors
-                     text-sm font-medium text-gray-700 dark:text-gray-300">
-        <span class="flex items-center gap-2">
-          <span class="material-symbols-rounded text-base">history</span>
+    <div class="history-section">
+      <button
+        (click)="showHistory = !showHistory"
+        class="history-toggle"
+        [class.expanded]="showHistory"
+      >
+        <span class="history-toggle-label">
+          <span class="material-symbols-rounded">history</span>
           Histórico de Scans
-          <span *ngIf="scanHistory.length > 0"
-                class="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500">
-            {{ scanHistory.length }}
-          </span>
+          <span *ngIf="scanHistory.length > 0" class="history-count">{{
+            scanHistory.length
+          }}</span>
         </span>
-        <span class="material-symbols-rounded text-base transition-transform"
-              [class.rotate-180]="showHistory">expand_more</span>
+        <span
+          class="material-symbols-rounded history-chevron"
+          [class.rotate-180]="showHistory"
+          >expand_more</span
+        >
       </button>
 
-      <div *ngIf="showHistory" class="mt-3 space-y-2">
+      <div *ngIf="showHistory" class="history-content">
         <!-- Loading histórico -->
-        <div *ngIf="historyLoading" class="text-sm text-gray-400 text-center py-3">
+        <div *ngIf="historyLoading" class="history-loading">
           Carregando histórico...
         </div>
 
         <!-- Lista de scans anteriores -->
         <ng-container *ngIf="!historyLoading">
-          <div *ngIf="scanHistory.length === 0" class="text-sm text-gray-400 text-center py-3">
+          <div *ngIf="scanHistory.length === 0" class="history-empty">
             Nenhum scan anterior registrado.
           </div>
 
-          <div *ngFor="let scan of scanHistory"
-               class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs text-gray-500 dark:text-gray-400">
+          <div *ngFor="let scan of scanHistory" class="history-item">
+            <div class="history-item-header">
+              <span class="history-timestamp">
                 {{ formatScanTime(scan.timestamp) }}
               </span>
-              <span *ngIf="!scan.results?.channelSaturation"
-                    class="text-xs text-yellow-600 dark:text-yellow-400">
+              <span
+                *ngIf="!scan.results?.channelSaturation"
+                class="history-sim-badge"
+              >
                 Dados simulados
               </span>
             </div>
 
             <!-- Resumo 2 bandas lado a lado -->
-            <div class="grid grid-cols-2 gap-3 text-xs">
+            <div class="history-bands">
               <!-- 2.4 GHz -->
-              <div *ngIf="scan.results?.channelSaturation?.bands?.['2.4GHz'] as band24"
-                   class="space-y-0.5">
-                <div class="font-medium text-gray-700 dark:text-gray-300">2.4 GHz</div>
-                <div>Canal: {{ band24.currentChannel === 0 ? 'Auto' : (band24.currentChannel || '—') }}</div>
-                <div *ngIf="band24.suggestedChannel">
-                  Sugerido: <strong class="text-blue-600 dark:text-blue-400">{{ band24.suggestedChannel }}</strong>
+              <div
+                *ngIf="
+                  scan.results?.channelSaturation?.bands?.['2.4GHz'] as band24
+                "
+                class="history-band"
+              >
+                <div class="history-band-title">2.4 GHz</div>
+                <div class="history-band-row">
+                  <span class="history-band-label">Canal:</span>
+                  <span class="history-band-value">{{
+                    band24.currentChannel === 0
+                      ? "Auto"
+                      : band24.currentChannel || "—"
+                  }}</span>
                 </div>
-                <div [ngClass]="(band24.saturationScore ?? 0) > 3 ? 'text-red-500' :
-                                (band24.saturationScore ?? 0) > 1 ? 'text-yellow-500' : 'text-green-500'">
-                  Score: {{ band24.saturationScore != null ? band24.saturationScore.toFixed(1) : '—' }}
+                <div *ngIf="band24.suggestedChannel" class="history-band-row">
+                  <span class="history-band-label">Sugerido:</span>
+                  <span class="history-band-value history-band-suggested">{{
+                    band24.suggestedChannel
+                  }}</span>
+                </div>
+                <div class="history-band-row">
+                  <span class="history-band-label">Score atual:</span>
+                  <span
+                    class="history-band-value"
+                    [class.score-high]="(band24.saturationScore ?? 0) > 3"
+                    [class.score-medium]="
+                      (band24.saturationScore ?? 0) > 1 &&
+                      (band24.saturationScore ?? 0) <= 3
+                    "
+                    [class.score-low]="(band24.saturationScore ?? 0) <= 1"
+                  >
+                    {{
+                      band24.saturationScore != null
+                        ? band24.saturationScore.toFixed(1)
+                        : "—"
+                    }}
+                  </span>
                 </div>
               </div>
               <!-- 5 GHz -->
-              <div *ngIf="scan.results?.channelSaturation?.bands?.['5GHz'] as band5"
-                   class="space-y-0.5">
-                <div class="font-medium text-gray-700 dark:text-gray-300">5 GHz</div>
-                <div>Canal: {{ band5.currentChannel === 0 ? 'Auto' : (band5.currentChannel || '—') }}</div>
-                <div *ngIf="band5.suggestedChannel">
-                  Sugerido: <strong class="text-blue-600 dark:text-blue-400">{{ band5.suggestedChannel }}</strong>
+              <div
+                *ngIf="
+                  scan.results?.channelSaturation?.bands?.['5GHz'] as band5
+                "
+                class="history-band"
+              >
+                <div class="history-band-title">5 GHz</div>
+                <div class="history-band-row">
+                  <span class="history-band-label">Canal:</span>
+                  <span class="history-band-value">{{
+                    band5.currentChannel === 0
+                      ? "Auto"
+                      : band5.currentChannel || "—"
+                  }}</span>
                 </div>
-                <div [ngClass]="(band5.saturationScore ?? 0) > 3 ? 'text-red-500' :
-                                (band5.saturationScore ?? 0) > 1 ? 'text-yellow-500' : 'text-green-500'">
-                  Score: {{ band5.saturationScore != null ? band5.saturationScore.toFixed(1) : '—' }}
+                <div *ngIf="band5.suggestedChannel" class="history-band-row">
+                  <span class="history-band-label">Sugerido:</span>
+                  <span class="history-band-value history-band-suggested">{{
+                    band5.suggestedChannel
+                  }}</span>
+                </div>
+                <div class="history-band-row">
+                  <span class="history-band-label">Score atual:</span>
+                  <span
+                    class="history-band-value"
+                    [class.score-high]="(band5.saturationScore ?? 0) > 3"
+                    [class.score-medium]="
+                      (band5.saturationScore ?? 0) > 1 &&
+                      (band5.saturationScore ?? 0) <= 3
+                    "
+                    [class.score-low]="(band5.saturationScore ?? 0) <= 1"
+                  >
+                    {{
+                      band5.saturationScore != null
+                        ? band5.saturationScore.toFixed(1)
+                        : "—"
+                    }}
+                  </span>
                 </div>
               </div>
             </div>
 
             <!-- Fallback quando não há dados de saturação de canal -->
-            <div *ngIf="!scan.results?.channelSaturation?.bands?.['2.4GHz'] && !scan.results?.channelSaturation?.bands?.['5GHz']"
-                 class="text-xs text-gray-400 italic">
+            <div
+              *ngIf="
+                !scan.results?.channelSaturation?.bands?.['2.4GHz'] &&
+                !scan.results?.channelSaturation?.bands?.['5GHz']
+              "
+              class="history-fallback"
+            >
               Dados de saturação de canais não disponíveis para este scan.
             </div>
 
             <!-- Contador de vizinhos -->
-            <div *ngIf="scan.results?.neighborCount != null"
-                 class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <div
+              *ngIf="scan.results?.neighborCount != null"
+              class="history-neighbors"
+            >
               {{ scan.results.neighborCount }} redes vizinhas detectadas
             </div>
           </div>

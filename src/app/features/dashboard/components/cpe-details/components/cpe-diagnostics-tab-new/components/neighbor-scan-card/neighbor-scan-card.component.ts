@@ -1,7 +1,17 @@
-import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  Input,
+  Output,
+  EventEmitter,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ButtonComponent } from '@app/core/components/button/button.component';
-import { NON_OVERLAPPING_2G, PREFERRED_5G_NO_DFS, CHANNEL_RANGE } from '@app/core/constants/wifi.constants';
+import {
+  NON_OVERLAPPING_2G,
+  PREFERRED_5G_NO_DFS,
+  CHANNEL_RANGE,
+} from '@app/core/constants/wifi.constants';
 import { sanitizeNumber } from '@app/core/utils/sanitize';
 import {
   ChannelSaturationBand as BandSaturation,
@@ -153,11 +163,17 @@ export class NeighborScanCardComponent {
   }
 
   /** Extrai e ordena canais de uma banda a partir do channelSaturation. */
-  private extractChannels(cs: ChannelSaturation | null | undefined, band: '2.4GHz' | '5GHz'): ChannelEntry[] {
+  private extractChannels(
+    cs: ChannelSaturation | null | undefined,
+    band: '2.4GHz' | '5GHz',
+  ): ChannelEntry[] {
     const channels = cs?.bands?.[band]?.channels;
     if (!channels || typeof channels !== 'object') return [];
     return Object.values(channels)
-      .filter((c): c is ChannelEntry => !!c && typeof c === 'object' && typeof c.channel === 'number')
+      .filter(
+        (c): c is ChannelEntry =>
+          !!c && typeof c === 'object' && typeof c.channel === 'number',
+      )
       .sort((a, b) => a.channel - b.channel);
   }
 
@@ -174,12 +190,18 @@ export class NeighborScanCardComponent {
 
   get hasSaturationData(): boolean {
     // Segurança: valida que channelSaturation é um objeto válido
-    return !!(this._result?.channelSaturation && typeof this._result.channelSaturation === 'object');
+    return !!(
+      this._result?.channelSaturation &&
+      typeof this._result.channelSaturation === 'object'
+    );
   }
 
   get channelSaturation(): ChannelSaturation | null {
     // Segurança: retorna null se não for um objeto válido
-    if (!this._result?.channelSaturation || typeof this._result.channelSaturation !== 'object') {
+    if (
+      !this._result?.channelSaturation ||
+      typeof this._result.channelSaturation !== 'object'
+    ) {
       return null;
     }
     return this._result.channelSaturation;
@@ -199,6 +221,23 @@ export class NeighborScanCardComponent {
    */
   get channels5g(): ChannelEntry[] {
     return this._channels5g;
+  }
+
+  /**
+   * Canais 5GHz para exibição no grid — filtra canais completamente vazios
+   * (sem vizinhos E sem interferência) para evitar exibir 25 barras ociosas.
+   * Mantém sempre: canais com neighborCount > 0, canais com interferenceScore > 0,
+   * canais não-sobrepostos (UNII-1/3) e o canal atual.
+   */
+  get displayChannels5g(): ChannelEntry[] {
+    const currentCh = this.suggestion5g?.currentChannel;
+    return this._channels5g.filter((c) => {
+      if (c.neighborCount > 0) return true;
+      if (c.interferenceScore && c.interferenceScore > 0) return true;
+      if (this.isNonOverlappingChannel(c.channel, '5GHz')) return true;
+      if (c.channel === currentCh) return true;
+      return false;
+    });
   }
 
   get suggestion2g(): ChannelSuggestion | null {
@@ -239,7 +278,9 @@ export class NeighborScanCardComponent {
   get lastScanTimestamp(): string {
     // Segurança: valida que timestamp é uma string válida
     const timestamp = this._result?.timestamp;
-    return typeof timestamp === 'string' && timestamp.length > 0 ? timestamp : '';
+    return typeof timestamp === 'string' && timestamp.length > 0
+      ? timestamp
+      : '';
   }
 
   /**
@@ -270,9 +311,16 @@ export class NeighborScanCardComponent {
   /** Retorna um RadioQuality vazio para inicialização. */
   private emptyRadioQuality(): RadioQuality {
     return {
-      bandwidth: null, snr: null, noise: null, utilization: null,
-      txPower: null, channel: null, autoChannelEnable: null, rssi: null,
-      bandwidthSuggestion: null, bandwidthSuggestionReason: null,
+      bandwidth: null,
+      snr: null,
+      noise: null,
+      utilization: null,
+      txPower: null,
+      channel: null,
+      autoChannelEnable: null,
+      rssi: null,
+      bandwidthSuggestion: null,
+      bandwidthSuggestionReason: null,
     };
   }
 
@@ -293,29 +341,56 @@ export class NeighborScanCardComponent {
     const radio = this._result?.bands?.[band]?.radio;
 
     if (!radio || typeof radio !== 'object') {
-      return { bandwidth: null, snr: null, noise: null, utilization: null,
-               txPower: null, channel: null, autoChannelEnable: null, rssi: null,
-               bandwidthSuggestion: null, bandwidthSuggestionReason: null };
+      return {
+        bandwidth: null,
+        snr: null,
+        noise: null,
+        utilization: null,
+        txPower: null,
+        channel: null,
+        autoChannelEnable: null,
+        rssi: null,
+        bandwidthSuggestion: null,
+        bandwidthSuggestionReason: null,
+      };
     }
 
-    const bandwidth    = typeof radio.bandwidth === 'string' && radio.bandwidth.length > 0 ? radio.bandwidth : null;
+    const bandwidth =
+      typeof radio.bandwidth === 'string' && radio.bandwidth.length > 0
+        ? radio.bandwidth
+        : null;
 
     // AutoChannelEnable: true quando a CPE gerencia o canal (modo automático)
-    const autoChannelEnable = typeof radio.autoChannelEnable === 'boolean' ? radio.autoChannelEnable : null;
+    const autoChannelEnable =
+      typeof radio.autoChannelEnable === 'boolean'
+        ? radio.autoChannelEnable
+        : null;
 
     // SNR: CPEs TP-Link retornam "0" quando X_TP_SNR não é suportado pelo firmware.
     // SNR 0 dB (sinal = ruído) é fisicamente impossível num rádio funcional — descarta como inválido.
     const snrRaw = Number(radio.snr);
-    const snr = (radio.snr != null && !isNaN(snrRaw) && snrRaw > 0) ? sanitizeNumber(snrRaw, 1, 60) : null;
+    const snr =
+      radio.snr != null && !isNaN(snrRaw) && snrRaw > 0
+        ? sanitizeNumber(snrRaw, 1, 60)
+        : null;
 
     // Noise: CPEs retornam "0" quando Stats.Noise não é suportado.
     // Valores válidos de ruído de fundo ficam tipicamente entre -100 e -50 dBm.
     // 0 ou positivo indica parâmetro não suportado — descarta.
     const noiseRaw = Number(radio.noise);
-    const noise = (radio.noise != null && !isNaN(noiseRaw) && noiseRaw < -10) ? sanitizeNumber(noiseRaw, -120, -10) : null;
+    const noise =
+      radio.noise != null && !isNaN(noiseRaw) && noiseRaw < -10
+        ? sanitizeNumber(noiseRaw, -120, -10)
+        : null;
 
-    const utilization  = radio.utilization != null ? sanitizeNumber(radio.utilization, 0, 100) : null;
-    const txPower      = (radio.txPower != null && Number(radio.txPower) > 0) ? sanitizeNumber(radio.txPower, 1, 100) : null;
+    const utilization =
+      radio.utilization != null
+        ? sanitizeNumber(radio.utilization, 0, 100)
+        : null;
+    const txPower =
+      radio.txPower != null && Number(radio.txPower) > 0
+        ? sanitizeNumber(radio.txPower, 1, 100)
+        : null;
 
     // Canal: 0 em auto mode (AutoChannelEnable=true) é válido — manter 0.
     // 0 sem auto mode = parâmetro não preenchido — descarta (null).
@@ -334,17 +409,31 @@ export class NeighborScanCardComponent {
     }
 
     const rssiRaw = Number(radio.rssi);
-    const rssi = (radio.rssi != null && !isNaN(rssiRaw) && rssiRaw < 0) ? sanitizeNumber(rssiRaw, -120, -1) : null;
+    const rssi =
+      radio.rssi != null && !isNaN(rssiRaw) && rssiRaw < 0
+        ? sanitizeNumber(rssiRaw, -120, -1)
+        : null;
 
     // Sugestão de largura de banda: lê diretamente do payload do backend
     // (wifiNeighborScanService.collectChannelSaturation → bands[band].bandwidthSuggestion).
     // Antes esta lógica era duplicada no frontend — agora o backend é a fonte única.
     const channelSatBand = this.channelSaturation?.bands?.[band];
     const bandwidthSuggestion = channelSatBand?.bandwidthSuggestion ?? null;
-    const bandwidthSuggestionReason = channelSatBand?.bandwidthSuggestionReason ?? null;
+    const bandwidthSuggestionReason =
+      channelSatBand?.bandwidthSuggestionReason ?? null;
 
-    return { bandwidth, snr, noise, utilization, txPower, channel, autoChannelEnable, rssi,
-             bandwidthSuggestion, bandwidthSuggestionReason };
+    return {
+      bandwidth,
+      snr,
+      noise,
+      utilization,
+      txPower,
+      channel,
+      autoChannelEnable,
+      rssi,
+      bandwidthSuggestion,
+      bandwidthSuggestionReason,
+    };
   }
 
   /**
@@ -363,11 +452,16 @@ export class NeighborScanCardComponent {
   getSnrLabel(snr: number | null): string {
     const level = this.getSnrQuality(snr);
     switch (level) {
-      case 'excellent': return 'Excelente';
-      case 'good':      return 'Bom';
-      case 'fair':      return 'Regular';
-      case 'poor':      return 'Ruim';
-      default:          return 'N/D';
+      case 'excellent':
+        return 'Excelente';
+      case 'good':
+        return 'Bom';
+      case 'fair':
+        return 'Regular';
+      case 'poor':
+        return 'Ruim';
+      default:
+        return 'N/D';
     }
   }
 
@@ -385,10 +479,14 @@ export class NeighborScanCardComponent {
   getUtilizationLabel(utilization: number | null): string {
     const level = this.getUtilizationQuality(utilization);
     switch (level) {
-      case 'poor': return 'Saturado';
-      case 'fair': return 'Moderado';
-      case 'good': return 'Normal';
-      default:     return 'N/D';
+      case 'poor':
+        return 'Saturado';
+      case 'fair':
+        return 'Moderado';
+      case 'good':
+        return 'Normal';
+      default:
+        return 'N/D';
     }
   }
 
@@ -400,32 +498,45 @@ export class NeighborScanCardComponent {
   }
 
   /**
-   * Todos os insights vindos do backend (actionable e não-actionable).
-   * O card exibe ambos: actionable com botão "Aplicar", não-actionable como diagnóstico.
+   * Insights vindos do backend, filtrados para exibir apenas diagnósticos de CANAL e
+   * SATURAÇÃO (não de hosts conectados).
+   *
+   * Categorias host-specific ('sinal', 'qoe') são filtradas — o backend continua gerando
+   * esses insights para análise interna, mas o frontend não os exibe como sugestões ao
+   * técnico. Os dados de hosts permanecem acessíveis via aba "Dispositivos" para consulta.
+   *
+   * Categorias exibidas: 'canal', 'saturacao', 'congestionamento', 'configuracao'.
    * Ordenação: critical primeiro, depois warning, depois info.
    * Dentro da mesma severidade, actionable primeiro (botão Aplicar tem prioridade visual).
    */
+  private static readonly HOST_CATEGORIES = ['sinal', 'qoe'];
+
   get allInsights(): WifiInsight[] {
     const order = { critical: 0, warning: 1, info: 2 };
-    return (this.insights || []).slice().sort((a, b) => {
-      const sa = order[a.severity] ?? 9;
-      const sb = order[b.severity] ?? 9;
-      if (sa !== sb) return sa - sb;
-      // Dentro da mesma severidade, actionable primeiro
-      const aa = a.actionable ? 0 : 1;
-      const ab = b.actionable ? 0 : 1;
-      return aa - ab;
-    });
+    return (this.insights || [])
+      .filter(
+        (i) => !NeighborScanCardComponent.HOST_CATEGORIES.includes(i.category),
+      )
+      .slice()
+      .sort((a, b) => {
+        const sa = order[a.severity] ?? 9;
+        const sb = order[b.severity] ?? 9;
+        if (sa !== sb) return sa - sb;
+        // Dentro da mesma severidade, actionable primeiro
+        const aa = a.actionable ? 0 : 1;
+        const ab = b.actionable ? 0 : 1;
+        return aa - ab;
+      });
   }
 
   /** Apenas insights actionable (com botão "Aplicar"). */
   get actionableInsights(): WifiInsight[] {
-    return this.allInsights.filter(i => i?.actionable === true && i?.action);
+    return this.allInsights.filter((i) => i?.actionable === true && i?.action);
   }
 
   /** Insights críticos (severity === 'critical'). */
   get criticalInsights(): WifiInsight[] {
-    return this.allInsights.filter(i => i.severity === 'critical');
+    return this.allInsights.filter((i) => i.severity === 'critical');
   }
 
   /** True quando há pelo menos 1 insight — expande o status-dashboard. */
@@ -467,20 +578,24 @@ export class NeighborScanCardComponent {
     if (this.hasCriticalInsights) {
       const crit = this.criticalInsights.length;
       const act = this.actionableInsights.length;
-      if (act > 0) return `${crit} alerta${crit > 1 ? 's' : ''} crítico${crit > 1 ? 's' : ''} e ${act} otimização${act > 1 ? 'ões' : ''} aplicável${act > 1 ? 'eis' : ''}`;
+      if (act > 0)
+        return `${crit} alerta${crit > 1 ? 's' : ''} crítico${crit > 1 ? 's' : ''} e ${act} otimização${act > 1 ? 'ões' : ''} aplicável${act > 1 ? 'eis' : ''}`;
       return `${crit} alerta${crit > 1 ? 's' : ''} crítico${crit > 1 ? 's' : ''} detectado${crit > 1 ? 's' : ''}`;
     }
     if (this.hasActionableInsights) {
       const act = this.actionableInsights.length;
       const total = this.insightsCount;
-      if (act === total) return `${act} otimização${act > 1 ? 'ões' : ''} aplicável${act > 1 ? 'eis' : ''}`;
+      if (act === total)
+        return `${act} otimização${act > 1 ? 'ões' : ''} aplicável${act > 1 ? 'eis' : ''}`;
       return `${act} otimização${act > 1 ? 'ões' : ''} aplicável${act > 1 ? 'eis' : ''} em ${total} diagnóstico${total > 1 ? 's' : ''}`;
     }
     if (this.hasInsights) {
       const n = this.insightsCount;
       return `${n} diagnóstico${n > 1 ? 's' : ''} disponível${n > 1 ? 'veis' : ''}`;
     }
-    return this.hasCongestion ? 'Recomenda-se ajuste de canal' : 'Nenhuma ação necessária';
+    return this.hasCongestion
+      ? 'Recomenda-se ajuste de canal'
+      : 'Nenhuma ação necessária';
   }
 
   /** Ícone Material Symbols do status (substitui emojis). */
@@ -539,11 +654,16 @@ export class NeighborScanCardComponent {
     const a = insight?.action;
     if (!a) return '';
     switch (a.type) {
-      case 'set_channel':    return `Canal ${a.band} → ${a.value}`;
-      case 'change_channel': return `Canal ${a.band} → ${a.value}`;
-      case 'set_power':      return `Potência ${a.band} → ${a.value}%`;
-      case 'set_bandwidth':  return `Largura ${a.band} → ${a.value}`;
-      default:               return `${a.band}: ${a.value}`;
+      case 'set_channel':
+        return `Canal ${a.band} → ${a.value}`;
+      case 'change_channel':
+        return `Canal ${a.band} → ${a.value}`;
+      case 'set_power':
+        return `Potência ${a.band} → ${a.value}%`;
+      case 'set_bandwidth':
+        return `Largura ${a.band} → ${a.value}`;
+      default:
+        return `${a.band}: ${a.value}`;
     }
   }
 
@@ -568,24 +688,34 @@ export class NeighborScanCardComponent {
   getCongestionLabel(countOrScore: number): string {
     const level = this.getCongestionLevel(countOrScore);
     switch (level) {
-      case 'empty':  return 'Livre';
-      case 'low':    return 'Baixa';
-      case 'medium': return 'Média';
-      case 'high':   return 'Alta';
-      default:       return '';
+      case 'empty':
+        return 'Livre';
+      case 'low':
+        return 'Baixa';
+      case 'medium':
+        return 'Média';
+      case 'high':
+        return 'Alta';
+      default:
+        return '';
     }
   }
 
   getCongestionColor(level: string): string {
     // Segurança: valida que level é uma string válida
     if (typeof level !== 'string') return '#64748b';
-    
+
     switch (level) {
-      case 'empty':  return '#e2e8f0';
-      case 'low':    return '#22c55e';
-      case 'medium': return '#f59e0b';
-      case 'high':   return '#ef4444';
-      default:       return '#64748b';
+      case 'empty':
+        return '#e2e8f0';
+      case 'low':
+        return '#22c55e';
+      case 'medium':
+        return '#f59e0b';
+      case 'high':
+        return '#ef4444';
+      default:
+        return '#64748b';
     }
   }
 
@@ -595,7 +725,7 @@ export class NeighborScanCardComponent {
    */
   getCongestionWidth(score: number, max: number = 5): number {
     const sanitizedScore = sanitizeNumber(score, 0, 1000);
-    const sanitizedMax   = sanitizeNumber(max, 1, 1000);
+    const sanitizedMax = sanitizeNumber(max, 1, 1000);
     if (sanitizedMax === 0) return 0;
     return Math.min((sanitizedScore / sanitizedMax) * 100, 100);
   }
@@ -603,13 +733,13 @@ export class NeighborScanCardComponent {
   formatTimestamp(timestamp: string): string {
     // Segurança: valida timestamp antes de criar Date
     if (!timestamp || typeof timestamp !== 'string') return '';
-    
+
     try {
       const date = new Date(timestamp);
-      
+
       // Segurança: valida se a data é válida
       if (isNaN(date.getTime())) return '';
-      
+
       return date.toLocaleString('pt-BR');
     } catch (error) {
       console.error('[NeighborScanCard] Erro ao formatar timestamp:', error);
@@ -622,29 +752,34 @@ export class NeighborScanCardComponent {
     if (typeof band !== 'string' || (band !== '2.4GHz' && band !== '5GHz')) {
       return 'Parâmetro de banda inválido';
     }
-    
-    const suggestion = band === '2.4GHz' ? this.suggestion2g : this.suggestion5g;
+
+    const suggestion =
+      band === '2.4GHz' ? this.suggestion2g : this.suggestion5g;
     if (!suggestion) return 'Sem dados para recomendação (acione a varredura)';
 
     // Estrutura real do backend: { bestChannel, currentChannel, currentScore, bestScore,
     //                               improvement, shouldChange, reason, parameterPath }
     if (suggestion.shouldChange === false) {
       const currentChannel = sanitizeNumber(suggestion.currentChannel, 1, 165);
-      const currentScore   = sanitizeNumber(suggestion.currentScore, 0, 1000);
+      const currentScore = sanitizeNumber(suggestion.currentScore, 0, 1000);
       return `Canal ${currentChannel} já é o melhor disponível (score ${currentScore.toFixed(1)})`;
     }
 
     // Sanitiza e usa o campo reason do backend se disponível (string já formatada)
-    if (typeof suggestion.reason === 'string' && suggestion.reason.length > 0 && suggestion.reason.length < 200) {
+    if (
+      typeof suggestion.reason === 'string' &&
+      suggestion.reason.length > 0 &&
+      suggestion.reason.length < 200
+    ) {
       return suggestion.reason;
     }
 
     // Fallback com campos individuais sanitizados
-    const bestChannel    = sanitizeNumber(suggestion.bestChannel, 1, 165);
+    const bestChannel = sanitizeNumber(suggestion.bestChannel, 1, 165);
     const currentChannel = sanitizeNumber(suggestion.currentChannel, 1, 165);
-    const bestScore      = sanitizeNumber(suggestion.bestScore, 0, 1000);
-    const improvement    = sanitizeNumber(suggestion.improvement, 0, 1000);
-    
+    const bestScore = sanitizeNumber(suggestion.bestScore, 0, 1000);
+    const improvement = sanitizeNumber(suggestion.improvement, 0, 1000);
+
     return `Mudar canal ${currentChannel} → ${bestChannel} (redução de ${improvement.toFixed(1)} no score, de ${sanitizeNumber(suggestion.currentScore, 0, 1000).toFixed(1)} para ${bestScore.toFixed(1)})`;
   }
 
@@ -665,7 +800,19 @@ export class NeighborScanCardComponent {
     // Segurança: valida channel e band antes de processar
     const sanitizedChannel = sanitizeNumber(channel, 1, 165);
     const validChannels = this.getNonOverlappingChannels(band);
-    
+
     return validChannels.includes(sanitizedChannel);
+  }
+
+  /**
+   * Verifica se um canal é o canal sugerido pelo backend (bestChannel da suggestion).
+   * Usado para destacar visualmente o canal recomendado no grid de saturação.
+   */
+  isSuggestedChannel(channel: number, band: string): boolean {
+    const suggestion =
+      band === '2.4GHz' ? this.suggestion2g : this.suggestion5g;
+    return (
+      suggestion?.bestChannel === channel && suggestion?.shouldChange === true
+    );
   }
 }
