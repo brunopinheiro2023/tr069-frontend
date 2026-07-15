@@ -184,6 +184,21 @@ export class WebSocketService {
   }> {
     return this.on('neighbor_scan_completed');
   }
+  // Auto-otimização de canal Wi-Fi aplicada pelo scheduler (não por técnico).
+  // Emitido no room cpe_${serialNumber} quando o backend aplica uma troca de canal
+  // automática. Permite que admins/técnicos conectados vejam mudanças automáticas
+  // em tempo real — mesmo padrão do neighbor_scan_completed acima.
+  onAutoWifiOptimizeApplied(): Observable<{
+    serialNumber: string;
+    band: string;
+    previousChannel: number;
+    newChannel: number;
+    improvement: number | null;
+    reason: string;
+    timestamp: string;
+  }> {
+    return this.on('auto_wifi_optimize_applied');
+  }
 
   // Diagnósticos ativos — 4 pares de evento (ipping/traceroute/dnslookup/udpecho × completed/error)
   // já emitidos pelo backend na sala cpe_${serialNumber}. Reaproveita os eventos
