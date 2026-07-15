@@ -1,13 +1,34 @@
 // Caminho do arquivo: frontend/src/app/features/dashboard/dashboard.component.ts
 
-import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef, ViewChild, inject, DestroyRef } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  OnDestroy,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  ViewChild,
+  inject,
+  DestroyRef,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject, from, of, timer, forkJoin, zip, Observable } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { bufferTime, filter, debounceTime, distinctUntilChanged, bufferCount, concatMap, catchError, map } from 'rxjs/operators';
+import {
+  bufferTime,
+  filter,
+  debounceTime,
+  distinctUntilChanged,
+  bufferCount,
+  concatMap,
+  catchError,
+  map,
+} from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
-import { ScrollingModule, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
+import {
+  ScrollingModule,
+  CdkVirtualScrollViewport,
+} from '@angular/cdk/scrolling';
 import { NgChartsModule } from 'ng2-charts';
 import { ChartConfiguration, ChartOptions } from 'chart.js';
 import { CpeService } from '../../core/services/cpe.service';
@@ -16,7 +37,12 @@ import { ToastService } from '../../core/services/toast.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ButtonComponent } from '../../core/components/button/button.component';
 import { SkeletonComponent } from '../../core/components/skeleton/skeleton.component';
-import { CpeDevice, PaginatedResponse, CpePrediction, DiagnosticOverview } from '../../core/models';
+import {
+  CpeDevice,
+  PaginatedResponse,
+  CpePrediction,
+  DiagnosticOverview,
+} from '../../core/models';
 import { Router } from '@angular/router';
 import { AlertsPanelComponent } from './components/alerts-panel/alerts-panel.component';
 import { DiagnosticTargetService } from '../../core/services/diagnostic-target.service';
@@ -32,10 +58,18 @@ interface DashboardCpe extends CpeDevice {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, ButtonComponent, SkeletonComponent, ScrollingModule, NgChartsModule, AlertsPanelComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    ButtonComponent,
+    SkeletonComponent,
+    ScrollingModule,
+    NgChartsModule,
+    AlertsPanelComponent,
+  ],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss'],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DashboardComponent implements OnInit, OnDestroy {
   // Referência ao Viewport para resetar o scroll ao trocar de página/filtro
@@ -83,7 +117,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     errors: number;
   } | null = null;
   queueStats: { messageCount: number; consumerCount: number } | null = null;
-  processHealth: { rssMB: number; heapUsedMB: number; uptimeSeconds: number } | null = null;
+  processHealth: {
+    rssMB: number;
+    heapUsedMB: number;
+    uptimeSeconds: number;
+  } | null = null;
   workerHealthDegraded: boolean = false;
   selectedCpes = new Set<string>();
 
@@ -100,7 +138,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
   } | null = null;
 
   // Alertas de sistema — disparados quando thresholds são cruzados
-  systemAlerts: { level: 'warning' | 'critical'; message: string; metric: string }[] = [];
+  systemAlerts: {
+    level: 'warning' | 'critical';
+    message: string;
+    metric: string;
+  }[] = [];
 
   // Getter: uptime formatado em dias/horas/minutos
   get acsUptimeFormatted(): string {
@@ -117,12 +159,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // Getter: status geral do backend (ok/degraded/critical)
   get backendStatus(): 'ok' | 'degraded' | 'critical' {
     if (!this.acsSystemInfo) return 'ok';
-    if (this.acsSystemInfo.mongodbStatus === 'disconnected' || this.acsSystemInfo.redisStatus === 'disconnected') return 'critical';
+    if (
+      this.acsSystemInfo.mongodbStatus === 'disconnected' ||
+      this.acsSystemInfo.redisStatus === 'disconnected'
+    )
+      return 'critical';
     if (this.workerHealthSeverity === 'critical') return 'critical';
-    if (this.workerHealthSeverity === 'warning' ||
-        this.acsSystemInfo.mongodbStatus === 'degraded' ||
-        this.acsSystemInfo.redisStatus === 'degraded' ||
-        this.acsSystemInfo.admissionCircuitOpen) return 'degraded';
+    if (
+      this.workerHealthSeverity === 'warning' ||
+      this.acsSystemInfo.mongodbStatus === 'degraded' ||
+      this.acsSystemInfo.redisStatus === 'degraded' ||
+      this.acsSystemInfo.admissionCircuitOpen
+    )
+      return 'degraded';
     return 'ok';
   }
 
@@ -133,7 +182,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     memoryMBWarning: 400,
     memoryMBCritical: 600,
     queueWarning: 50,
-    queueCritical: 200
+    queueCritical: 200,
   };
 
   // Ordenação multi-coluna — qualquer coluna pode ser ordenada (asc/desc/null)
@@ -143,7 +192,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // Colunas ordenáveis da tabela
   readonly SORTABLE_COLUMNS: readonly string[] = [
-    'status', 'serialNumber', 'model', 'wanIp', 'pppoe', 'rx', 'healthScore', 'tasks'
+    'status',
+    'serialNumber',
+    'model',
+    'wanIp',
+    'pppoe',
+    'rx',
+    'healthScore',
+    'tasks',
   ];
 
   // Compatibilidade: mantém healthScoreSortDirection mapeando para o novo sistema
@@ -191,13 +247,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // Getter para detectar filtros ativos (público para uso no template)
   get hasActiveFilters(): boolean {
-    return this.filterStatus !== 'all'
-      || !!this.filterManufacturer
-      || !!this.filterModel
-      || !!this.filterFirmware
-      || !!this.searchQuery.trim()
-      || this.filterCriticalGpon
-      || this.filterHealthScore !== null;
+    return (
+      this.filterStatus !== 'all' ||
+      !!this.filterManufacturer ||
+      !!this.filterModel ||
+      !!this.filterFirmware ||
+      !!this.searchQuery.trim() ||
+      this.filterCriticalGpon ||
+      this.filterHealthScore !== null
+    );
   }
 
   // CPEs que já receberam alerta de offline nesta sessão (evita spam)
@@ -220,14 +278,35 @@ export class DashboardComponent implements OnInit, OnDestroy {
   diagLastUpdate: string | null = null;
   diagEmptyMessage: string | null = null;
   private diagnosticInterval?: ReturnType<typeof setInterval>;
-  readonly diagnosticTooltipText = 'Diagnósticos periódicos (IPPing, TraceRoute, DNSLookup) executados automaticamente pelo scheduler a cada hora contra destinos cadastrados. A taxa de sucesso indica quantos diagnósticos completaram sem erro. A latência média reflete o tempo de resposta da rede. CPEs com falhas são equipamentos que falharam em pelo menos 1 diagnóstico no período.';
-  readonly diagnosticRefreshText = 'Este gráfico é atualizado automaticamente a cada 5 minutos. A próxima atualização ocorrerá após o intervalo. Você também pode atualizar a página para ver os dados mais recentes.';
+  readonly diagnosticTooltipText =
+    'Diagnósticos periódicos (IPPing, TraceRoute, DNSLookup) executados automaticamente pelo scheduler a cada hora contra destinos cadastrados. A taxa de sucesso indica quantos diagnósticos completaram sem erro. A latência média reflete o tempo de resposta da rede. CPEs com falhas são equipamentos que falharam em pelo menos 1 diagnóstico no período.';
+  readonly diagnosticRefreshText =
+    'Este gráfico é atualizado automaticamente a cada 5 minutos. A próxima atualização ocorrerá após o intervalo. Você também pode atualizar a página para ver os dados mais recentes.';
+
+  // Filtro de destino no gráfico — 'all' = agregado, ou targetId específico
+  selectedTargetId: string = 'all';
 
   // Gráfico de barras empilhadas: sucesso/erro por dia
   diagChartLabels: string[] = [];
   diagChartDatasets: ChartConfiguration<'bar'>['data']['datasets'] = [
-    { data: [], label: 'Sucesso', backgroundColor: 'rgba(16, 185, 129, 0.7)', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y', type: 'bar' as const },
-    { data: [], label: 'Erro', backgroundColor: 'rgba(239, 68, 68, 0.7)', borderColor: '#ef4444', borderWidth: 1, yAxisID: 'y', type: 'bar' as const },
+    {
+      data: [],
+      label: 'Sucesso',
+      backgroundColor: 'rgba(16, 185, 129, 0.7)',
+      borderColor: '#10b981',
+      borderWidth: 1,
+      yAxisID: 'y',
+      type: 'bar' as const,
+    },
+    {
+      data: [],
+      label: 'Erro',
+      backgroundColor: 'rgba(239, 68, 68, 0.7)',
+      borderColor: '#ef4444',
+      borderWidth: 1,
+      yAxisID: 'y',
+      type: 'bar' as const,
+    },
   ];
   diagChartOptions: ChartOptions<'bar'> = {
     responsive: true,
@@ -239,7 +318,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     },
     scales: {
       x: { stacked: true, title: { display: true, text: 'Data' } },
-      y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Execuções' }, position: 'left' as const },
+      y: {
+        stacked: true,
+        beginAtZero: true,
+        title: { display: true, text: 'Execuções' },
+        position: 'left' as const,
+      },
     },
   };
 
@@ -251,14 +335,30 @@ export class DashboardComponent implements OnInit, OnDestroy {
     plugins: { legend: { display: true }, tooltip: { enabled: true } },
     scales: {
       x: { display: false },
-      y: { beginAtZero: true, display: false }
+      y: { beginAtZero: true, display: false },
     },
-    elements: { point: { radius: 0 } }
+    elements: { point: { radius: 0 } },
   };
   xmlChartLabels: string[] = [];
   xmlChartDatasets: ChartConfiguration<'line'>['data']['datasets'] = [
-    { data: [], label: 'Média (ms)', borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.2)', fill: true, tension: 0.4, borderWidth: 2 },
-    { data: [], label: 'P95 (ms)', borderColor: '#f59e0b', borderDash: [4, 4], fill: false, tension: 0.4, borderWidth: 1.5 }
+    {
+      data: [],
+      label: 'Média (ms)',
+      borderColor: '#10b981',
+      backgroundColor: 'rgba(16, 185, 129, 0.2)',
+      fill: true,
+      tension: 0.4,
+      borderWidth: 2,
+    },
+    {
+      data: [],
+      label: 'P95 (ms)',
+      borderColor: '#f59e0b',
+      borderDash: [4, 4],
+      fill: false,
+      tension: 0.4,
+      borderWidth: 1.5,
+    },
   ];
 
   constructor(
@@ -268,18 +368,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private router: Router,
     private cdr: ChangeDetectorRef,
     public authService: AuthService,
-    private diagnosticTargetService: DiagnosticTargetService
+    private diagnosticTargetService: DiagnosticTargetService,
   ) {}
 
   get workerHealthSeverity(): 'ok' | 'warning' | 'critical' {
     if (!this.xmlParserMetrics) return 'ok';
     const t = this.WORKER_HEALTH_THRESHOLDS;
-    if (this.xmlParserMetrics.avgProcessingTimeMs > t.avgMsCritical ||
-        this.xmlParserMetrics.lastMemoryUsageMB > t.memoryMBCritical ||
-        (this.queueStats?.messageCount ?? 0) > t.queueCritical) return 'critical';
-    if (this.xmlParserMetrics.avgProcessingTimeMs > t.avgMsWarning ||
-        this.xmlParserMetrics.lastMemoryUsageMB > t.memoryMBWarning ||
-        (this.queueStats?.messageCount ?? 0) > t.queueWarning) return 'warning';
+    if (
+      this.xmlParserMetrics.avgProcessingTimeMs > t.avgMsCritical ||
+      this.xmlParserMetrics.lastMemoryUsageMB > t.memoryMBCritical ||
+      (this.queueStats?.messageCount ?? 0) > t.queueCritical
+    )
+      return 'critical';
+    if (
+      this.xmlParserMetrics.avgProcessingTimeMs > t.avgMsWarning ||
+      this.xmlParserMetrics.lastMemoryUsageMB > t.memoryMBWarning ||
+      (this.queueStats?.messageCount ?? 0) > t.queueWarning
+    )
+      return 'warning';
     return 'ok';
   }
 
@@ -288,25 +394,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadSavedFilters();
 
     // Setup do debounce reativo para a busca (Otimização RxJS)
-    this.searchSubject.pipe(
-      debounceTime(400),
-      distinctUntilChanged(),
-      takeUntilDestroyed(this.destroyRef)
-    ).subscribe(query => {
-      this.triggerFilter();
-    });
+    this.searchSubject
+      .pipe(
+        debounceTime(400),
+        distinctUntilChanged(),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((query) => {
+        this.triggerFilter();
+      });
 
     // Setup do debounce para re-filtragem WS (evita spam ao Worker)
-    this.refilterSubject.pipe(
-      debounceTime(300),
-      takeUntilDestroyed(this.destroyRef)
-    ).subscribe(() => {
-      this.triggerFilter(false);
-    });
+    this.refilterSubject
+      .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.triggerFilter(false);
+      });
 
     // Inicializa o Web Worker para isolar o processamento pesado de filtros
     if (typeof Worker !== 'undefined') {
-      this.worker = new Worker(new URL('./cpe-filter.worker.ts', import.meta.url), { type: 'module' });
+      this.worker = new Worker(
+        new URL('./cpe-filter.worker.ts', import.meta.url),
+        { type: 'module' },
+      );
       this.worker.onmessage = ({ data }) => {
         if (data.error) {
           this.toastService.error(`Erro no filtro: ${data.message}`);
@@ -323,7 +433,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
       };
       this.worker.onerror = (error) => {
-        this.toastService.error('Ocorreu um erro no processamento de filtros em segundo plano.');
+        this.toastService.error(
+          'Ocorreu um erro no processamento de filtros em segundo plano.',
+        );
         this.cpes = this.applyFilters(this.allCpes); // Fallback: aplica filtros na thread principal
         this.loading = false;
         this.isRefiltering = false;
@@ -346,7 +458,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       const now = Date.now();
       let hasChanges = false;
 
-      this.allCpes.forEach(cpe => {
+      this.allCpes.forEach((cpe) => {
         if (cpe.lastInform) {
           const minsSince = (now - new Date(cpe.lastInform).getTime()) / 60000;
 
@@ -425,8 +537,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private startMetricsPolling(): void {
     this.metricsInterval = setInterval(() => {
       forkJoin({
-        system: this.cpeService.getSystemHealth().pipe(catchError(() => of(null))),
-        workers: this.cpeService.getWorkerHealth().pipe(catchError(() => of(null))),
+        system: this.cpeService
+          .getSystemHealth()
+          .pipe(catchError(() => of(null))),
+        workers: this.cpeService
+          .getWorkerHealth()
+          .pipe(catchError(() => of(null))),
       }).subscribe({
         next: ({ system, workers }) => {
           // --- Endpoint /health (sistema) ---
@@ -434,8 +550,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
             this.acsSystemInfo = {
               version: system.version ?? 'N/D',
               uptimeSeconds: system.uptime ?? 0,
-              mongodbStatus: (system.mongodb === 'connected' ? 'connected' : system.mongodb === 'degraded' ? 'degraded' : 'disconnected') as 'connected' | 'disconnected' | 'degraded',
-              redisStatus: (system.redis === 'connected' ? 'connected' : system.redis === 'degraded' ? 'degraded' : 'disconnected') as 'connected' | 'disconnected' | 'degraded',
+              mongodbStatus: (system.mongodb === 'connected'
+                ? 'connected'
+                : system.mongodb === 'degraded'
+                  ? 'degraded'
+                  : 'disconnected') as
+                | 'connected'
+                | 'disconnected'
+                | 'degraded',
+              redisStatus: (system.redis === 'connected'
+                ? 'connected'
+                : system.redis === 'degraded'
+                  ? 'degraded'
+                  : 'disconnected') as
+                | 'connected'
+                | 'disconnected'
+                | 'degraded',
               eventLoopLagMs: system.admission?.eventLoopLagMs ?? 0,
               admissionCircuitOpen: system.admission?.circuitOpen ?? false,
               mongoCircuitState: system.mongoCircuit?.state ?? 'closed',
@@ -451,8 +581,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
             const now = new Date().toLocaleTimeString();
             this.xmlChartLabels.push(now);
-            this.xmlChartDatasets[0].data.push(workers.xmlParser.avgProcessingTimeMs);
-            this.xmlChartDatasets[1].data.push(workers.xmlParser.p95ProcessingTimeMs);
+            this.xmlChartDatasets[0].data.push(
+              workers.xmlParser.avgProcessingTimeMs,
+            );
+            this.xmlChartDatasets[1].data.push(
+              workers.xmlParser.p95ProcessingTimeMs,
+            );
             if (this.xmlChartLabels.length > 30) {
               this.xmlChartLabels.shift();
               this.xmlChartDatasets[0].data.shift();
@@ -471,7 +605,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         error: () => {
           this.workerHealthDegraded = true;
           this.cdr.markForCheck();
-        }
+        },
       });
     }, 5000);
   }
@@ -481,51 +615,107 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * Alertas são recalculados a cada polling — não persistem entre ciclos.
    */
   private evaluateSystemAlerts(): void {
-    const alerts: { level: 'warning' | 'critical'; message: string; metric: string }[] = [];
+    const alerts: {
+      level: 'warning' | 'critical';
+      message: string;
+      metric: string;
+    }[] = [];
     const t = this.WORKER_HEALTH_THRESHOLDS;
 
     if (this.xmlParserMetrics) {
       if (this.xmlParserMetrics.avgProcessingTimeMs > t.avgMsCritical) {
-        alerts.push({ level: 'critical', message: `CPU XML parser crítica: ${this.xmlParserMetrics.avgProcessingTimeMs}ms`, metric: 'cpu' });
+        alerts.push({
+          level: 'critical',
+          message: `CPU XML parser crítica: ${this.xmlParserMetrics.avgProcessingTimeMs}ms`,
+          metric: 'cpu',
+        });
       } else if (this.xmlParserMetrics.avgProcessingTimeMs > t.avgMsWarning) {
-        alerts.push({ level: 'warning', message: `CPU XML parser elevada: ${this.xmlParserMetrics.avgProcessingTimeMs}ms`, metric: 'cpu' });
+        alerts.push({
+          level: 'warning',
+          message: `CPU XML parser elevada: ${this.xmlParserMetrics.avgProcessingTimeMs}ms`,
+          metric: 'cpu',
+        });
       }
 
       if (this.xmlParserMetrics.lastMemoryUsageMB > t.memoryMBCritical) {
-        alerts.push({ level: 'critical', message: `RAM crítica: ${this.xmlParserMetrics.lastMemoryUsageMB}MB`, metric: 'memory' });
+        alerts.push({
+          level: 'critical',
+          message: `RAM crítica: ${this.xmlParserMetrics.lastMemoryUsageMB}MB`,
+          metric: 'memory',
+        });
       } else if (this.xmlParserMetrics.lastMemoryUsageMB > t.memoryMBWarning) {
-        alerts.push({ level: 'warning', message: `RAM elevada: ${this.xmlParserMetrics.lastMemoryUsageMB}MB`, metric: 'memory' });
+        alerts.push({
+          level: 'warning',
+          message: `RAM elevada: ${this.xmlParserMetrics.lastMemoryUsageMB}MB`,
+          metric: 'memory',
+        });
       }
     }
 
     if (this.queueStats) {
       if (this.queueStats.messageCount > t.queueCritical) {
-        alerts.push({ level: 'critical', message: `Fila RabbitMQ crítica: ${this.queueStats.messageCount} mensagens`, metric: 'queue' });
+        alerts.push({
+          level: 'critical',
+          message: `Fila RabbitMQ crítica: ${this.queueStats.messageCount} mensagens`,
+          metric: 'queue',
+        });
       } else if (this.queueStats.messageCount > t.queueWarning) {
-        alerts.push({ level: 'warning', message: `Fila RabbitMQ elevada: ${this.queueStats.messageCount} mensagens`, metric: 'queue' });
+        alerts.push({
+          level: 'warning',
+          message: `Fila RabbitMQ elevada: ${this.queueStats.messageCount} mensagens`,
+          metric: 'queue',
+        });
       }
     }
 
     if (this.acsSystemInfo) {
       if (this.acsSystemInfo.mongodbStatus === 'disconnected') {
-        alerts.push({ level: 'critical', message: 'MongoDB desconectado', metric: 'mongodb' });
+        alerts.push({
+          level: 'critical',
+          message: 'MongoDB desconectado',
+          metric: 'mongodb',
+        });
       } else if (this.acsSystemInfo.mongodbStatus === 'degraded') {
-        alerts.push({ level: 'warning', message: 'MongoDB degradado', metric: 'mongodb' });
+        alerts.push({
+          level: 'warning',
+          message: 'MongoDB degradado',
+          metric: 'mongodb',
+        });
       }
       if (this.acsSystemInfo.redisStatus === 'disconnected') {
-        alerts.push({ level: 'critical', message: 'Redis desconectado', metric: 'redis' });
+        alerts.push({
+          level: 'critical',
+          message: 'Redis desconectado',
+          metric: 'redis',
+        });
       } else if (this.acsSystemInfo.redisStatus === 'degraded') {
-        alerts.push({ level: 'warning', message: 'Redis degradado', metric: 'redis' });
+        alerts.push({
+          level: 'warning',
+          message: 'Redis degradado',
+          metric: 'redis',
+        });
       }
       // Alerta: admission circuit aberto (backend sob pressão, rejeitando requisições)
       if (this.acsSystemInfo.admissionCircuitOpen) {
-        alerts.push({ level: 'critical', message: 'Admission circuit aberto — backend rejeitando requisições', metric: 'admission' });
+        alerts.push({
+          level: 'critical',
+          message: 'Admission circuit aberto — backend rejeitando requisições',
+          metric: 'admission',
+        });
       }
       // Alerta: event loop lag alto
       if (this.acsSystemInfo.eventLoopLagMs > 100) {
-        alerts.push({ level: 'critical', message: `Event loop lag crítico: ${this.acsSystemInfo.eventLoopLagMs}ms`, metric: 'eventloop' });
+        alerts.push({
+          level: 'critical',
+          message: `Event loop lag crítico: ${this.acsSystemInfo.eventLoopLagMs}ms`,
+          metric: 'eventloop',
+        });
       } else if (this.acsSystemInfo.eventLoopLagMs > 30) {
-        alerts.push({ level: 'warning', message: `Event loop lag elevado: ${this.acsSystemInfo.eventLoopLagMs}ms`, metric: 'eventloop' });
+        alerts.push({
+          level: 'warning',
+          message: `Event loop lag elevado: ${this.acsSystemInfo.eventLoopLagMs}ms`,
+          metric: 'eventloop',
+        });
       }
     }
 
@@ -560,7 +750,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
         filterCriticalGpon: this.filterCriticalGpon,
         filterHealthScore: this.filterHealthScore,
       };
-      localStorage.setItem(DashboardComponent.FILTERS_KEY, JSON.stringify(filters));
+      localStorage.setItem(
+        DashboardComponent.FILTERS_KEY,
+        JSON.stringify(filters),
+      );
     } catch (e) {
       console.error('Erro ao salvar filtros no localStorage', e);
     }
@@ -573,11 +766,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
       const saved = JSON.parse(raw);
       if (saved.searchQuery !== undefined) this.searchQuery = saved.searchQuery;
       if (saved.filterStatus) this.filterStatus = saved.filterStatus;
-      if (saved.filterManufacturer !== undefined) this.filterManufacturer = saved.filterManufacturer;
+      if (saved.filterManufacturer !== undefined)
+        this.filterManufacturer = saved.filterManufacturer;
       if (saved.filterModel !== undefined) this.filterModel = saved.filterModel;
-      if (saved.filterFirmware !== undefined) this.filterFirmware = saved.filterFirmware;
-      if (saved.filterCriticalGpon !== undefined) this.filterCriticalGpon = saved.filterCriticalGpon;
-      if (saved.filterHealthScore !== undefined) this.filterHealthScore = saved.filterHealthScore;
+      if (saved.filterFirmware !== undefined)
+        this.filterFirmware = saved.filterFirmware;
+      if (saved.filterCriticalGpon !== undefined)
+        this.filterCriticalGpon = saved.filterCriticalGpon;
+      if (saved.filterHealthScore !== undefined)
+        this.filterHealthScore = saved.filterHealthScore;
     } catch (e) {
       console.error('Erro ao carregar filtros do localStorage', e);
     }
@@ -595,7 +792,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: (response: any) => {
         this.allCpes = response.data.map((c: any) => this.enrichCpeData(c));
         this.cpeIndexMap.clear();
-        this.allCpes.forEach((cpe, i) => this.cpeIndexMap.set(cpe.serialNumber, i));
+        this.allCpes.forEach((cpe, i) =>
+          this.cpeIndexMap.set(cpe.serialNumber, i),
+        );
         this.globalTotalCpes = response.pagination.total;
         this.totalPages = response.pagination.totalPages;
 
@@ -603,11 +802,25 @@ export class DashboardComponent implements OnInit, OnDestroy {
         if (response.metrics) {
           this.globalOnlineCount = response.metrics.onlineCount;
           // globalCriticalGponCount calculado localmente via _rx (opticalRx removido do schema Cpe EP28)
-          this.globalCriticalGponCount = this.allCpes.filter(c => c._rx !== undefined && c._rx < -27).length;
+          this.globalCriticalGponCount = this.allCpes.filter(
+            (c) => c._rx !== undefined && c._rx < -27,
+          ).length;
           this.globalPendingTasksCount = response.metrics.pendingTasksCount;
-          this.globalManufacturers = (response.metrics.byManufacturer || []).map((m: any) => ({ name: m._id || 'Desconhecido', count: m.count }));
-          this.globalModels = (response.metrics.byModel || []).map((m: any) => ({ name: m._id || 'Desconhecido', count: m.count }));
-          this.globalFirmwares = (response.metrics.byFirmware || []).map((m: any) => ({ name: m._id || 'Desconhecido', count: m.count })).sort((a: any, b: any) => b.count - a.count);
+          this.globalManufacturers = (
+            response.metrics.byManufacturer || []
+          ).map((m: any) => ({
+            name: m._id || 'Desconhecido',
+            count: m.count,
+          }));
+          this.globalModels = (response.metrics.byModel || []).map(
+            (m: any) => ({ name: m._id || 'Desconhecido', count: m.count }),
+          );
+          this.globalFirmwares = (response.metrics.byFirmware || [])
+            .map((m: any) => ({
+              name: m._id || 'Desconhecido',
+              count: m.count,
+            }))
+            .sort((a: any, b: any) => b.count - a.count);
         } else {
           this.calculateFallbackMetrics();
         }
@@ -643,7 +856,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: (response: any) => {
         const newCpes = response.data.map((c: any) => this.enrichCpeData(c));
         // Adiciona apenas CPEs que ainda não estão carregadas (evita duplicatas de updates WS)
-        const newOnes = newCpes.filter((c: DashboardCpe) => !this.cpeIndexMap.has(c.serialNumber));
+        const newOnes = newCpes.filter(
+          (c: DashboardCpe) => !this.cpeIndexMap.has(c.serialNumber),
+        );
         newOnes.forEach((cpe: DashboardCpe) => {
           this.cpeIndexMap.set(cpe.serialNumber, this.allCpes.length);
           this.allCpes.push(cpe);
@@ -684,7 +899,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const filters: Record<string, any> = {};
     if (this.filterStatus === 'online') filters['isOnline'] = true;
     if (this.filterStatus === 'offline') filters['isOnline'] = false;
-    if (this.filterManufacturer) filters['manufacturer'] = this.filterManufacturer;
+    if (this.filterManufacturer)
+      filters['manufacturer'] = this.filterManufacturer;
     if (this.filterModel) filters['productClass'] = this.filterModel;
     if (this.filterFirmware) filters['softwareVersion'] = this.filterFirmware;
     if (this.searchQuery.trim()) filters['search'] = this.searchQuery.trim();
@@ -716,7 +932,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   onManufacturerFilterChange(manufacturer: string): void {
-    this.filterManufacturer = this.filterManufacturer === manufacturer ? '' : manufacturer;
+    this.filterManufacturer =
+      this.filterManufacturer === manufacturer ? '' : manufacturer;
     this.triggerFilter();
   }
 
@@ -761,60 +978,74 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * OTIMIZAÇÃO: runOutsideAngular + markForCheck reduz CD calls de 6000 para 1 por 500ms.
    */
   setupRealTimeUpdates(): void {
-    this.wsService.onCpeUpdated().pipe(
-      bufferTime(500),
-      filter(updates => updates.length > 0),
-      takeUntilDestroyed(this.destroyRef)
-    ).subscribe(updatedCpes => {
-      let hasChanges = false;
-      updatedCpes.forEach(updatedCpe => {
-        if (this.processCpeUpdate(updatedCpe)) hasChanges = true;
+    this.wsService
+      .onCpeUpdated()
+      .pipe(
+        bufferTime(500),
+        filter((updates) => updates.length > 0),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((updatedCpes) => {
+        let hasChanges = false;
+        updatedCpes.forEach((updatedCpe) => {
+          if (this.processCpeUpdate(updatedCpe)) hasChanges = true;
+        });
+        this.applyChangesIfAny(hasChanges);
       });
-      this.applyChangesIfAny(hasChanges);
-    });
 
-    this.wsService.onCpeOnline().pipe(
-      bufferTime(500),
-      filter(updates => updates.length > 0),
-      takeUntilDestroyed(this.destroyRef)
-    ).subscribe(onlineCpes => {
-      let hasChanges = false;
-      onlineCpes.forEach(onlineCpe => {
-        const mergedCpe = { ...onlineCpe, isOnline: true };
-        if (this.processCpeUpdate(mergedCpe, true)) hasChanges = true;
-        // Remove spinner de Connection Request quando a CPE volta online
-        if (this.wakingUpCpes.has(onlineCpe.serialNumber)) {
-          this.wakingUpCpes.delete(onlineCpe.serialNumber);
-          this.toastService.success(`${onlineCpe.serialNumber} voltou online!`);
-        }
-        // Remove spinner de reboot quando a CPE volta online (reboot completo)
-        if (this.rebootingCpes.has(onlineCpe.serialNumber)) {
-          this.rebootingCpes.delete(onlineCpe.serialNumber);
-          this.toastService.success(`${onlineCpe.serialNumber} reiniciou com sucesso!`);
-        }
+    this.wsService
+      .onCpeOnline()
+      .pipe(
+        bufferTime(500),
+        filter((updates) => updates.length > 0),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((onlineCpes) => {
+        let hasChanges = false;
+        onlineCpes.forEach((onlineCpe) => {
+          const mergedCpe = { ...onlineCpe, isOnline: true };
+          if (this.processCpeUpdate(mergedCpe, true)) hasChanges = true;
+          // Remove spinner de Connection Request quando a CPE volta online
+          if (this.wakingUpCpes.has(onlineCpe.serialNumber)) {
+            this.wakingUpCpes.delete(onlineCpe.serialNumber);
+            this.toastService.success(
+              `${onlineCpe.serialNumber} voltou online!`,
+            );
+          }
+          // Remove spinner de reboot quando a CPE volta online (reboot completo)
+          if (this.rebootingCpes.has(onlineCpe.serialNumber)) {
+            this.rebootingCpes.delete(onlineCpe.serialNumber);
+            this.toastService.success(
+              `${onlineCpe.serialNumber} reiniciou com sucesso!`,
+            );
+          }
+        });
+        this.applyChangesIfAny(hasChanges);
       });
-      this.applyChangesIfAny(hasChanges);
-    });
 
     // cpe_batch_update: ativado pelo batchEmitter quando >10 eventos/2s (mass reboot)
     // Dispatcha cada item para processCpeUpdate() usando eventName como hint de tipo
-    this.wsService.onCpeBatchUpdate().pipe(
-      takeUntilDestroyed(this.destroyRef)
-    ).subscribe(batch => {
-      let hasChanges = false;
-      const isOnlineEvent = batch.eventName === 'cpe_online';
-      batch.items.forEach((payload: Partial<CpeDevice>) => {
-        const cpeData = isOnlineEvent ? { ...payload, isOnline: true } : payload;
-        if (this.processCpeUpdate(cpeData, isOnlineEvent)) hasChanges = true;
+    this.wsService
+      .onCpeBatchUpdate()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((batch) => {
+        let hasChanges = false;
+        const isOnlineEvent = batch.eventName === 'cpe_online';
+        batch.items.forEach((payload: Partial<CpeDevice>) => {
+          const cpeData = isOnlineEvent
+            ? { ...payload, isOnline: true }
+            : payload;
+          if (this.processCpeUpdate(cpeData, isOnlineEvent)) hasChanges = true;
+        });
+        this.applyChangesIfAny(hasChanges);
       });
-      this.applyChangesIfAny(hasChanges);
-    });
 
-    this.wsService.on('cpe_deleted').pipe(
-      takeUntilDestroyed(this.destroyRef)
-    ).subscribe((data: any) => {
-      this.removeCpe(data.serialNumber);
-    });
+    this.wsService
+      .on('cpe_deleted')
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((data: any) => {
+        this.removeCpe(data.serialNumber);
+      });
   }
 
   // --- HELPER METHODS PARA ATUALIZAÇÃO EM TEMPO REAL ---
@@ -825,43 +1056,74 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private applyFilters(cpes: DashboardCpe[]): DashboardCpe[] {
     const filters = {
-      isOnline: this.filterStatus === 'all' ? undefined : this.filterStatus === 'online',
+      isOnline:
+        this.filterStatus === 'all'
+          ? undefined
+          : this.filterStatus === 'online',
       manufacturer: this.filterManufacturer || undefined,
       productClass: this.filterModel || undefined,
       softwareVersion: this.filterFirmware || undefined,
       isCriticalGpon: this.filterCriticalGpon || undefined,
       healthScore: this.filterHealthScore,
-      search: this.searchQuery || undefined
+      search: this.searchQuery || undefined,
     };
 
-    return cpes.filter(cpe => {
-      if (filters.isOnline !== undefined && cpe.isOnline !== filters.isOnline) return false;
-      if (filters.manufacturer && (cpe.deviceInfo?.manufacturer || cpe.manufacturer) !== filters.manufacturer) return false;
-      if (filters.productClass && (cpe.deviceInfo?.productClass || cpe.productClass) !== filters.productClass) return false;
-      if (filters.softwareVersion && (cpe.deviceInfo?.softwareVersion || cpe.softwareVersion) !== filters.softwareVersion) return false;
-      if (filters.isCriticalGpon && (cpe._rx === undefined || cpe._rx >= -27)) return false;
+    return cpes.filter((cpe) => {
+      if (filters.isOnline !== undefined && cpe.isOnline !== filters.isOnline)
+        return false;
+      if (
+        filters.manufacturer &&
+        (cpe.deviceInfo?.manufacturer || cpe.manufacturer) !==
+          filters.manufacturer
+      )
+        return false;
+      if (
+        filters.productClass &&
+        (cpe.deviceInfo?.productClass || cpe.productClass) !==
+          filters.productClass
+      )
+        return false;
+      if (
+        filters.softwareVersion &&
+        (cpe.deviceInfo?.softwareVersion || cpe.softwareVersion) !==
+          filters.softwareVersion
+      )
+        return false;
+      if (filters.isCriticalGpon && (cpe._rx === undefined || cpe._rx >= -27))
+        return false;
       if (filters.healthScore) {
         const score = cpe.healthScore;
         if (score === undefined || score === null) return false;
         if (filters.healthScore === 'critical' && score >= 50) return false;
-        if (filters.healthScore === 'attention' && (score < 50 || score >= 80)) return false;
+        if (filters.healthScore === 'attention' && (score < 50 || score >= 80))
+          return false;
         if (filters.healthScore === 'healthy' && score < 80) return false;
       }
       if (filters.search) {
         const searchRegex = new RegExp(this.escapeRegex(filters.search), 'i');
         const matches =
           searchRegex.test(cpe.serialNumber) ||
-          ((cpe.wan?.ip || cpe.wanIp) && searchRegex.test((cpe.wan?.ip || cpe.wanIp)!)) ||
-          ((cpe.deviceInfo?.productClass || cpe.productClass) && searchRegex.test((cpe.deviceInfo?.productClass || cpe.productClass)!)) ||
+          ((cpe.wan?.ip || cpe.wanIp) &&
+            searchRegex.test((cpe.wan?.ip || cpe.wanIp)!)) ||
+          ((cpe.deviceInfo?.productClass || cpe.productClass) &&
+            searchRegex.test(
+              (cpe.deviceInfo?.productClass || cpe.productClass)!,
+            )) ||
           (cpe._pppoe && searchRegex.test(cpe._pppoe)) ||
-          ((cpe.deviceInfo?.manufacturer || cpe.manufacturer) && searchRegex.test((cpe.deviceInfo?.manufacturer || cpe.manufacturer)!));
+          ((cpe.deviceInfo?.manufacturer || cpe.manufacturer) &&
+            searchRegex.test(
+              (cpe.deviceInfo?.manufacturer || cpe.manufacturer)!,
+            ));
         if (!matches) return false;
       }
       return true;
     });
   }
 
-  private processCpeUpdate(updatedCpe: Partial<CpeDevice>, isOnlineEvent = false): boolean {
+  private processCpeUpdate(
+    updatedCpe: Partial<CpeDevice>,
+    isOnlineEvent = false,
+  ): boolean {
     if (!updatedCpe.serialNumber) return false;
     const index = this.cpeIndexMap.get(updatedCpe.serialNumber!) ?? -1;
 
@@ -874,7 +1136,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
   }
 
-  private updateExistingCpe(index: number, updatedCpe: Partial<CpeDevice>, isOnlineEvent: boolean): void {
+  private updateExistingCpe(
+    index: number,
+    updatedCpe: Partial<CpeDevice>,
+    isOnlineEvent: boolean,
+  ): void {
     const oldCpe = this.allCpes[index];
     const mergedCpe = { ...oldCpe, ...updatedCpe } as CpeDevice;
     const enrichedCpe = this.enrichCpeData(mergedCpe);
@@ -896,18 +1162,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (updatedCpe.pendingTasks !== undefined) {
       const oldTasks = oldCpe.pendingTasks?.length || 0;
       const newTasks = enrichedCpe.pendingTasks?.length || 0;
-      this.globalPendingTasksCount += (newTasks - oldTasks);
+      this.globalPendingTasksCount += newTasks - oldTasks;
     }
 
     // Notificações visuais
     const newWanIp = enrichedCpe.wan?.ip || enrichedCpe.wanIp;
     const oldWanIp = oldCpe.wan?.ip || oldCpe.wanIp;
     if (newWanIp && oldWanIp && oldWanIp !== newWanIp) {
-      this.toastService.info(`CPE ${enrichedCpe.serialNumber}: IP mudou de ${oldWanIp} para ${newWanIp}`);
+      this.toastService.info(
+        `CPE ${enrichedCpe.serialNumber}: IP mudou de ${oldWanIp} para ${newWanIp}`,
+      );
     }
 
-    if (enrichedCpe._pppoe && oldCpe._pppoe && oldCpe._pppoe !== enrichedCpe._pppoe && oldCpe._pppoe !== 'DHCP/Fixo') {
-      this.toastService.info(`CPE ${enrichedCpe.serialNumber}: Usuário PPPoE alterado de ${oldCpe._pppoe} para ${enrichedCpe._pppoe}`);
+    if (
+      enrichedCpe._pppoe &&
+      oldCpe._pppoe &&
+      oldCpe._pppoe !== enrichedCpe._pppoe &&
+      oldCpe._pppoe !== 'DHCP/Fixo'
+    ) {
+      this.toastService.info(
+        `CPE ${enrichedCpe.serialNumber}: Usuário PPPoE alterado de ${oldCpe._pppoe} para ${enrichedCpe._pppoe}`,
+      );
     }
 
     this.allCpes[index] = enrichedCpe;
@@ -922,8 +1197,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // Incrementa métricas globais para nova CPE na rede
     this.globalTotalCpes++;
     if (enrichedCpe.isOnline) this.globalOnlineCount++;
-    if (enrichedCpe._rx !== undefined && enrichedCpe._rx < -27) this.globalCriticalGponCount++;
-    this.globalPendingTasksCount += (enrichedCpe.pendingTasks?.length || 0);
+    if (enrichedCpe._rx !== undefined && enrichedCpe._rx < -27)
+      this.globalCriticalGponCount++;
+    this.globalPendingTasksCount += enrichedCpe.pendingTasks?.length || 0;
 
     if (updatedCpe.serialNumber) {
       this.toastService.success(`CPE ${updatedCpe.serialNumber} está online.`);
@@ -935,7 +1211,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (index === -1) return;
     const oldCpe = this.allCpes[index];
     if (oldCpe.isOnline) this.globalOnlineCount--;
-    if (oldCpe._rx !== undefined && oldCpe._rx < -27) this.globalCriticalGponCount--;
+    if (oldCpe._rx !== undefined && oldCpe._rx < -27)
+      this.globalCriticalGponCount--;
     this.globalTotalCpes--;
     this.allCpes.splice(index, 1);
     this.cpeIndexMap.delete(serialNumber);
@@ -964,22 +1241,31 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // Alerta de sinal GPON crítico (< -27 dBm)
     const rx = cpe._rx;
 
-    if (rx !== undefined && rx < -27 && !this.alertedGponCpes.has(cpe.serialNumber)) {
+    if (
+      rx !== undefined &&
+      rx < -27 &&
+      !this.alertedGponCpes.has(cpe.serialNumber)
+    ) {
       this.alertedGponCpes.add(cpe.serialNumber);
       this.toastService.warning(
         `CPE ${cpe.serialNumber}: Sinal GPON crítico (${rx} dBm). Verifique a fibra.`,
-        7000
+        7000,
       );
     }
 
     // Alerta de CPE offline (lastInform > 30 min sem contato)
-    if (!cpe.isOnline && cpe.lastInform && !this.alertedOfflineCpes.has(cpe.serialNumber)) {
-      const minutesSince = (Date.now() - new Date(cpe.lastInform).getTime()) / 60000;
+    if (
+      !cpe.isOnline &&
+      cpe.lastInform &&
+      !this.alertedOfflineCpes.has(cpe.serialNumber)
+    ) {
+      const minutesSince =
+        (Date.now() - new Date(cpe.lastInform).getTime()) / 60000;
       if (minutesSince > 30) {
         this.alertedOfflineCpes.add(cpe.serialNumber);
         this.toastService.error(
           `CPE ${cpe.serialNumber} offline há mais de ${Math.round(minutesSince)} minutos.`,
-          8000
+          8000,
         );
       }
     }
@@ -990,7 +1276,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
     this.cpeService.wakeUpCpe(serialNumber).subscribe({
       next: () => {
-        this.toastService.success(`Connection Request enviado para ${serialNumber}!`);
+        this.toastService.success(
+          `Connection Request enviado para ${serialNumber}!`,
+        );
         // Remove o spinner após 10s se a CPE não voltar online (timeout de segurança)
         setTimeout(() => {
           this.wakingUpCpes.delete(serialNumber);
@@ -1016,7 +1304,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
     this.cpeService.rebootCpe(serialNumber).subscribe({
       next: () => {
-        this.toastService.success(`Comando de reinício enfileirado para ${serialNumber}.`);
+        this.toastService.success(
+          `Comando de reinício enfileirado para ${serialNumber}.`,
+        );
         // Timeout de segurança: remove o spinner após 60s (reboot leva ~30-45s)
         setTimeout(() => {
           if (this.rebootingCpes.has(serialNumber)) {
@@ -1054,25 +1344,71 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * Falha silenciosa — não quebra o dashboard se o endpoint falhar.
    */
   private loadDiagnosticOverview(): void {
-    this.diagnosticTargetService.overview(7).pipe(
-      catchError(() => of({ data: null, message: 'Falha ao carregar visão geral de diagnósticos.' })),
-      takeUntilDestroyed(this.destroyRef)
-    ).subscribe(({ data, message }) => {
-      this.diagnosticOverview = data;
-      this.diagEmptyMessage = data ? null : (message || 'Nenhum dado de diagnóstico disponível.');
-      if (data) {
-        this.diagChartLabels = data.dailySeriesAggregated.map(d => {
-          const parts = d.day.split('-');
-          return `${parts[2]}/${parts[1]}`;
-        });
-        this.diagChartDatasets[0].data = data.dailySeriesAggregated.map(d => d.success);
-        this.diagChartDatasets[1].data = data.dailySeriesAggregated.map(d => d.error);
-        this.diagChartDatasets = [...this.diagChartDatasets];
-        // Registra o horário da última atualização para exibir no header
-        this.diagLastUpdate = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      }
-      this.cdr.markForCheck();
+    this.diagnosticTargetService
+      .overview(7)
+      .pipe(
+        catchError(() =>
+          of({
+            data: null,
+            message: 'Falha ao carregar visão geral de diagnósticos.',
+          }),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(({ data, message }) => {
+        this.diagnosticOverview = data;
+        this.diagEmptyMessage = data
+          ? null
+          : message || 'Nenhum dado de diagnóstico disponível.';
+        if (data) {
+          this.updateDiagChart(data);
+          // Registra o horário da última atualização para exibir no header
+          this.diagLastUpdate = new Date().toLocaleTimeString('pt-BR', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          });
+        }
+        this.cdr.markForCheck();
+      });
+  }
+
+  /**
+   * Atualiza o gráfico de diagnósticos com base no destino selecionado.
+   * 'all' = série agregada, ou targetId específico = série daquele destino.
+   */
+  private updateDiagChart(data: DiagnosticOverview): void {
+    let series: {
+      day: string;
+      success: number;
+      error: number;
+      total: number;
+    }[];
+    if (this.selectedTargetId === 'all') {
+      series = data.dailySeriesAggregated;
+    } else {
+      const target = data.perTargetDailySeries.find(
+        (t) => t.targetId === this.selectedTargetId,
+      );
+      series = target?.dailySeries || [];
+    }
+    this.diagChartLabels = series.map((d) => {
+      const parts = d.day.split('-');
+      return `${parts[2]}/${parts[1]}`;
     });
+    this.diagChartDatasets[0].data = series.map((d) => d.success);
+    this.diagChartDatasets[1].data = series.map((d) => d.error);
+    this.diagChartDatasets = [...this.diagChartDatasets];
+  }
+
+  /** Troca o destino selecionado e re-renderiza o gráfico sem refazer a request. */
+  selectDiagTarget(targetId: string): void {
+    if (this.selectedTargetId === targetId) return;
+    this.selectedTargetId = targetId;
+    if (this.diagnosticOverview) {
+      this.updateDiagChart(this.diagnosticOverview);
+    }
+    this.cdr.markForCheck();
   }
 
   /**
@@ -1089,7 +1425,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       error: () => {
         // Silencioso - não quebra o dashboard se o widget falhar
-      }
+      },
     });
   }
 
@@ -1104,7 +1440,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
       // Mesma coluna: cicla direção
       if (this.sortDirection === null) this.sortDirection = 'asc';
       else if (this.sortDirection === 'asc') this.sortDirection = 'desc';
-      else { this.sortColumn = null; this.sortDirection = null; }
+      else {
+        this.sortColumn = null;
+        this.sortDirection = null;
+      }
     } else {
       // Coluna nova: inicia asc
       this.sortColumn = column;
@@ -1151,7 +1490,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
           valA = a.wanIp || a.wan?.ip || '';
           valB = b.wanIp || b.wan?.ip || '';
           // IPs ordenados por string é aceitável para ordenação visual
-          return valA.localeCompare(valB, undefined, { numeric: true }) * direction;
+          return (
+            valA.localeCompare(valB, undefined, { numeric: true }) * direction
+          );
         case 'pppoe':
           valA = a._pppoe || '';
           valB = b._pppoe || '';
@@ -1191,14 +1532,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // Função de Performance: Pré-processa os dados pesados na entrada
   private enrichCpeData(cpe: CpeDevice): DashboardCpe {
     let cleanIp = cpe.wan?.ip || cpe.wanIp;
-    if (cleanIp && typeof cleanIp === 'string' && cleanIp.startsWith('::ffff:')) {
+    if (
+      cleanIp &&
+      typeof cleanIp === 'string' &&
+      cleanIp.startsWith('::ffff:')
+    ) {
       cleanIp = cleanIp.replace('::ffff:', '');
     }
 
     // Busca valores cacheados na raiz para evitar varredura caso o Backend já tenha normalizado
-    let pppoe = (cpe as any)['pppoeUsername'] || (cpe as any)['_pppoe'] || cpe.wan?.pppoeUsername;
+    let pppoe =
+      (cpe as any)['pppoeUsername'] ||
+      (cpe as any)['_pppoe'] ||
+      cpe.wan?.pppoeUsername;
     // opticalRx vem via WebSocket no campo raiz (VALUE CHANGE) ou via cpe.parameters (carga inicial)
-    let rx: number | undefined = (cpe as any).opticalRx != null ? Number((cpe as any).opticalRx) : undefined;
+    let rx: number | undefined =
+      (cpe as any).opticalRx != null
+        ? Number((cpe as any).opticalRx)
+        : undefined;
 
     // Prioridade: campo top-level wifi2gBandwidth (mais rápido) → fallback wifi2g.bandwidth
     const raw2g = (cpe as any).wifi2gBandwidth ?? cpe.wifi2g?.bandwidth ?? null;
@@ -1212,19 +1563,30 @@ export class DashboardComponent implements OnInit, OnDestroy {
     };
 
     // Validação estrita de array para evitar TypeError no loop e consumo desnecessário de memória
-    if ((pppoe === undefined || rx === undefined) && Array.isArray(cpe.parameters) && cpe.parameters.length > 0) {
+    if (
+      (pppoe === undefined || rx === undefined) &&
+      Array.isArray(cpe.parameters) &&
+      cpe.parameters.length > 0
+    ) {
       for (const p of cpe.parameters) {
         if (!p || !p.name) continue;
         const key = String(p.name).toLowerCase();
 
         // Extração de PPPoE Username
-        if (pppoe === undefined && key.endsWith('username') && (key.includes('pppconnection') || key.includes('ppp.interface'))) {
+        if (
+          pppoe === undefined &&
+          key.endsWith('username') &&
+          (key.includes('pppconnection') || key.includes('ppp.interface'))
+        ) {
           pppoe = p.value;
           if (rx !== undefined) break; // Early break se ambos encontrados
         }
 
         // Extração de Sinal Óptico
-        if (rx === undefined && (key.endsWith('opticalsignallevel') || key.endsWith('rxpower'))) {
+        if (
+          rx === undefined &&
+          (key.endsWith('opticalsignallevel') || key.endsWith('rxpower'))
+        ) {
           const rxVal = parseFloat(p.value);
           if (!isNaN(rxVal)) {
             rx = rxVal < -100 ? rxVal / 10 : rxVal;
@@ -1235,7 +1597,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
 
     // Fallback 3: parametersCache — estrutura [{name, value, lastSeen}], IS retornada pela query de lista
-    if (rx === undefined && Array.isArray((cpe as any).parametersCache) && (cpe as any).parametersCache.length > 0) {
+    if (
+      rx === undefined &&
+      Array.isArray((cpe as any).parametersCache) &&
+      (cpe as any).parametersCache.length > 0
+    ) {
       for (const param of (cpe as any).parametersCache) {
         if (!param || !param.name) continue;
         const lk = String(param.name).toLowerCase();
@@ -1257,11 +1623,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
       _bw2g: formatBw(raw2g),
       _bw5g: formatBw(raw5g),
       // FIX EP 27.16: normaliza productClass de deviceInfo.productClass (schema EP24)
-      productClass: (cpe as any).deviceInfo?.productClass || cpe.productClass || null,
+      productClass:
+        (cpe as any).deviceInfo?.productClass || cpe.productClass || null,
       // FIX: normaliza manufacturer e softwareVersion de deviceInfo (schema EP24)
       // Sem isso, o worker filtra por cpe.manufacturer que é undefined — tabela fica vazia
-      manufacturer: (cpe as any).deviceInfo?.manufacturer || cpe.manufacturer || null,
-      softwareVersion: (cpe as any).deviceInfo?.softwareVersion || cpe.softwareVersion || null,
+      manufacturer:
+        (cpe as any).deviceInfo?.manufacturer || cpe.manufacturer || null,
+      softwareVersion:
+        (cpe as any).deviceInfo?.softwareVersion || cpe.softwareVersion || null,
     };
   }
 
@@ -1293,7 +1662,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   toggleSelectAll(event: Event): void {
     const checked = (event.target as HTMLInputElement).checked;
     if (checked) {
-      this.cpes.forEach(c => this.selectedCpes.add(c.serialNumber));
+      this.cpes.forEach((c) => this.selectedCpes.add(c.serialNumber));
     } else {
       this.selectedCpes.clear();
     }
@@ -1304,9 +1673,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   get isIndeterminate(): boolean {
-    return this.selectedCpes.size > 0 && this.selectedCpes.size < this.cpes.length;
+    return (
+      this.selectedCpes.size > 0 && this.selectedCpes.size < this.cpes.length
+    );
   }
-
 
   // Adicione esta função
   goToDetails(serialNumber: string): void {
@@ -1315,7 +1685,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   exportSelectedToCsv(): void {
     if (this.selectedCpes.size === 0) return;
-    const selectedData = this.cpes.filter(c => this.selectedCpes.has(c.serialNumber));
+    const selectedData = this.cpes.filter((c) =>
+      this.selectedCpes.has(c.serialNumber),
+    );
     this.generateCsv(selectedData, 'selecionadas');
   }
 
@@ -1333,7 +1705,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * Previne CSV Injection (prefixa campos que começam com =, +, -, @).
    */
   private generateCsv(data: DashboardCpe[], suffix: string): void {
-    const headers = ['Status', 'Serial Number', 'Modelo', 'IP WAN', 'PPPoE', 'Sinal Rx (dBm)', 'Ultima Conexao'];
+    const headers = [
+      'Status',
+      'Serial Number',
+      'Modelo',
+      'IP WAN',
+      'PPPoE',
+      'Sinal Rx (dBm)',
+      'Ultima Conexao',
+    ];
 
     const sanitizeCsvField = (value: string | undefined): string => {
       if (!value) return 'N/D';
@@ -1342,23 +1722,34 @@ export class DashboardComponent implements OnInit, OnDestroy {
       return str;
     };
 
-    const rows = data.map(c => [
+    const rows = data.map((c) => [
       c.isOnline ? 'Online' : 'Offline',
       sanitizeCsvField(c.serialNumber),
-      sanitizeCsvField(c.deviceInfo?.productClass || c.productClass || c.deviceInfo?.manufacturer || c.manufacturer),
+      sanitizeCsvField(
+        c.deviceInfo?.productClass ||
+          c.productClass ||
+          c.deviceInfo?.manufacturer ||
+          c.manufacturer,
+      ),
       sanitizeCsvField(c.wan?.ip || c.wanIp),
       sanitizeCsvField(c._pppoe),
       c._rx !== undefined ? c._rx : 'N/D',
-      sanitizeCsvField(c.lastInform)
+      sanitizeCsvField(c.lastInform),
     ]);
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((r) => r.join(',')),
+    ].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `acs_cpes_${suffix}_${new Date().getTime()}.csv`);
+    link.setAttribute(
+      'download',
+      `acs_cpes_${suffix}_${new Date().getTime()}.csv`,
+    );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1372,7 +1763,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   confirmBulkReboot(): void {
     if (this.bulkRebootConfirmCount !== this.selectedCpes.size) {
-      this.toastService.error('Número incorreto. Digite o número exato de equipamentos.');
+      this.toastService.error(
+        'Número incorreto. Digite o número exato de equipamentos.',
+      );
       return;
     }
     this.isBulkRebootConfirmOpen = false;
@@ -1392,21 +1785,25 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // BC-4: Filtra CPEs offline — reboot exige comunicação CWMP ativa.
     // CPEs offline seriam rejeitadas pelo backend/Circuit Breaker, gerando
     // falhas desnecessárias e poluindo o AuditLog com result: 'failed'.
-    const serialNumbers = allSelected.filter(sn => {
-      const cpe = this.allCpes.find(c => c.serialNumber === sn);
+    const serialNumbers = allSelected.filter((sn) => {
+      const cpe = this.allCpes.find((c) => c.serialNumber === sn);
       return cpe?.isOnline === true;
     });
     const offlineCount = allSelected.length - serialNumbers.length;
 
     if (serialNumbers.length === 0) {
-      this.toastService.warning('Todas as CPEs selecionadas estão offline. Nenhum reinício enviado.');
+      this.toastService.warning(
+        'Todas as CPEs selecionadas estão offline. Nenhum reinício enviado.',
+      );
       this.isBulkRebootConfirmOpen = false;
       this.cdr.markForCheck();
       return;
     }
 
     if (offlineCount > 0) {
-      this.toastService.warning(`${offlineCount} CPE(s) offline foram ignoradas — reinício exige CPE online.`);
+      this.toastService.warning(
+        `${offlineCount} CPE(s) offline foram ignoradas — reinício exige CPE online.`,
+      );
     }
 
     let success = 0;
@@ -1418,70 +1815,95 @@ export class DashboardComponent implements OnInit, OnDestroy {
       message?: string;
     }
 
-    from(serialNumbers).pipe(
-      bufferCount(BATCH_SIZE),
-      concatMap((batch, index) => {
-        // Cria o timer para delay apenas a partir do segundo lote
-        const delay$ = index === 0 ? of(null) : timer(BATCH_DELAY_MS);
-        
-        const requests$ = forkJoin(
-          batch.map(serial => 
-            this.cpeService.rebootCpe(serial, true).pipe(
-              // Envelopa o erro para o lote não quebrar a execução global
-              catchError((err): Observable<BulkRebootResult> => 
-                of({ error: true, serial, message: err?.message || 'Erro desconhecido' })
-              )
-            )
-          )
-        );
+    from(serialNumbers)
+      .pipe(
+        bufferCount(BATCH_SIZE),
+        concatMap((batch, index) => {
+          // Cria o timer para delay apenas a partir do segundo lote
+          const delay$ = index === 0 ? of(null) : timer(BATCH_DELAY_MS);
 
-        return zip(delay$, requests$).pipe(map(([_, results]) => results as BulkRebootResult[]));
-      }),
-      // Segurança Absoluta: cancela tudo se o componente for destruído pelo Angular
-      takeUntilDestroyed(this.destroyRef)
-    ).subscribe({
-      next: (batchResults: BulkRebootResult[]) => {
-        if (Array.isArray(batchResults)) {
-          batchResults.forEach(r => {
-            if (r && r.error) {
-              failed++;
-            } else {
-              success++;
-            }
-          });
-        }
-      },
-      complete: () => {
-        this.finalizeBulkReboot(success, failed);
-      },
-      error: () => {
-        this.toastService.error('Falha crítica no processamento do lote de reinício.');
-      }
-    });
+          const requests$ = forkJoin(
+            batch.map((serial) =>
+              this.cpeService.rebootCpe(serial, true).pipe(
+                // Envelopa o erro para o lote não quebrar a execução global
+                catchError(
+                  (err): Observable<BulkRebootResult> =>
+                    of({
+                      error: true,
+                      serial,
+                      message: err?.message || 'Erro desconhecido',
+                    }),
+                ),
+              ),
+            ),
+          );
+
+          return zip(delay$, requests$).pipe(
+            map(([_, results]) => results as BulkRebootResult[]),
+          );
+        }),
+        // Segurança Absoluta: cancela tudo se o componente for destruído pelo Angular
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (batchResults: BulkRebootResult[]) => {
+          if (Array.isArray(batchResults)) {
+            batchResults.forEach((r) => {
+              if (r && r.error) {
+                failed++;
+              } else {
+                success++;
+              }
+            });
+          }
+        },
+        complete: () => {
+          this.finalizeBulkReboot(success, failed);
+        },
+        error: () => {
+          this.toastService.error(
+            'Falha crítica no processamento do lote de reinício.',
+          );
+        },
+      });
   }
 
   private finalizeBulkReboot(success: number, fail: number): void {
-    this.toastService.success(`Ação concluída: ${success} reiniciadas com sucesso, ${fail} falhas.`);
+    this.toastService.success(
+      `Ação concluída: ${success} reiniciadas com sucesso, ${fail} falhas.`,
+    );
     this.selectedCpes.clear();
     this.cdr.markForCheck();
   }
 
   deleteCpe(cpe: DashboardCpe): void {
-    if (!confirm(`Atenção: Tem certeza que deseja excluir a CPE ${cpe.serialNumber} do sistema? Esta ação apagará todo o histórico do equipamento e não pode ser desfeita.`)) return;
+    if (
+      !confirm(
+        `Atenção: Tem certeza que deseja excluir a CPE ${cpe.serialNumber} do sistema? Esta ação apagará todo o histórico do equipamento e não pode ser desfeita.`,
+      )
+    )
+      return;
 
     this.cpeService.deleteCpe(cpe.serialNumber).subscribe({
       next: () => {
-        this.toastService.success(`CPE ${cpe.serialNumber} excluída com sucesso.`);
+        this.toastService.success(
+          `CPE ${cpe.serialNumber} excluída com sucesso.`,
+        );
         // A remoção da tabela é processada automaticamente pelo evento WebSocket 'cpe_deleted' acima
       },
-      error: (err) => this.toastService.error(err?.error?.error || `Falha ao excluir a CPE ${cpe.serialNumber}.`)
+      error: (err) =>
+        this.toastService.error(
+          err?.error?.error || `Falha ao excluir a CPE ${cpe.serialNumber}.`,
+        ),
     });
   }
 
   // 2. Funções de controle do Modal (Adicione estas duas funções)
   openConfigModal(cpe: DashboardCpe): void {
     // Navega para a tab Wi-Fi do CpeDetailsComponent em vez de abrir modal inline
-    this.router.navigate(['/dashboard/cpe', cpe.serialNumber], { queryParams: { tab: 'wifi' } });
+    this.router.navigate(['/dashboard/cpe', cpe.serialNumber], {
+      queryParams: { tab: 'wifi' },
+    });
   }
 
   closeConfigModal(): void {
@@ -1492,7 +1914,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   goToDiagnostics(serialNumber: string): void {
     // Navega para a tab de diagnóstico do CpeDetailsComponent via query param
-    this.router.navigate(['/dashboard/cpe', serialNumber], { queryParams: { tab: 'diagnostics' } });
+    this.router.navigate(['/dashboard/cpe', serialNumber], {
+      queryParams: { tab: 'diagnostics' },
+    });
   }
 
   // --- INTEGRAÇÃO COM INTELIGÊNCIA ARTIFICIAL (MOTOR DE PREDIÇÃO) ---
@@ -1511,11 +1935,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
       },
       error: (err: any) => {
-        this.toastService.error('Falha ao conectar com o Motor de Inteligência Artificial.');
+        this.toastService.error(
+          'Falha ao conectar com o Motor de Inteligência Artificial.',
+        );
         this.isAnalyzingAi = false;
         this.isAiModalOpen = false;
         this.cdr.markForCheck();
-      }
+      },
     });
   }
 

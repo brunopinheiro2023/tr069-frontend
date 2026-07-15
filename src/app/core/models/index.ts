@@ -44,8 +44,8 @@ export interface CpeParameter {
 export interface CpeParameterCached {
   name: string;
   value: string;
-  lastSeen?: string;  // ISO 8601 — última vez visto na CPE
-  cachedAt?: string;  // ISO 8601 — quando foi armazenado no cache
+  lastSeen?: string; // ISO 8601 — última vez visto na CPE
+  cachedAt?: string; // ISO 8601 — quando foi armazenado no cache
 }
 
 /**
@@ -306,7 +306,7 @@ export interface CpeDevice {
   // opticalTx?: number; // dBm (ex: 2.1)
 
   // Health Score calculado pelo backend a cada hora
-  healthScore?: number;          // 0-100
+  healthScore?: number; // 0-100
   healthScoreUpdatedAt?: string; // ISO 8601
 
   // Largura de banda Wi-Fi — mirrors de top-level para acesso direto sem navegar em wifi2g/wifi5g
@@ -421,27 +421,27 @@ export interface WifiDiagnosticsData {
   channelSaturation?: ChannelSaturationData;
 
   // ── Diagnósticos de rede (IPPing, TraceRoute, Download, Upload, DNS) ─────
-  pingAverageResponseTime?: number;      // Tempo médio de ping (ms)
-  pingSuccessCount?: number;             // Pings com sucesso
-  pingFailureCount?: number;             // Pings com falha
-  pingMinResponseTime?: number;          // Tempo mínimo (ms)
-  pingMaxResponseTime?: number;          // Tempo máximo (ms)
+  pingAverageResponseTime?: number; // Tempo médio de ping (ms)
+  pingSuccessCount?: number; // Pings com sucesso
+  pingFailureCount?: number; // Pings com falha
+  pingMinResponseTime?: number; // Tempo mínimo (ms)
+  pingMaxResponseTime?: number; // Tempo máximo (ms)
 
-  traceRouteResponseTime?: number;       // Tempo total TraceRoute (ms)
-  traceRouteHopCount?: number;           // Número de hops
+  traceRouteResponseTime?: number; // Tempo total TraceRoute (ms)
+  traceRouteHopCount?: number; // Número de hops
 
-  downloadTestBytesReceived?: number;    // Bytes recebidos no teste
+  downloadTestBytesReceived?: number; // Bytes recebidos no teste
   downloadTestTotalBytesReceived?: number; // Total acumulado
 
-  uploadTestBytesSent?: number;          // Bytes enviados no teste
-  uploadTestTotalBytesSent?: number;     // Total acumulado
+  uploadTestBytesSent?: number; // Bytes enviados no teste
+  uploadTestTotalBytesSent?: number; // Total acumulado
 
-  dnsLookupSuccessCount?: number;        // Lookups DNS com sucesso
-  dnsLookupResultCount?: number;         // Resultados DNS retornados
-  dnsDiagnosticsState?: string;          // Estado do diagnóstico DNS
+  dnsLookupSuccessCount?: number; // Lookups DNS com sucesso
+  dnsLookupResultCount?: number; // Resultados DNS retornados
+  dnsDiagnosticsState?: string; // Estado do diagnóstico DNS
 
   // ── Estado dos diagnósticos (string retornada pela CPE) ──────────────────
-  pingDiagnosticsState?: string;         // None | Requested | Complete | Error_*
+  pingDiagnosticsState?: string; // None | Requested | Complete | Error_*
   traceRouteDiagnosticsState?: string;
   downloadDiagnosticsState?: string;
   uploadDiagnosticsState?: string;
@@ -557,21 +557,21 @@ export interface ChannelSaturationData {
 export interface ChannelSaturationBand {
   band: string;
   timestamp?: string;
-  demo?: boolean;            // true quando são dados simulados (sem varredura real)
-  totalNeighbors?: number;   // soma total de vizinhos na banda
+  demo?: boolean; // true quando são dados simulados (sem varredura real)
+  totalNeighbors?: number; // soma total de vizinhos na banda
   channels: Record<number, ChannelEntry>;
   suggestion?: ChannelSuggestion; // sugestão de troca de canal com aplicação automática
-  maxInterferenceScore?: number;  // score máximo de interferência na banda
-  bandwidthSuggestion?: string | null;       // sugestão de largura de banda (backend)
+  maxInterferenceScore?: number; // score máximo de interferência na banda
+  bandwidthSuggestion?: string | null; // sugestão de largura de banda (backend)
   bandwidthSuggestionReason?: string | null; // razão da sugestão de largura
 }
 
 export interface ChannelEntry {
   channel: number;
   neighborCount: number;
-  interferenceScore?: number;   // score ponderado (RSSI + sobreposição + largura)
-  avgRssi?: number | null;      // RSSI médio dos vizinhos diretos (dBm)
-  noiseLevel?: number;          // dBm estimado
+  interferenceScore?: number; // score ponderado (RSSI + sobreposição + largura)
+  avgRssi?: number | null; // RSSI médio dos vizinhos diretos (dBm)
+  noiseLevel?: number; // dBm estimado
   congestionLevel?: 'Alto' | 'Médio' | 'Baixo' | string;
 }
 
@@ -591,15 +591,15 @@ export interface ChannelSuggestion {
  * Todos os campos são opcionais pois dependem das capacidades do firmware.
  */
 export interface RadioQuality {
-  bandwidth: string | null;              // OperatingChannelBandwidth: ex. "20MHz", "80MHz", "Auto"
-  snr: number | null;                    // SNR em dB (proprietary X_TP_SNR - TP-Link)
-  noise: number | null;                  // Ruído de fundo em dBm
-  utilization: number | null;            // Utilização do canal em % (X_TP_Utilization - TP-Link)
-  txPower: number | null;                // Potência de transmissão em %
-  channel: number | null;                // Canal atual (0 = auto mode)
-  autoChannelEnable: boolean | null;     // true quando CPE gerencia canal (modo automático)
-  rssi: number | null;                   // RSSI do rádio
-  bandwidthSuggestion: string | null;    // Sugestão de largura de banda baseada em dados reais
+  bandwidth: string | null; // OperatingChannelBandwidth: ex. "20MHz", "80MHz", "Auto"
+  snr: number | null; // SNR em dB (proprietary X_TP_SNR - TP-Link)
+  noise: number | null; // Ruído de fundo em dBm
+  utilization: number | null; // Utilização do canal em % (X_TP_Utilization - TP-Link)
+  txPower: number | null; // Potência de transmissão em %
+  channel: number | null; // Canal atual (0 = auto mode)
+  autoChannelEnable: boolean | null; // true quando CPE gerencia canal (modo automático)
+  rssi: number | null; // RSSI do rádio
+  bandwidthSuggestion: string | null; // Sugestão de largura de banda baseada em dados reais
   bandwidthSuggestionReason: string | null; // Razão da sugestão
 }
 
@@ -614,26 +614,32 @@ export interface WifiHost {
   active: boolean;
   status: 'ativo' | 'ocioso' | 'inativo'; // determinado por tráfego (bytesSent/bytesReceived)
   band: '2.4GHz' | '5GHz' | 'Desconhecida' | string;
-  ssid: string | null;           // nome da rede Wi-Fi ao qual o host está conectado
-  clientType: string | null;     // X_TP_ClientType: 'Android', 'IP Camera', 'iPhone', etc.
+  ssid: string | null; // nome da rede Wi-Fi ao qual o host está conectado
+  clientType: string | null; // X_TP_ClientType: 'Android', 'IP Camera', 'iPhone', etc.
 
   // Métricas DataElements X_TP_ (null quando firmware não expõe)
-  qoe: number | null;               // 0–100 (TP-Link X_TP_QoE)
+  qoe: number | null; // 0–100 (TP-Link X_TP_QoE)
   qoeLabel: 'Excelente' | 'Bom' | 'Regular' | 'Ruim' | 'N/A';
-  downSpeedMbps: number | null;     // X_TP_DownSpeed
-  upSpeedMbps: number | null;       // X_TP_UpSpeed
+  downSpeedMbps: number | null; // X_TP_DownSpeed
+  upSpeedMbps: number | null; // X_TP_UpSpeed
   operatingStandard: string | null; // ex: '802.11ax', '802.11ac', '802.11n'
   clientEfficiencyRate: number | null; // % X_TP_ClientEfficiencyRate
-  noiseDbm: number | null;          // X_TP_Noise
+  noiseDbm: number | null; // X_TP_Noise
   signalStrengthDbm: number | null; // X_TP_SignalStrength (DataElements)
-  snrDb: number | null;             // X_TP_Snr
+  snrDb: number | null; // X_TP_Snr
 }
 
 /** Ação corretiva proposta por um insight (quando actionable=true). */
 export interface WifiInsightAction {
-  type: 'set_channel' | 'change_channel' | 'set_power' | 'set_bandwidth' | 'enable_beamforming' | 'info';
+  type:
+    | 'set_channel'
+    | 'change_channel'
+    | 'set_power'
+    | 'set_bandwidth'
+    | 'enable_beamforming'
+    | 'info';
   band: '2.4GHz' | '5GHz';
-  parameter: string;  // caminho TR-181 para SetParameterValues
+  parameter: string; // caminho TR-181 para SetParameterValues
   value: string;
 }
 
@@ -641,10 +647,16 @@ export interface WifiInsightAction {
 export interface WifiInsight {
   id: string;
   severity: 'info' | 'warning' | 'critical';
-  category: 'canal' | 'sinal' | 'qoe' | 'configuracao' | 'saturacao' | 'congestionamento';
+  category:
+    | 'canal'
+    | 'sinal'
+    | 'qoe'
+    | 'configuracao'
+    | 'saturacao'
+    | 'congestionamento';
   title: string;
   description: string;
-  sourceParam: string;  // parâmetro TR-181 que originou o insight
+  sourceParam: string; // parâmetro TR-181 que originou o insight
   actionable: boolean;
   action?: WifiInsightAction;
 }
@@ -654,7 +666,7 @@ export interface WifiHostsData {
   serialNumber: string;
   manufacturer: string | null;
   timestamp: string;
-  dataElementsAvailable: boolean;  // false quando CPE não expõe X_TP_ DataElements
+  dataElementsAvailable: boolean; // false quando CPE não expõe X_TP_ DataElements
   totalHosts: number;
   hosts: WifiHost[];
   insights: WifiInsight[];
@@ -675,7 +687,7 @@ export interface EthernetDevice {
   ipAddress: string | null;
   active: boolean;
   connectionType: 'Ethernet';
-  portName: string | null;  // X_TP_IfNameAlias: ex: 'LAN1', 'LAN2'
+  portName: string | null; // X_TP_IfNameAlias: ex: 'LAN1', 'LAN2'
   clientType: string | null;
 }
 
@@ -713,7 +725,7 @@ export interface ToastNotification {
 // =============================================================================
 
 export interface CpePredictionFactor {
-  score: number | null;       // 0-100 (pior = maior), null se indisponível
+  score: number | null; // 0-100 (pior = maior), null se indisponível
   status: 'good' | 'warning' | 'critical' | 'unavailable';
   value: number | null;
   message: string;
@@ -837,12 +849,12 @@ export interface LanTelemetry {
 export interface TelemetryAlert {
   _id?: string;
   serialNumber: string;
-  metric: string;             // 'opticalRx' | 'cpuUsage' | 'wifi2gNoise' | 'wifi5gNoise'
+  metric: string; // 'opticalRx' | 'cpuUsage' | 'wifi2gNoise' | 'wifi5gNoise'
   severity: 'warning' | 'critical';
   status: 'active' | 'resolved';
   value?: number;
   threshold?: number;
-  triggeredAt: string;        // ISO 8601
+  triggeredAt: string; // ISO 8601
   resolvedAt?: string | null;
   message: string;
   acknowledgedBy?: string | null;
@@ -853,7 +865,7 @@ export interface TelemetryData {
   // NOTA ARQUITETURAL: dados chegam em formato FLAT via WebSocket e REST cache.
   // Métricas chegam como chaves diretas: cpuUsage, opticalRx, wanStatus, etc.
   // O indexer [metricKey: string]: any suporta o formato real de dados.
-  [metricKey: string]: any;   // Formato real: chaves diretas do backend (cpuUsage, opticalRx, etc.)
+  [metricKey: string]: any; // Formato real: chaves diretas do backend (cpuUsage, opticalRx, etc.)
 }
 
 export interface TelemetryUpdateEvent {
@@ -876,16 +888,16 @@ export interface TelemetryCacheResponse {
 export interface TelemetrySnapshot {
   timestamp: string;
   cpuUsage?: number;
-  memoryUsage?: number;      // % calculado (legacy WebSocket cache)
-  memoryFree?: number;       // KB bruto (TelemetryVitals)
-  memoryTotal?: number;      // KB bruto
-  uptime?: number;           // segundos desde o boot (TelemetryVitals)
+  memoryUsage?: number; // % calculado (legacy WebSocket cache)
+  memoryFree?: number; // KB bruto (TelemetryVitals)
+  memoryTotal?: number; // KB bruto
+  uptime?: number; // segundos desde o boot (TelemetryVitals)
   opticalRx?: number;
   // opticalTx removido do schema TelemetryVitals — presente apenas em TelemetryRaw
   wanStatus?: string;
   gponStatus?: string;
   hostCount?: number;
-  source?: string;           // 'vitals' | 'hourly'
+  source?: string; // 'vitals' | 'hourly'
 }
 
 /** Resposta para endpoints de séries temporais. */
@@ -904,7 +916,11 @@ export interface TrendAnalysis {
   sampleCount: number;
   reliableModel: boolean;
   r2: number;
-  rxTrend: { slopePerDay: number; r2: number; direction: 'degrading' | 'improving' | 'stable' };
+  rxTrend: {
+    slopePerDay: number;
+    r2: number;
+    direction: 'degrading' | 'improving' | 'stable';
+  };
   txTrend: { slopePerDay: number; r2: number };
   alert: boolean;
   severity: 'critical' | 'warning' | 'good';
@@ -932,7 +948,12 @@ export interface TrafficAnomaliesAnalysis {
   sampleCount: number;
   deltaCount: number;
   anomalyCount: number;
-  anomalies: { timestamp: Date; type: string; valueMbps: number; avgMbps: number }[];
+  anomalies: {
+    timestamp: Date;
+    type: string;
+    valueMbps: number;
+    avgMbps: number;
+  }[];
   alert: boolean;
   message: string;
 }
@@ -954,7 +975,12 @@ export interface OltComparisonAnalysis {
   alert: boolean;
   severity: 'group_issue' | 'local_issue' | 'normal';
   message: string;
-  peers: { serialNumber: string; wanIp: string; opticalRx: number | null; isOnline: boolean }[];
+  peers: {
+    serialNumber: string;
+    wanIp: string;
+    opticalRx: number | null;
+    isOnline: boolean;
+  }[];
 }
 
 /** Correlação entre temperatura e performance. */
@@ -1004,11 +1030,11 @@ export interface WifiQualityAnalysis {
   snrMin: number | null;
   noiseFloor: number | null;
   clientCount: number | null;
-  errorRateRx: number | null;       // erros RX por minuto (normalizado pelo intervalo)
-  errorRateTx: number | null;       // erros TX por minuto (normalizado pelo intervalo)
-  intervalMinutes: number | null;   // intervalo entre as duas coletas usadas para erro rate
-  thresholdWarn: number;            // limite inferior do warning (erros/min)
-  thresholdCritical: number;        // limite do critical (erros/min)
+  errorRateRx: number | null; // erros RX por minuto (normalizado pelo intervalo)
+  errorRateTx: number | null; // erros TX por minuto (normalizado pelo intervalo)
+  intervalMinutes: number | null; // intervalo entre as duas coletas usadas para erro rate
+  thresholdWarn: number; // limite inferior do warning (erros/min)
+  thresholdCritical: number; // limite do critical (erros/min)
   dataSource: 'snr' | 'fallback';
   confidence: 'high' | 'medium' | 'low';
   severity: 'ok' | 'warning' | 'critical';
@@ -1105,7 +1131,7 @@ export interface TraceRouteResult {
   host: string;
   hopCount: number;
   responseTime: number;
-  hops: { hopNumber: number; ipAddress: string; responseTime: number; }[];
+  hops: { hopNumber: number; ipAddress: string; responseTime: number }[];
   timestamp: string;
 }
 
@@ -1128,7 +1154,14 @@ export interface DNSLookupResult {
   diagnosticsState: string;
   dnsServer: string;
   hostName: string;
-  results: { status: string; answerType: string; hostName: string; ipAddresses: string; dnsServerIp: string; responseTime: number; }[];
+  results: {
+    status: string;
+    answerType: string;
+    hostName: string;
+    ipAddresses: string;
+    dnsServerIp: string;
+    responseTime: number;
+  }[];
   timestamp: string;
 }
 
@@ -1201,7 +1234,13 @@ export interface WifiNeighborHistoryResponse {
 }
 
 /** Entrada genérica no histórico de diagnósticos. */
-export type DiagnosticResult = PingResult | TraceRouteResult | SpeedTestResult | DNSLookupResult | UDPEchoResult | WifiNeighborResult;
+export type DiagnosticResult =
+  | PingResult
+  | TraceRouteResult
+  | SpeedTestResult
+  | DNSLookupResult
+  | UDPEchoResult
+  | WifiNeighborResult;
 
 /** Resposta para endpoints de histórico de diagnósticos. */
 export interface DiagnosticHistoryResponse<T extends DiagnosticResult> {
@@ -1242,7 +1281,11 @@ export interface ProviderConfigUpdate {
 // DIAGNOSTIC TARGETS — Destinos de diagnóstico periódico (admin)
 // =============================================================================
 
-export type DiagnosticTargetType = 'IPPing' | 'TraceRoute' | 'DNSLookup' | 'UDPEcho';
+export type DiagnosticTargetType =
+  | 'IPPing'
+  | 'TraceRoute'
+  | 'DNSLookup'
+  | 'UDPEcho';
 export type DiagnosticTargetScope = 'all' | 'selected';
 
 // Ícones e labels centralizados em core/constants/diagnostic.constants.ts
@@ -1320,7 +1363,12 @@ export interface DiagnosticTargetAnalysis {
     iqr: number | null;
     count: number;
   } | null;
-  topFailingCpes: { serialNumber: string; failures: number; lastError: string | null; lastErrorAt: string | null }[];
+  topFailingCpes: {
+    serialNumber: string;
+    failures: number;
+    lastError: string | null;
+    lastErrorAt: string | null;
+  }[];
   dailySeries: { day: string; success: number; error: number; total: number }[];
 }
 
@@ -1335,13 +1383,37 @@ export interface DiagnosticOverview {
   perTarget: {
     targetId: string;
     host: string;
+    label: string | null;
     type: string;
     successRate: number;
     latencyAvg: number | null;
     totalExecutions: number;
+    successCount: number;
+    errorCount: number;
   }[];
-  dailySeriesAggregated: { day: string; success: number; error: number; total: number }[];
-  topFailingCpes: { serialNumber: string; failures: number; lastError: string | null; lastErrorAt: string | null }[];
+  perTargetDailySeries: {
+    targetId: string;
+    host: string;
+    label: string | null;
+    dailySeries: {
+      day: string;
+      success: number;
+      error: number;
+      total: number;
+    }[];
+  }[];
+  dailySeriesAggregated: {
+    day: string;
+    success: number;
+    error: number;
+    total: number;
+  }[];
+  topFailingCpes: {
+    serialNumber: string;
+    failures: number;
+    lastError: string | null;
+    lastErrorAt: string | null;
+  }[];
   analysisText: string;
   generatedAt: string;
 }
@@ -1367,7 +1439,13 @@ export interface AuditLog {
   durationMs?: number;
   userAgent?: string;
   requestId?: string;
-  result: 'requested' | 'success' | 'error' | 'conflict' | 'confirmed' | 'inconclusive';
+  result:
+    | 'requested'
+    | 'success'
+    | 'error'
+    | 'conflict'
+    | 'confirmed'
+    | 'inconclusive';
   errorMessage?: string;
   createdAt: string;
 }
