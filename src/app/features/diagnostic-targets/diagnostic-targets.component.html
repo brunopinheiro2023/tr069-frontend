@@ -3,7 +3,10 @@
     <span class="material-symbols-rounded">monitor_heart</span>
     <div>
       <h1>Diagnósticos Periódicos</h1>
-      <p>Destinos de diagnóstico cadastrados pelo administrador, executados automaticamente pelo scheduler em intervalos regulares.</p>
+      <p>
+        Destinos de diagnóstico cadastrados pelo administrador, executados
+        automaticamente pelo scheduler em intervalos regulares.
+      </p>
     </div>
   </header>
 
@@ -11,6 +14,133 @@
   <div *ngIf="loading" class="skeleton-block"></div>
 
   <ng-container *ngIf="!loading">
+    <!-- ── Seção de Alertas de Degradação ─────────────────────────────────── -->
+    <section
+      class="card alerts-section"
+      *ngIf="alertsExpanded || activeAlertsCount > 0"
+    >
+      <div class="alerts-header" (click)="toggleAlertsSection()">
+        <span
+          class="material-symbols-rounded"
+          [class.active]="activeAlertsCount > 0"
+        >
+          {{ activeAlertsCount > 0 ? "warning" : "check_circle" }}
+        </span>
+        <h2>Alertas de Degradação</h2>
+        <span class="badge badge--off" *ngIf="activeAlertsCount > 0">
+          {{ activeAlertsCount }} ativo{{ activeAlertsCount !== 1 ? "s" : "" }}
+        </span>
+        <span
+          class="material-symbols-rounded expand-icon"
+          [class.expanded]="alertsExpanded"
+        >
+          expand_more
+        </span>
+      </div>
+
+      <div class="alerts-body" *ngIf="alertsExpanded">
+        <!-- Filtros -->
+        <div class="alert-filters">
+          <button
+            class="btn-sm"
+            [class.active-filter]="alertFilter === 'active'"
+            (click)="setAlertFilter('active')"
+          >
+            Ativos
+          </button>
+          <button
+            class="btn-sm"
+            [class.active-filter]="alertFilter === 'resolved'"
+            (click)="setAlertFilter('resolved')"
+          >
+            Resolvidos
+          </button>
+          <button
+            class="btn-sm"
+            [class.active-filter]="alertFilter === 'all'"
+            (click)="setAlertFilter('all')"
+          >
+            Todos
+          </button>
+        </div>
+
+        <!-- Loading -->
+        <div class="analysis-loading" *ngIf="alertsLoading">
+          <span class="material-symbols-rounded spin">progress_activity</span>
+          Carregando alertas…
+        </div>
+
+        <!-- Lista de alertas -->
+        <div class="alert-list" *ngIf="!alertsLoading && alerts.length > 0">
+          <div
+            class="alert-row"
+            *ngFor="let a of alerts"
+            [class.resolved]="a.status === 'resolved'"
+          >
+            <div class="alert-row-info">
+              <span class="material-symbols-rounded type-icon">{{
+                getTypeIcon(a.type)
+              }}</span>
+              <div>
+                <div class="alert-row-title">
+                  <strong>{{ a.host }}</strong>
+                  <span
+                    class="badge"
+                    [class.badge--off]="a.status === 'active'"
+                    [class.badge--on]="a.status === 'resolved'"
+                  >
+                    {{ a.status === "active" ? "Ativo" : "Resolvido" }}
+                  </span>
+                  <span class="alert-fails" *ngIf="a.status === 'active'">
+                    {{ a.distinctFailingCpes }} CPEs falhando
+                  </span>
+                </div>
+                <div class="alert-row-meta">
+                  <span>{{ getTypeLabel(a.type) }}</span>
+                  <span class="sep">·</span>
+                  <span
+                    >disparado: {{ a.triggeredAt | date: "dd/MM HH:mm" }}</span
+                  >
+                  <span class="sep" *ngIf="a.resolvedAt">·</span>
+                  <span *ngIf="a.resolvedAt"
+                    >resolvido: {{ a.resolvedAt | date: "dd/MM HH:mm" }}</span
+                  >
+                  <span class="sep" *ngIf="a.acknowledgedBy">·</span>
+                  <span *ngIf="a.acknowledgedBy" class="ack-badge"
+                    >reconhecido por {{ a.acknowledgedBy }}</span
+                  >
+                </div>
+              </div>
+            </div>
+            <button
+              class="icon-btn"
+              *ngIf="
+                a.status === 'active' && !a.acknowledgedBy && a._id && isAdmin
+              "
+              (click)="acknowledgeAlert(a)"
+              [disabled]="alertAckId === a._id"
+              title="Reconhecer alerta"
+            >
+              <span class="material-symbols-rounded">{{
+                alertAckId === a._id ? "hourglass_empty" : "check"
+              }}</span>
+            </button>
+          </div>
+        </div>
+
+        <p class="no-data" *ngIf="!alertsLoading && alerts.length === 0">
+          Nenhum alerta
+          {{
+            alertFilter === "active"
+              ? "ativo"
+              : alertFilter === "resolved"
+                ? "resolvido"
+                : "cadastrado"
+          }}.
+        </p>
+      </div>
+    </section>
+
     <!-- Botão Novo Destino -->
     <div class="toolbar" *ngIf="isAdmin">
       <button class="btn-primary" (click)="openCreateForm()" *ngIf="!showForm">
@@ -25,25 +155,44 @@
 
     <!-- Formulário inline (criar/editar) -->
     <section class="card form-card" *ngIf="showForm && isAdmin">
-      <h2>{{ editingId ? 'Editar destino' : 'Cadastrar novo destino' }}</h2>
+      <h2>{{ editingId ? "Editar destino" : "Cadastrar novo destino" }}</h2>
       <form [formGroup]="form" (ngSubmit)="save()">
         <div class="field-row">
-          <label>Host / IP alvo
-            <input type="text" formControlName="host" placeholder="ex: 8.8.8.8, dns.google, 1.1.1.1">
+          <label
+            >Host / IP alvo
+            <input
+              type="text"
+              formControlName="host"
+              placeholder="ex: 8.8.8.8, dns.google, 1.1.1.1"
+            />
           </label>
-          <label>Tipo de diagnóstico
+          <label
+            >Tipo de diagnóstico
             <select formControlName="type">
-              <option *ngFor="let t of targetTypes" [value]="t.value">{{ t.label }}</option>
+              <option *ngFor="let t of targetTypes" [value]="t.value">
+                {{ t.label }}
+              </option>
             </select>
           </label>
         </div>
 
         <div class="field-row">
-          <label>Rótulo (opcional)
-            <input type="text" formControlName="label" placeholder="ex: DNS Google, Gateway Backbone">
+          <label
+            >Rótulo (opcional)
+            <input
+              type="text"
+              formControlName="label"
+              placeholder="ex: DNS Google, Gateway Backbone"
+            />
           </label>
-          <label>Intervalo (horas)
-            <input type="number" formControlName="intervalHours" min="1" max="168">
+          <label
+            >Intervalo (horas)
+            <input
+              type="number"
+              formControlName="intervalHours"
+              min="1"
+              max="168"
+            />
           </label>
         </div>
 
@@ -51,29 +200,45 @@
           <legend>Escopo</legend>
           <div class="scope-row">
             <label class="radio-label">
-              <input type="radio" formControlName="scopeType" value="all">
+              <input type="radio" formControlName="scopeType" value="all" />
               Todas as CPEs online
             </label>
             <label class="radio-label">
-              <input type="radio" formControlName="scopeType" value="selected">
+              <input
+                type="radio"
+                formControlName="scopeType"
+                value="selected"
+              />
               CPEs específicas
             </label>
           </div>
           <label *ngIf="form.value.scopeType === 'selected'">
             Serial numbers (separados por vírgula)
-            <input type="text" formControlName="serialNumbers" placeholder="ex: 54504C470C3A7300, 54504C470C3A7301">
+            <input
+              type="text"
+              formControlName="serialNumbers"
+              placeholder="ex: 54504C470C3A7300, 54504C470C3A7301"
+            />
           </label>
         </fieldset>
 
         <label class="toggle-label">
-          <input type="checkbox" formControlName="enabled">
+          <input type="checkbox" formControlName="enabled" />
           Destino ativo (scheduler vai executar)
         </label>
 
         <div class="form-actions">
-          <button type="submit" class="btn-primary" [disabled]="form.invalid || saving">
-            <span class="material-symbols-rounded">{{ saving ? 'hourglass_empty' : 'save' }}</span>
-            {{ saving ? 'Salvando…' : (editingId ? 'Atualizar' : 'Criar destino') }}
+          <button
+            type="submit"
+            class="btn-primary"
+            [disabled]="form.invalid || saving"
+          >
+            <span class="material-symbols-rounded">{{
+              saving ? "hourglass_empty" : "save"
+            }}</span>
+            {{
+              saving ? "Salvando…" : editingId ? "Atualizar" : "Criar destino"
+            }}
           </button>
         </div>
       </form>
@@ -85,30 +250,68 @@
 
       <!-- Toolbar de ações em lote -->
       <div class="bulk-toolbar" *ngIf="selectedIds.size > 0">
-        <span>{{ selectedIds.size }} selecionado{{ selectedIds.size !== 1 ? 's' : '' }}</span>
-        <button class="btn-sm" (click)="bulkToggleEnabled(true)" *ngIf="isAdmin">Ativar</button>
-        <button class="btn-sm" (click)="bulkToggleEnabled(false)" *ngIf="isAdmin">Desativar</button>
-        <button class="btn-sm btn-danger" (click)="bulkDelete()" *ngIf="isAdmin">Remover</button>
+        <span
+          >{{ selectedIds.size }} selecionado{{
+            selectedIds.size !== 1 ? "s" : ""
+          }}</span
+        >
+        <button
+          class="btn-sm"
+          (click)="bulkToggleEnabled(true)"
+          *ngIf="isAdmin"
+        >
+          Ativar
+        </button>
+        <button
+          class="btn-sm"
+          (click)="bulkToggleEnabled(false)"
+          *ngIf="isAdmin"
+        >
+          Desativar
+        </button>
+        <button
+          class="btn-sm btn-danger"
+          (click)="bulkDelete()"
+          *ngIf="isAdmin"
+        >
+          Remover
+        </button>
       </div>
 
       <div class="target-list">
         <div class="target-item" *ngFor="let t of targets">
           <div class="target-header">
             <div class="target-info">
-              <input type="checkbox" class="bulk-checkbox" *ngIf="isAdmin"
-                     [checked]="selectedIds.has(t._id!)"
-                     (change)="toggleSelection(t._id!)" />
-              <span class="material-symbols-rounded type-icon">{{ getTypeIcon(t.type) }}</span>
+              <input
+                type="checkbox"
+                class="bulk-checkbox"
+                *ngIf="isAdmin"
+                [checked]="selectedIds.has(t._id!)"
+                (change)="toggleSelection(t._id!)"
+              />
+              <span class="material-symbols-rounded type-icon">{{
+                getTypeIcon(t.type)
+              }}</span>
               <div>
                 <div class="target-title">
                   <strong>{{ t.label || t.host }}</strong>
-                  <span class="badge" [class.badge--on]="t.enabled" [class.badge--off]="!t.enabled">
-                    {{ t.enabled ? 'Ativo' : 'Inativo' }}
+                  <span
+                    class="badge"
+                    [class.badge--on]="t.enabled"
+                    [class.badge--off]="!t.enabled"
+                  >
+                    {{ t.enabled ? "Ativo" : "Inativo" }}
                   </span>
-                  <span class="badge badge--health" *ngIf="t.health"
+                  <span
+                    class="badge badge--health"
+                    *ngIf="t.health"
                     [class.badge--on]="t.health.successRate24h >= 90"
-                    [class.badge--warn]="t.health.successRate24h >= 70 && t.health.successRate24h < 90"
-                    [class.badge--off]="t.health.successRate24h < 70">
+                    [class.badge--warn]="
+                      t.health.successRate24h >= 70 &&
+                      t.health.successRate24h < 90
+                    "
+                    [class.badge--off]="t.health.successRate24h < 70"
+                  >
                     {{ t.health.successRate24h }}% (24h)
                   </span>
                 </div>
@@ -124,16 +327,30 @@
               </div>
             </div>
             <div class="target-actions" *ngIf="isAdmin">
-              <button class="icon-btn" (click)="toggleAnalysis(t)" title="Análise">
+              <button
+                class="icon-btn"
+                (click)="toggleAnalysis(t)"
+                title="Análise"
+              >
                 <span class="material-symbols-rounded">analytics</span>
               </button>
-              <button class="icon-btn" (click)="toggleEnabled(t)" [title]="t.enabled ? 'Desativar' : 'Ativar'">
-                <span class="material-symbols-rounded">{{ t.enabled ? 'toggle_on' : 'toggle_off' }}</span>
+              <button
+                class="icon-btn"
+                (click)="toggleEnabled(t)"
+                [title]="t.enabled ? 'Desativar' : 'Ativar'"
+              >
+                <span class="material-symbols-rounded">{{
+                  t.enabled ? "toggle_on" : "toggle_off"
+                }}</span>
               </button>
               <button class="icon-btn" (click)="openEditForm(t)" title="Editar">
                 <span class="material-symbols-rounded">edit</span>
               </button>
-              <button class="icon-btn icon-btn--danger" (click)="deleteTarget(t)" title="Remover">
+              <button
+                class="icon-btn icon-btn--danger"
+                (click)="deleteTarget(t)"
+                title="Remover"
+              >
                 <span class="material-symbols-rounded">delete</span>
               </button>
             </div>
@@ -142,18 +359,27 @@
           <!-- Painel de análise expandido -->
           <div class="analysis-panel" *ngIf="expandedAnalysisId === t._id">
             <div class="analysis-loading" *ngIf="analysisLoadingId === t._id">
-              <span class="material-symbols-rounded spin">progress_activity</span>
+              <span class="material-symbols-rounded spin"
+                >progress_activity</span
+              >
               Carregando análise…
             </div>
 
-            <ng-container *ngIf="analysisLoadingId !== t._id && analysisMap[t._id!]">
+            <ng-container
+              *ngIf="analysisLoadingId !== t._id && analysisMap[t._id!]"
+            >
               <div class="analysis-grid" *ngIf="analysisMap[t._id!]; let a">
                 <div class="metric-card">
                   <span class="metric-value">{{ a.totalExecutions }}</span>
                   <span class="metric-label">Execuções</span>
                 </div>
                 <div class="metric-card">
-                  <span class="metric-value" [class.success]="a.successRate >= 90" [class.warning]="a.successRate >= 70 && a.successRate < 90" [class.error]="a.successRate < 70">
+                  <span
+                    class="metric-value"
+                    [class.success]="a.successRate >= 90"
+                    [class.warning]="a.successRate >= 70 && a.successRate < 90"
+                    [class.error]="a.successRate < 70"
+                  >
                     {{ a.successRate }}%
                   </span>
                   <span class="metric-label">Taxa de sucesso</span>
@@ -163,65 +389,132 @@
                   <span class="metric-label">Sucessos</span>
                 </div>
                 <div class="metric-card">
-                  <span class="metric-value error" *ngIf="a.errorCount > 0; else zeroErrors">{{ a.errorCount }}</span>
-                  <ng-template #zeroErrors><span class="metric-value">0</span></ng-template>
+                  <span
+                    class="metric-value error"
+                    *ngIf="a.errorCount > 0; else zeroErrors"
+                    >{{ a.errorCount }}</span
+                  >
+                  <ng-template #zeroErrors
+                    ><span class="metric-value">0</span></ng-template
+                  >
                   <span class="metric-label">Falhas</span>
                 </div>
               </div>
 
               <!-- Latência stats -->
-              <div class="latency-stats" *ngIf="analysisMap[t._id!]?.latencyStats as ls">
-                <h4>Latência (ms) — {{ ls.count }} amostra{{ ls.count !== 1 ? 's' : '' }} (sem outliers)</h4>
+              <div
+                class="latency-stats"
+                *ngIf="analysisMap[t._id!]?.latencyStats as ls"
+              >
+                <h4>
+                  Latência (ms) — {{ ls.count }} amostra{{
+                    ls.count !== 1 ? "s" : ""
+                  }}
+                  (sem outliers)
+                </h4>
                 <div class="latency-grid">
                   <span><strong>Min:</strong> {{ ls.min }}</span>
-                  <span><strong>P25:</strong> {{ ls.p25 ?? '—' }}</span>
-                  <span><strong>Mediana (P50):</strong> {{ ls.p50 ?? '—' }}</span>
-                  <span><strong>Média:</strong> {{ ls.avg | number:'1.0-1' }}</span>
-                  <span><strong>P75:</strong> {{ ls.p75 ?? '—' }}</span>
+                  <span><strong>P25:</strong> {{ ls.p25 ?? "—" }}</span>
+                  <span
+                    ><strong>Mediana (P50):</strong> {{ ls.p50 ?? "—" }}</span
+                  >
+                  <span
+                    ><strong>Média:</strong>
+                    {{ ls.avg | number: "1.0-1" }}</span
+                  >
+                  <span><strong>P75:</strong> {{ ls.p75 ?? "—" }}</span>
                   <span><strong>Max:</strong> {{ ls.max }}</span>
-                  <span><strong>Desvio padrão:</strong> {{ ls.std | number:'1.0-1' }}</span>
-                  <span><strong>IQR:</strong> {{ ls.iqr ?? '—' }}</span>
+                  <span
+                    ><strong>Desvio padrão:</strong>
+                    {{ ls.std | number: "1.0-1" }}</span
+                  >
+                  <span><strong>IQR:</strong> {{ ls.iqr ?? "—" }}</span>
                 </div>
               </div>
 
               <!-- Série diária -->
-              <div class="daily-series" *ngIf="analysisMap[t._id!]?.dailySeries?.length">
+              <div
+                class="daily-series"
+                *ngIf="analysisMap[t._id!]?.dailySeries?.length"
+              >
                 <h4>
                   Execuções por dia (últimos 30 dias)
-                  <button class="icon-btn csv-btn" (click)="exportAnalysisCsv(t)" title="Exportar CSV">
+                  <button
+                    class="icon-btn csv-btn"
+                    (click)="exportAnalysisCsv(t)"
+                    title="Exportar CSV"
+                  >
                     <span class="material-symbols-rounded">download</span>
                   </button>
                 </h4>
                 <div class="series-bars">
-                  <div class="series-bar" *ngFor="let day of analysisMap[t._id!]!.dailySeries"
-                       [title]="day.day + ': ' + day.success + ' ok, ' + day.error + ' falhas'">
-                    <div class="bar-ok" [style.height.%]="day.total > 0 ? (day.success / day.total) * 100 : 0"></div>
-                    <div class="bar-err" [style.height.%]="day.total > 0 ? (day.error / day.total) * 100 : 0"></div>
-                    <span class="day-label">{{ day.day | date:'dd/MM' }}</span>
+                  <div
+                    class="series-bar"
+                    *ngFor="let day of analysisMap[t._id!]!.dailySeries"
+                    [title]="
+                      day.day +
+                      ': ' +
+                      day.success +
+                      ' ok, ' +
+                      day.error +
+                      ' falhas'
+                    "
+                  >
+                    <div
+                      class="bar-ok"
+                      [style.height.%]="
+                        day.total > 0 ? (day.success / day.total) * 100 : 0
+                      "
+                    ></div>
+                    <div
+                      class="bar-err"
+                      [style.height.%]="
+                        day.total > 0 ? (day.error / day.total) * 100 : 0
+                      "
+                    ></div>
+                    <span class="day-label">{{ day.day | date: "dd/MM" }}</span>
                   </div>
                 </div>
               </div>
 
               <!-- CPEs com mais falhas -->
-              <div class="failing-cpes" *ngIf="analysisMap[t._id!]?.topFailingCpes?.length">
+              <div
+                class="failing-cpes"
+                *ngIf="analysisMap[t._id!]?.topFailingCpes?.length"
+              >
                 <h4>CPEs com mais falhas</h4>
                 <ul>
                   <li *ngFor="let cpe of analysisMap[t._id!]!.topFailingCpes">
                     <span class="cpe-serial">{{ cpe.serialNumber }}</span>
-                    <span class="cpe-fails">{{ cpe.failures }} falha{{ cpe.failures !== 1 ? 's' : '' }}</span>
+                    <span class="cpe-fails"
+                      >{{ cpe.failures }} falha{{
+                        cpe.failures !== 1 ? "s" : ""
+                      }}</span
+                    >
                     <span class="cpe-last-err" *ngIf="cpe.lastError">
-                      último: {{ cpe.lastError }}{{ cpe.lastErrorAt ? (' · ' + (cpe.lastErrorAt | date:'dd/MM HH:mm')) : '' }}
+                      último: {{ cpe.lastError
+                      }}{{
+                        cpe.lastErrorAt
+                          ? " · " + (cpe.lastErrorAt | date: "dd/MM HH:mm")
+                          : ""
+                      }}
                     </span>
                   </li>
                 </ul>
               </div>
 
-              <p class="no-data" *ngIf="analysisMap[t._id!]?.totalExecutions === 0">
+              <p
+                class="no-data"
+                *ngIf="analysisMap[t._id!]?.totalExecutions === 0"
+              >
                 Nenhuma execução registrada nos últimos 30 dias.
               </p>
             </ng-container>
 
-            <p class="no-data" *ngIf="analysisLoadingId !== t._id && !analysisMap[t._id!]">
+            <p
+              class="no-data"
+              *ngIf="analysisLoadingId !== t._id && !analysisMap[t._id!]"
+            >
               Nenhuma execução registrada no período.
             </p>
           </div>
@@ -233,15 +526,26 @@
       <section class="card empty-state">
         <span class="material-symbols-rounded">inbox</span>
         <h2>Nenhum destino cadastrado</h2>
-        <p *ngIf="isAdmin">Clique em "Novo Destino" para cadastrar o primeiro diagnóstico periódico.</p>
-        <p *ngIf="!isAdmin">Aguarde o administrador cadastrar destinos de diagnóstico.</p>
+        <p *ngIf="isAdmin">
+          Clique em "Novo Destino" para cadastrar o primeiro diagnóstico
+          periódico.
+        </p>
+        <p *ngIf="!isAdmin">
+          Aguarde o administrador cadastrar destinos de diagnóstico.
+        </p>
       </section>
     </ng-template>
 
     <!-- Aviso read-only -->
-    <section class="card readonly-notice" *ngIf="!isAdmin && targets.length > 0">
+    <section
+      class="card readonly-notice"
+      *ngIf="!isAdmin && targets.length > 0"
+    >
       <span class="material-symbols-rounded">lock</span>
-      <p>Apenas administradores podem cadastrar ou alterar destinos de diagnóstico.</p>
+      <p>
+        Apenas administradores podem cadastrar ou alterar destinos de
+        diagnóstico.
+      </p>
     </section>
   </ng-container>
 </div>

@@ -1419,6 +1419,31 @@ export interface DiagnosticOverview {
 }
 
 // ============================================================================
+// DIAGNOSTIC ALERTS — Alertas de destino de diagnóstico degradado
+// (GET /api/diagnostic-targets/alerts, POST /alerts/:id/acknowledge)
+// ============================================================================
+
+/**
+ * Alerta de destino de diagnóstico degradado — disparado quando 3+ CPEs
+ * distintas falham no mesmo destino na última hora. Espelha o schema
+ * DiagnosticAlert do backend (src/models/DiagnosticAlert.js).
+ *
+ * Diferença de TelemetryAlert: este é por destino (targetId), não por CPE.
+ */
+export interface DiagnosticAlert {
+  _id?: string;
+  targetId: string;
+  host: string;
+  type: string;
+  distinctFailingCpes: number;
+  status: 'active' | 'resolved';
+  triggeredAt: string; // ISO 8601
+  resolvedAt: string | null;
+  acknowledgedBy: string | null;
+  acknowledgedAt: string | null;
+}
+
+// ============================================================================
 // AUDIT LOGS — Trilha de auditoria (GET /api/audit-logs)
 // ============================================================================
 

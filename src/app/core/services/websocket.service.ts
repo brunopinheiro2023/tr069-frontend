@@ -8,7 +8,7 @@ import { ServerLogEntry, ServerLogBatch } from '../models';
 export type WsConnectionStatus = 'connected' | 'disconnected' | 'reconnecting';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class WebSocketService {
   private socket: Socket;
@@ -17,7 +17,9 @@ export class WebSocketService {
   private pendingRooms = new Set<string>(); // Salas solicitadas antes da conexão estabelecida
 
   // P4: Status de conexão reativo — componentes podem subscrever para feedback visual.
-  private connectionStatus$ = new BehaviorSubject<WsConnectionStatus>('disconnected');
+  private connectionStatus$ = new BehaviorSubject<WsConnectionStatus>(
+    'disconnected',
+  );
   readonly connectionStatus = this.connectionStatus$.asObservable();
 
   // Contagem de referências por sala: permite que múltiplos componentes compartilhem
@@ -27,7 +29,10 @@ export class WebSocketService {
   // Map para gerenciar Observables e evitar memory leaks reaproveitando conexões
   private observablesMap = new Map<string, Observable<any>>();
 
-  constructor(private zone: NgZone, private router: Router) {
+  constructor(
+    private zone: NgZone,
+    private router: Router,
+  ) {
     // Gera sessionId único por instância (aba do navegador) usando fallback matemático
     // Funciona em HTTP sem TLS (Web Crypto API bloqueada fora de HTTPS)
     this.sessionId = this.generateSessionId();
@@ -39,7 +44,7 @@ export class WebSocketService {
         const token = localStorage.getItem('jwt_token');
         const username = localStorage.getItem('username') || 'unknown';
         cb({ token: token || '', sessionId: this.sessionId, username });
-      }
+      },
     });
 
     this.socket.on('connect', () => {
@@ -67,14 +72,22 @@ export class WebSocketService {
 
     // P4: Listener de falha definitiva de reconexão — todas as tentativas esgotadas.
     this.socket.io.on('reconnect_failed', () => {
-      console.error('Falha definitiva de reconexão WebSocket — tentativas esgotadas.');
+      console.error(
+        'Falha definitiva de reconexão WebSocket — tentativas esgotadas.',
+      );
       this.connectionStatus$.next('disconnected');
     });
 
     // Monitora falhas de autenticação em tempo real
     this.socket.on('connect_error', (err) => {
-      if (err.message === 'INVALID_TOKEN' || err.message === 'UNAUTHENTICATED' || err.message === 'TOKEN_EXPIRED') {
-        console.error('Sessão WebSocket bloqueada: Token JWT expirado ou ausente.');
+      if (
+        err.message === 'INVALID_TOKEN' ||
+        err.message === 'UNAUTHENTICATED' ||
+        err.message === 'TOKEN_EXPIRED'
+      ) {
+        console.error(
+          'Sessão WebSocket bloqueada: Token JWT expirado ou ausente.',
+        );
         // Limpa tokens e redireciona para login
         localStorage.removeItem('jwt_token');
         localStorage.removeItem('username');
@@ -140,71 +153,294 @@ export class WebSocketService {
   }
 
   // Delega o repasse para o método genérico 'on'
-  onCpeUpdated(): Observable<any> { return this.on('cpe_updated'); }
-  onCpeOnline(): Observable<any> { return this.on('cpe_online'); }
-  onCpeBatchUpdate(): Observable<{ eventName: string; items: any[]; count: number }> { return this.on('cpe_batch_update'); }
-  onConfigSuccess(): Observable<any> { return this.on('config_success'); }
-  onWifiDiagnosticsUpdate(): Observable<any> { return this.on('wifi_diagnostics_update'); }
-  onWifiDataRefreshed(): Observable<{ serialNumber: string; timestamp: string }> { return this.on('wifi_data_refreshed'); }
-  onNeighborScanCompleted(): Observable<{ serialNumber: string; timestamp: string }> { return this.on('neighbor_scan_completed'); }
+  onCpeUpdated(): Observable<any> {
+    return this.on('cpe_updated');
+  }
+  onCpeOnline(): Observable<any> {
+    return this.on('cpe_online');
+  }
+  onCpeBatchUpdate(): Observable<{
+    eventName: string;
+    items: any[];
+    count: number;
+  }> {
+    return this.on('cpe_batch_update');
+  }
+  onConfigSuccess(): Observable<any> {
+    return this.on('config_success');
+  }
+  onWifiDiagnosticsUpdate(): Observable<any> {
+    return this.on('wifi_diagnostics_update');
+  }
+  onWifiDataRefreshed(): Observable<{
+    serialNumber: string;
+    timestamp: string;
+  }> {
+    return this.on('wifi_data_refreshed');
+  }
+  onNeighborScanCompleted(): Observable<{
+    serialNumber: string;
+    timestamp: string;
+  }> {
+    return this.on('neighbor_scan_completed');
+  }
 
   // Diagnósticos ativos — 4 pares de evento (ipping/traceroute/dnslookup/udpecho × completed/error)
   // já emitidos pelo backend na sala cpe_${serialNumber}. Reaproveita os eventos
   // existentes — só adiciona listeners novos no frontend.
-  onDiagnosticTestCompleted(): Observable<{ deviceId: string; targetId: string | null }> {
+  onDiagnosticTestCompleted(): Observable<{
+    deviceId: string;
+    targetId: string | null;
+  }> {
     return merge(
-      this.on<any>('ipping_test_completed'), this.on<any>('traceroute_test_completed'),
-      this.on<any>('dnslookup_test_completed'), this.on<any>('udpecho_test_completed'),
+      this.on<any>('ipping_test_completed'),
+      this.on<any>('traceroute_test_completed'),
+      this.on<any>('dnslookup_test_completed'),
+      this.on<any>('udpecho_test_completed'),
     );
   }
-  onDiagnosticTestError(): Observable<{ deviceId: string; targetId: string | null }> {
+  onDiagnosticTestError(): Observable<{
+    deviceId: string;
+    targetId: string | null;
+  }> {
     return merge(
-      this.on<any>('ipping_test_error'), this.on<any>('traceroute_test_error'),
-      this.on<any>('dnslookup_test_error'), this.on<any>('udpecho_test_error'),
+      this.on<any>('ipping_test_error'),
+      this.on<any>('traceroute_test_error'),
+      this.on<any>('dnslookup_test_error'),
+      this.on<any>('udpecho_test_error'),
     );
   }
   // Evento global (sala all_cpes) — emitido pelo scheduler quando um destino periódico completa
-  onDiagnosticTargetResult(): Observable<{ targetId: string; serialNumber: string; type: string; timestamp: string }> {
+  onDiagnosticTargetResult(): Observable<{
+    targetId: string;
+    serialNumber: string;
+    type: string;
+    timestamp: string;
+  }> {
     return this.on('diagnostic_target_result');
   }
   // Evento global — emitido quando um destino falha em ≥3 CPEs distintas na última hora
-  onDiagnosticTargetDegraded(): Observable<{ targetId: string; host: string; type: string; distinctFailingCpes: number; timestamp: string }> {
+  onDiagnosticTargetDegraded(): Observable<{
+    targetId: string;
+    host: string;
+    type: string;
+    distinctFailingCpes: number;
+    timestamp: string;
+  }> {
     return this.on('diagnostic_target_degraded');
   }
-  onCpeAccessDenied(): Observable<{ serialNumber: string; lockedBy: string; lockedAt: string; lockedMinutes: number }> { return this.on('cpe_access_denied'); }
-  onCpeAccessGranted(): Observable<{ serialNumber: string; isDriver: boolean }> { return this.on('cpe_access_granted'); }
-  onPresenceConflict(): Observable<{ serialNumber: string; driver: string; message: string }> { return this.on('presence_conflict'); }
-  onDriverPromoted(): Observable<{ serialNumber: string; newDriver: string }> { return this.on('driver_promoted'); }
-  onDriverAcquired(): Observable<{ serialNumber: string; username: string }> { return this.on('driver_acquired'); }
-  onViewOnly(): Observable<{ serialNumber: string; driver: string; message: string }> { return this.on('view_only'); }
-  onForceViewOnly(): Observable<{ serialNumber: string; message: string }> { return this.on('force_view_only'); }
-  onDriverReleased(): Observable<{ serialNumber: string }> { return this.on('driver_released'); }
-  onViewersUpdated(): Observable<{ serialNumber: string; viewers: string[] }> { return this.on('viewers_updated'); }
-  onCpeLocked(): Observable<{ serialNumber: string; source: string }> { return this.on('cpe_locked'); }
-  onCpeUnlocked(): Observable<{ serialNumber: string }> { return this.on('cpe_unlocked'); }
-  onCpeValueChange(): Observable<{ serialNumber: string; changeType: string; changedParams: Array<{ name: string; value: string }>; timestamp: string }> { return this.on('cpe_value_change'); }
-  onTelemetryStarted(): Observable<{ serialNumber: string; requestedBy: string; message: string }> { return this.on('telemetry_started'); }
-  onTelemetryUpdate(): Observable<{ serialNumber: string; data: any; timestamp: string }> { return this.on('telemetry_update'); }
-  onTelemetryProgress(): Observable<{ serialNumber: string; completedChunks: number; totalChunks: number; percent: number; partial?: boolean; faultCode?: number }> { return this.on('telemetry_progress'); }
-  onTelemetryComplete(): Observable<{ serialNumber: string; timestamp: string; totalChunks: number; source?: string; partial?: boolean }> { return this.on('telemetry_complete'); }
-  onTelemetryAlert(): Observable<{ serialNumber: string; metric: string; severity: 'warning' | 'critical'; value: number; message: string; timestamp: string }> { return this.on('telemetry_alert'); }
-  onTelemetryAlertResolved(): Observable<{ serialNumber: string; metric: string; timestamp: string }> { return this.on('telemetry_alert_resolved'); }
-  onTelemetryAlertBatch(): Observable<{ alerts: Array<{ serialNumber: string; metric: string; severity: string; value: number; message: string; timestamp: string }>; count: number; timestamp: string }> { return this.on('telemetry_alert_batch'); }
-  onUploadTestStarted(): Observable<{ deviceId: string; direction: string; url: string; timestamp: string }> { return this.on('upload_test_started'); }
-  onUploadTestCompleted(): Observable<{ deviceId: string; direction: string; results?: any; timestamp: string }> { return this.on('upload_test_completed'); }
-  onUploadTestError(): Observable<{ deviceId: string; direction: string; error: string; results?: any; timestamp: string }> { return this.on('upload_test_error'); }
-  onDownloadTestStarted(): Observable<{ deviceId: string; direction: string; url: string; timestamp: string }> { return this.on('download_test_started'); }
-  onDownloadTestCompleted(): Observable<{ deviceId: string; direction: string; results?: any; timestamp: string }> { return this.on('download_test_completed'); }
-  onDownloadTestError(): Observable<{ deviceId: string; direction: string; error: string; results?: any; timestamp: string }> { return this.on('download_test_error'); }
-  onDiagnosticsComplete(): Observable<{ serialNumber: string; timestamp: string }> { return this.on('diagnostics_complete'); }
-  onAnalysisUpdate(): Observable<{ serialNumber: string; analysis: any; timestamp: string }> { return this.on('analysis_update'); }
-  onBootLoopAnomaly(): Observable<{ serialNumber: string; count: number; windowSeconds: number; severity: 'critical'; message: string; suggestion: string; timestamp: string }> { return this.on('boot_loop_anomaly'); }
+  // Evento global — emitido quando um destino degradado recupera (transição Error_*→Complete)
+  onDiagnosticTargetRecovered(): Observable<{
+    targetId: string;
+    timestamp: string;
+  }> {
+    return this.on('diagnostic_target_recovered');
+  }
+  onCpeAccessDenied(): Observable<{
+    serialNumber: string;
+    lockedBy: string;
+    lockedAt: string;
+    lockedMinutes: number;
+  }> {
+    return this.on('cpe_access_denied');
+  }
+  onCpeAccessGranted(): Observable<{
+    serialNumber: string;
+    isDriver: boolean;
+  }> {
+    return this.on('cpe_access_granted');
+  }
+  onPresenceConflict(): Observable<{
+    serialNumber: string;
+    driver: string;
+    message: string;
+  }> {
+    return this.on('presence_conflict');
+  }
+  onDriverPromoted(): Observable<{ serialNumber: string; newDriver: string }> {
+    return this.on('driver_promoted');
+  }
+  onDriverAcquired(): Observable<{ serialNumber: string; username: string }> {
+    return this.on('driver_acquired');
+  }
+  onViewOnly(): Observable<{
+    serialNumber: string;
+    driver: string;
+    message: string;
+  }> {
+    return this.on('view_only');
+  }
+  onForceViewOnly(): Observable<{ serialNumber: string; message: string }> {
+    return this.on('force_view_only');
+  }
+  onDriverReleased(): Observable<{ serialNumber: string }> {
+    return this.on('driver_released');
+  }
+  onViewersUpdated(): Observable<{ serialNumber: string; viewers: string[] }> {
+    return this.on('viewers_updated');
+  }
+  onCpeLocked(): Observable<{ serialNumber: string; source: string }> {
+    return this.on('cpe_locked');
+  }
+  onCpeUnlocked(): Observable<{ serialNumber: string }> {
+    return this.on('cpe_unlocked');
+  }
+  onCpeValueChange(): Observable<{
+    serialNumber: string;
+    changeType: string;
+    changedParams: Array<{ name: string; value: string }>;
+    timestamp: string;
+  }> {
+    return this.on('cpe_value_change');
+  }
+  onTelemetryStarted(): Observable<{
+    serialNumber: string;
+    requestedBy: string;
+    message: string;
+  }> {
+    return this.on('telemetry_started');
+  }
+  onTelemetryUpdate(): Observable<{
+    serialNumber: string;
+    data: any;
+    timestamp: string;
+  }> {
+    return this.on('telemetry_update');
+  }
+  onTelemetryProgress(): Observable<{
+    serialNumber: string;
+    completedChunks: number;
+    totalChunks: number;
+    percent: number;
+    partial?: boolean;
+    faultCode?: number;
+  }> {
+    return this.on('telemetry_progress');
+  }
+  onTelemetryComplete(): Observable<{
+    serialNumber: string;
+    timestamp: string;
+    totalChunks: number;
+    source?: string;
+    partial?: boolean;
+  }> {
+    return this.on('telemetry_complete');
+  }
+  onTelemetryAlert(): Observable<{
+    serialNumber: string;
+    metric: string;
+    severity: 'warning' | 'critical';
+    value: number;
+    message: string;
+    timestamp: string;
+  }> {
+    return this.on('telemetry_alert');
+  }
+  onTelemetryAlertResolved(): Observable<{
+    serialNumber: string;
+    metric: string;
+    timestamp: string;
+  }> {
+    return this.on('telemetry_alert_resolved');
+  }
+  onTelemetryAlertBatch(): Observable<{
+    alerts: Array<{
+      serialNumber: string;
+      metric: string;
+      severity: string;
+      value: number;
+      message: string;
+      timestamp: string;
+    }>;
+    count: number;
+    timestamp: string;
+  }> {
+    return this.on('telemetry_alert_batch');
+  }
+  onUploadTestStarted(): Observable<{
+    deviceId: string;
+    direction: string;
+    url: string;
+    timestamp: string;
+  }> {
+    return this.on('upload_test_started');
+  }
+  onUploadTestCompleted(): Observable<{
+    deviceId: string;
+    direction: string;
+    results?: any;
+    timestamp: string;
+  }> {
+    return this.on('upload_test_completed');
+  }
+  onUploadTestError(): Observable<{
+    deviceId: string;
+    direction: string;
+    error: string;
+    results?: any;
+    timestamp: string;
+  }> {
+    return this.on('upload_test_error');
+  }
+  onDownloadTestStarted(): Observable<{
+    deviceId: string;
+    direction: string;
+    url: string;
+    timestamp: string;
+  }> {
+    return this.on('download_test_started');
+  }
+  onDownloadTestCompleted(): Observable<{
+    deviceId: string;
+    direction: string;
+    results?: any;
+    timestamp: string;
+  }> {
+    return this.on('download_test_completed');
+  }
+  onDownloadTestError(): Observable<{
+    deviceId: string;
+    direction: string;
+    error: string;
+    results?: any;
+    timestamp: string;
+  }> {
+    return this.on('download_test_error');
+  }
+  onDiagnosticsComplete(): Observable<{
+    serialNumber: string;
+    timestamp: string;
+  }> {
+    return this.on('diagnostics_complete');
+  }
+  onAnalysisUpdate(): Observable<{
+    serialNumber: string;
+    analysis: any;
+    timestamp: string;
+  }> {
+    return this.on('analysis_update');
+  }
+  onBootLoopAnomaly(): Observable<{
+    serialNumber: string;
+    count: number;
+    windowSeconds: number;
+    severity: 'critical';
+    message: string;
+    suggestion: string;
+    timestamp: string;
+  }> {
+    return this.on('boot_loop_anomaly');
+  }
 
   // ── Server Log Streaming (tempo real) ──
   // Evento 'server_log': cada nova entrada de log do servidor (Pino).
-  onServerLog(): Observable<ServerLogEntry> { return this.on('server_log'); }
+  onServerLog(): Observable<ServerLogEntry> {
+    return this.on('server_log');
+  }
   // Evento 'server_log_batch': buffer recente enviado ao subscrever.
-  onServerLogBatch(): Observable<ServerLogBatch> { return this.on('server_log_batch'); }
+  onServerLogBatch(): Observable<ServerLogBatch> {
+    return this.on('server_log_batch');
+  }
 
   /** Getter para verificar se socket está conectado sem expor campo privado */
   get isConnected(): boolean {
@@ -254,8 +490,18 @@ export class WebSocketService {
    * Aplica otimização automática Wi-Fi via WebSocket.
    * Envia evento para o backend executar SetParameterValues na CPE.
    */
-  applyWifiOptimization(serialNumber: string, type: string, band: string, value: any): void {
-    this.socket.emit('apply_wifi_optimization', { serialNumber, type, band, value });
+  applyWifiOptimization(
+    serialNumber: string,
+    type: string,
+    band: string,
+    value: any,
+  ): void {
+    this.socket.emit('apply_wifi_optimization', {
+      serialNumber,
+      type,
+      band,
+      value,
+    });
   }
 
   /**

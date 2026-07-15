@@ -1,8 +1,19 @@
 import {
-  Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef, DestroyRef, inject,
+  Component,
+  OnInit,
+  OnDestroy,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  DestroyRef,
+  inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import {
+  ReactiveFormsModule,
+  FormBuilder,
+  FormGroup,
+  Validators,
+} from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, finalize, of, forkJoin } from 'rxjs';
 import { DiagnosticTargetService } from '../../core/services/diagnostic-target.service';
@@ -10,10 +21,15 @@ import { ToastService } from '../../core/services/toast.service';
 import { AuthService } from '../../core/services/auth.service';
 import { WebSocketService } from '../../core/services/websocket.service';
 import {
-  DiagnosticTarget, DiagnosticTargetType, DiagnosticTargetAnalysis,
+  DiagnosticTarget,
+  DiagnosticTargetType,
+  DiagnosticTargetAnalysis,
+  DiagnosticAlert,
 } from '../../core/models';
 import {
-  DIAGNOSTIC_TYPES, getDiagnosticTypeIcon, getDiagnosticTypeLabel,
+  DIAGNOSTIC_TYPES,
+  getDiagnosticTypeIcon,
+  getDiagnosticTypeLabel,
 } from '../../core/constants/diagnostic.constants';
 
 @Component({
@@ -24,7 +40,7 @@ import {
   styleUrls: ['./diagnostic-targets.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DiagnosticTargetsComponent implements OnInit {
+export class DiagnosticTargetsComponent implements OnInit, OnDestroy {
   private destroyRef = inject(DestroyRef);
 
   targets: DiagnosticTarget[] = [];
@@ -42,8 +58,18 @@ export class DiagnosticTargetsComponent implements OnInit {
   historyMap: Record<string, boolean> = {}; // apenas controla loading
   expandedHistoryId: string | null = null;
 
+  // ── Alertas de degradação ───────────────────────────────────────────────
+  alerts: DiagnosticAlert[] = [];
+  alertsLoading = false;
+  alertsExpanded = false;
+  alertFilter: 'active' | 'resolved' | 'all' = 'active';
+  alertAckId: string | null = null;
+  private alertRefreshInterval?: ReturnType<typeof setInterval>;
+
   form!: FormGroup;
-  get isAdmin(): boolean { return this.authService.isAdmin(); }
+  get isAdmin(): boolean {
+    return this.authService.isAdmin();
+  }
 
   readonly targetTypes = DIAGNOSTIC_TYPES;
 
@@ -63,7 +89,10 @@ export class DiagnosticTargetsComponent implements OnInit {
       label: [''],
       scopeType: ['all', [Validators.required]],
       serialNumbers: [''],
-      intervalHours: [6, [Validators.required, Validators.min(1), Validators.max(168)]],
+      intervalHours: [
+        6,
+        [Validators.required, Validators.min(1), Validators.max(168)],
+      ],
       enabled: [true],
     });
     this.load();
@@ -72,28 +101,63 @@ export class DiagnosticTargetsComponent implements OnInit {
     // diagnostic_target_result → atualiza lista (pega novo health 24h) + recarrega análise se expandida.
     // diagnostic_target_degraded → toast de aviso + destaca visualmente o item.
     this.wsService.subscribeToAllCpes();
-    this.wsService.onDiagnosticTargetResult().pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(ev => {
-        if (this.expandedAnalysisId === ev.targetId) delete this.analysisMap[ev.targetId];
+    this.wsService
+      .onDiagnosticTargetResult()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((ev) => {
+        if (this.expandedAnalysisId === ev.targetId)
+          delete this.analysisMap[ev.targetId];
         this.load();
       });
-    this.wsService.onDiagnosticTargetDegraded().pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(ev => {
-        this.toast.warning(`Destino "${ev.host}" (${ev.type}) falhando em ${ev.distinctFailingCpes} CPEs distintas na última hora.`);
+    this.wsService
+      .onDiagnosticTargetDegraded()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((ev) => {
+        this.toast.warning(
+          `Destino "${ev.host}" (${ev.type}) falhando em ${ev.distinctFailingCpes} CPEs distintas na última hora.`,
+        );
+        this.loadAlerts();
         this.cdr.markForCheck();
       });
+    this.wsService
+      .onDiagnosticTargetRecovered()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((ev) => {
+        this.toast.info('Destino recuperou — alerta de degradação resolvido.');
+        this.loadAlerts();
+        this.cdr.markForCheck();
+      });
+
+    // Carga inicial de alertas ativos — abre a seção automaticamente se houver
+    this.loadAlerts();
+
+    // Polling defensivo a cada 60s — fallback se WebSocket cair
+    this.alertRefreshInterval = setInterval(() => this.loadAlerts(), 60_000);
+  }
+
+  ngOnDestroy(): void {
+    if (this.alertRefreshInterval) clearInterval(this.alertRefreshInterval);
   }
 
   private load(): void {
     this.loading = true;
-    this.service.list().pipe(
-      takeUntilDestroyed(this.destroyRef),
-      catchError(() => { this.toast.error('Erro ao carregar destinos de diagnóstico.'); return of([]); }),
-      finalize(() => { this.loading = false; this.cdr.markForCheck(); }),
-    ).subscribe(targets => {
-      this.targets = targets;
-      this.cdr.markForCheck();
-    });
+    this.service
+      .list()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError(() => {
+          this.toast.error('Erro ao carregar destinos de diagnóstico.');
+          return of([]);
+        }),
+        finalize(() => {
+          this.loading = false;
+          this.cdr.markForCheck();
+        }),
+      )
+      .subscribe((targets) => {
+        this.targets = targets;
+        this.cdr.markForCheck();
+      });
   }
 
   // ── Formulário ──────────────────────────────────────────────────────────
@@ -101,7 +165,15 @@ export class DiagnosticTargetsComponent implements OnInit {
   openCreateForm(): void {
     this.editingId = null;
     this.showForm = true;
-    this.form.reset({ host: '', type: 'IPPing', label: '', scopeType: 'all', serialNumbers: '', intervalHours: 6, enabled: true });
+    this.form.reset({
+      host: '',
+      type: 'IPPing',
+      label: '',
+      scopeType: 'all',
+      serialNumbers: '',
+      intervalHours: 6,
+      enabled: true,
+    });
     this.cdr.markForCheck();
   }
 
@@ -143,9 +215,14 @@ export class DiagnosticTargetsComponent implements OnInit {
       payload['type'] = v.type;
     }
     if (v.scopeType === 'selected') {
-      const serials = (v.serialNumbers || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+      const serials = (v.serialNumbers || '')
+        .split(',')
+        .map((s: string) => s.trim())
+        .filter(Boolean);
       if (serials.length === 0) {
-        this.toast.error('Selecione ao menos uma CPE para escopo "selecionadas".');
+        this.toast.error(
+          'Selecione ao menos uma CPE para escopo "selecionadas".',
+        );
         this.saving = false;
         this.cdr.markForCheck();
         return;
@@ -162,24 +239,39 @@ export class DiagnosticTargetsComponent implements OnInit {
       ? this.service.update(this.editingId, payload)
       : this.service.create(payload as any);
 
-    req$.pipe(
-      takeUntilDestroyed(this.destroyRef),
-      catchError(err => {
-        if (err.status === 409) {
-          this.toast.error(err.error?.error || 'Destino duplicado já existe.');
-        } else {
-          this.toast.error(err?.error?.error || err?.error?.message || 'Erro ao salvar destino.');
+    req$
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError((err) => {
+          if (err.status === 409) {
+            this.toast.error(
+              err.error?.error || 'Destino duplicado já existe.',
+            );
+          } else {
+            this.toast.error(
+              err?.error?.error ||
+                err?.error?.message ||
+                'Erro ao salvar destino.',
+            );
+          }
+          return of(null);
+        }),
+        finalize(() => {
+          this.saving = false;
+          this.cdr.markForCheck();
+        }),
+      )
+      .subscribe((result) => {
+        if (result) {
+          this.toast.success(
+            this.editingId
+              ? 'Destino atualizado.'
+              : 'Destino criado com sucesso.',
+          );
+          this.closeForm();
+          this.load();
         }
-        return of(null);
-      }),
-      finalize(() => { this.saving = false; this.cdr.markForCheck(); }),
-    ).subscribe(result => {
-      if (result) {
-        this.toast.success(this.editingId ? 'Destino atualizado.' : 'Destino criado com sucesso.');
-        this.closeForm();
-        this.load();
-      }
-    });
+      });
   }
 
   // ── Toggle enable/disable ───────────────────────────────────────────────
@@ -187,30 +279,49 @@ export class DiagnosticTargetsComponent implements OnInit {
   toggleEnabled(target: DiagnosticTarget): void {
     if (!this.isAdmin) return;
     const newEnabled = !target.enabled;
-    this.service.update(target._id!, { enabled: newEnabled }).pipe(
-      takeUntilDestroyed(this.destroyRef),
-      catchError(() => { this.toast.error('Erro ao alterar status.'); return of(null); }),
-    ).subscribe(result => {
-      if (result) {
-        target.enabled = newEnabled;
-        this.toast.success(newEnabled ? 'Destino ativado.' : 'Destino desativado.');
-        this.cdr.markForCheck();
-      }
-    });
+    this.service
+      .update(target._id!, { enabled: newEnabled })
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError(() => {
+          this.toast.error('Erro ao alterar status.');
+          return of(null);
+        }),
+      )
+      .subscribe((result) => {
+        if (result) {
+          target.enabled = newEnabled;
+          this.toast.success(
+            newEnabled ? 'Destino ativado.' : 'Destino desativado.',
+          );
+          this.cdr.markForCheck();
+        }
+      });
   }
 
   // ── Delete ──────────────────────────────────────────────────────────────
 
   deleteTarget(target: DiagnosticTarget): void {
     if (!this.isAdmin || !target._id) return;
-    if (!confirm(`Remover o destino "${target.label || target.host}" (${target.type})?`)) return;
-    this.service.delete(target._id).pipe(
-      takeUntilDestroyed(this.destroyRef),
-      catchError(() => { this.toast.error('Erro ao remover destino.'); return of(null); }),
-    ).subscribe(() => {
-      this.toast.success('Destino removido.');
-      this.load();
-    });
+    if (
+      !confirm(
+        `Remover o destino "${target.label || target.host}" (${target.type})?`,
+      )
+    )
+      return;
+    this.service
+      .delete(target._id)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError(() => {
+          this.toast.error('Erro ao remover destino.');
+          return of(null);
+        }),
+      )
+      .subscribe(() => {
+        this.toast.success('Destino removido.');
+        this.load();
+      });
   }
 
   // ── Análise ─────────────────────────────────────────────────────────────
@@ -225,14 +336,23 @@ export class DiagnosticTargetsComponent implements OnInit {
     this.expandedAnalysisId = id;
     if (!this.analysisMap[id]) {
       this.analysisLoadingId = id;
-      this.service.analysis(id, 30).pipe(
-        takeUntilDestroyed(this.destroyRef),
-        catchError(() => { this.toast.error('Erro ao carregar análise.'); return of(null); }),
-        finalize(() => { this.analysisLoadingId = null; this.cdr.markForCheck(); }),
-      ).subscribe(analysis => {
-        this.analysisMap[id] = analysis;
-        this.cdr.markForCheck();
-      });
+      this.service
+        .analysis(id, 30)
+        .pipe(
+          takeUntilDestroyed(this.destroyRef),
+          catchError(() => {
+            this.toast.error('Erro ao carregar análise.');
+            return of(null);
+          }),
+          finalize(() => {
+            this.analysisLoadingId = null;
+            this.cdr.markForCheck();
+          }),
+        )
+        .subscribe((analysis) => {
+          this.analysisMap[id] = analysis;
+          this.cdr.markForCheck();
+        });
     }
     this.cdr.markForCheck();
   }
@@ -254,9 +374,13 @@ export class DiagnosticTargetsComponent implements OnInit {
     const a = this.analysisMap[target._id!];
     if (!a?.dailySeries?.length) return;
     const headers = ['day', 'success', 'error', 'total'];
-    const rows = a.dailySeries.map(d => [d.day, d.success, d.error, d.total].join(','));
+    const rows = a.dailySeries.map((d) =>
+      [d.day, d.success, d.error, d.total].join(','),
+    );
     const csv = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\uFEFF' + csv], {
+      type: 'text/csv;charset=utf-8;',
+    });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -278,27 +402,113 @@ export class DiagnosticTargetsComponent implements OnInit {
 
   bulkToggleEnabled(enabled: boolean): void {
     if (this.selectedIds.size === 0) return;
-    const calls = Array.from(this.selectedIds).map(id => this.service.update(id, { enabled }));
-    forkJoin(calls).pipe(
-      takeUntilDestroyed(this.destroyRef),
-      catchError(() => { this.toast.error('Falha ao atualizar alguns destinos.'); return of(null); }),
-    ).subscribe(() => {
-      this.toast.success(`${this.selectedIds.size} destino(s) atualizados.`);
-      this.selectedIds.clear();
-      this.load();
-    });
+    const calls = Array.from(this.selectedIds).map((id) =>
+      this.service.update(id, { enabled }),
+    );
+    forkJoin(calls)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError(() => {
+          this.toast.error('Falha ao atualizar alguns destinos.');
+          return of(null);
+        }),
+      )
+      .subscribe(() => {
+        this.toast.success(`${this.selectedIds.size} destino(s) atualizados.`);
+        this.selectedIds.clear();
+        this.load();
+      });
   }
 
   bulkDelete(): void {
-    if (this.selectedIds.size === 0 || !confirm(`Remover ${this.selectedIds.size} destino(s)?`)) return;
-    const calls = Array.from(this.selectedIds).map(id => this.service.delete(id));
-    forkJoin(calls).pipe(
-      takeUntilDestroyed(this.destroyRef),
-      catchError(() => { this.toast.error('Falha ao remover alguns destinos.'); return of(null); }),
-    ).subscribe(() => {
-      this.toast.success('Destinos removidos.');
-      this.selectedIds.clear();
-      this.load();
-    });
+    if (
+      this.selectedIds.size === 0 ||
+      !confirm(`Remover ${this.selectedIds.size} destino(s)?`)
+    )
+      return;
+    const calls = Array.from(this.selectedIds).map((id) =>
+      this.service.delete(id),
+    );
+    forkJoin(calls)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError(() => {
+          this.toast.error('Falha ao remover alguns destinos.');
+          return of(null);
+        }),
+      )
+      .subscribe(() => {
+        this.toast.success('Destinos removidos.');
+        this.selectedIds.clear();
+        this.load();
+      });
+  }
+
+  // ── Alertas de degradação ──────────────────────────────────────────────
+
+  get activeAlertsCount(): number {
+    return this.alerts.filter((a) => a.status === 'active').length;
+  }
+
+  toggleAlertsSection(): void {
+    this.alertsExpanded = !this.alertsExpanded;
+    if (this.alertsExpanded && this.alerts.length === 0) this.loadAlerts();
+    this.cdr.markForCheck();
+  }
+
+  setAlertFilter(filter: 'active' | 'resolved' | 'all'): void {
+    this.alertFilter = filter;
+    this.loadAlerts();
+    this.cdr.markForCheck();
+  }
+
+  loadAlerts(): void {
+    this.alertsLoading = true;
+    this.service
+      .listAlerts(this.alertFilter, 50)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError(() => {
+          this.toast.error('Erro ao carregar alertas de degradação.');
+          return of([]);
+        }),
+        finalize(() => {
+          this.alertsLoading = false;
+          this.cdr.markForCheck();
+        }),
+      )
+      .subscribe((alerts) => {
+        this.alerts = alerts;
+        // Auto-expande se há alertas ativos e a seção estava fechada
+        if (this.activeAlertsCount > 0 && !this.alertsExpanded)
+          this.alertsExpanded = true;
+        this.cdr.markForCheck();
+      });
+  }
+
+  acknowledgeAlert(alert: DiagnosticAlert): void {
+    if (!alert._id || this.alertAckId) return;
+    this.alertAckId = alert._id;
+    this.service
+      .acknowledgeDiagnosticAlert(alert._id)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError(() => {
+          this.toast.error('Falha ao reconhecer alerta.');
+          return of(null);
+        }),
+        finalize(() => {
+          this.alertAckId = null;
+          this.cdr.markForCheck();
+        }),
+      )
+      .subscribe((updated) => {
+        if (updated) {
+          const idx = this.alerts.findIndex((a) => a._id === alert._id);
+          if (idx !== -1) this.alerts[idx] = updated;
+          this.toast.success('Alerta reconhecido.');
+          this.cdr.markForCheck();
+        }
+      });
   }
 }
