@@ -518,10 +518,9 @@
 .vmoas-grid-row {
   display: grid;
   // Checkbox | Status | Serial | Modelo | IP WAN | PPPoE | Sinal Rx | Saúde | Tarefas | Ações
-  grid-template-columns: 48px 110px minmax(110px, 1.2fr) minmax(
-      110px,
-      1.2fr
-    ) minmax(110px, 1.1fr) minmax(120px, 1.3fr) 110px 80px 70px 220px;
+  grid-template-columns:
+    48px 110px minmax(110px, 1.2fr) minmax(110px, 1.2fr)
+    minmax(110px, 1.1fr) minmax(120px, 1.3fr) 110px 80px 70px 220px;
   align-items: center;
   gap: 16px;
   padding: 0 24px;
@@ -1165,10 +1164,9 @@
   .vmoas-grid-header,
   .vmoas-grid-row {
     // Remove col 6 (PPPoE) e col 9 (Tarefas) — mantém 8 colunas
-    grid-template-columns: 48px 110px minmax(110px, 1.2fr) minmax(
-        110px,
-        1.2fr
-      ) minmax(110px, 1.1fr) 110px 80px 220px;
+    grid-template-columns:
+      48px 110px minmax(110px, 1.2fr) minmax(110px, 1.2fr)
+      minmax(110px, 1.1fr) 110px 80px 220px;
   }
   // Esconde as divs correspondentes (índices base-0: 5=PPPoE, 8=Tarefas)
   .vmoas-grid-header > div:nth-child(6),
@@ -1944,6 +1942,15 @@
 
   &:last-child {
     border-bottom: none;
+  }
+
+  &.failing-cpe-clickable {
+    cursor: pointer;
+    transition: background var(--transition-speed) ease;
+
+    &:hover {
+      background: color-mix(in srgb, var(--accent-primary) 6%, transparent);
+    }
   }
 
   &.failing-cpe-header {

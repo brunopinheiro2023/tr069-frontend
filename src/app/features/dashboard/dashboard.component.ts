@@ -1387,10 +1387,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.selectedTargetId === 'all') {
       series = data.dailySeriesAggregated;
     } else {
-      const target = data.perTargetDailySeries.find(
+      // Guard: se o payload veio do cache antigo (sem perTargetDailySeries),
+      // fallback para a série agregada em vez de quebrar com tela em branco.
+      const target = data.perTargetDailySeries?.find(
         (t) => t.targetId === this.selectedTargetId,
       );
-      series = target?.dailySeries || [];
+      series = target?.dailySeries || data.dailySeriesAggregated;
     }
     this.diagChartLabels = series.map((d) => {
       const parts = d.day.split('-');
@@ -1409,6 +1411,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.updateDiagChart(this.diagnosticOverview);
     }
     this.cdr.markForCheck();
+  }
+
+  /** Navega para a página de detalhe da CPE ao clicar numa linha da tabela de falhas. */
+  navigateToCpeDetails(serialNumber: string): void {
+    this.router.navigate(['/dashboard/cpe', serialNumber]);
   }
 
   /**

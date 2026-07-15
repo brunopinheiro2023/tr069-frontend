@@ -1080,8 +1080,10 @@
                 <span>Quando</span>
               </div>
               <div
-                class="failing-cpe-row"
+                class="failing-cpe-row failing-cpe-clickable"
                 *ngFor="let cpe of diagnosticOverview.topFailingCpes"
+                (click)="navigateToCpeDetails(cpe.serialNumber)"
+                title="Clique para ver detalhes da CPE"
               >
                 <span class="cpe-serial">
                   <span class="material-symbols-rounded cpe-icon">router</span>
