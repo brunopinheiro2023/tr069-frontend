@@ -345,7 +345,7 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
    * do novo schema EP 28 (wan.ip, deviceInfo.softwareVersion, etc.).
    *
    * Necessário porque a API retorna apenas o novo schema, mas vários templates
-   * (cpe-details.component.html, cpe-info-tab loadWanConfig) ainda referenciam
+   * (cpe-details.component.html, cpe-info-tab wanDnsList) ainda referenciam
    * campos legados via interpolação direta (cpe.wanIp, cpe.softwareVersion).
    *
    * Padrão seguido: dashboard.component.ts linhas 1252-1265 (normalizeCpeForWorker).

@@ -431,6 +431,27 @@
     </div>
   </div>
 
+  <!-- ═══ SEÇÃO: Sistema ═══ -->
+  <div
+    class="col-span-full flex items-center gap-2 mt-4 mb-1"
+    *ngIf="
+      telemetryData?.['cpuUsage'] ||
+      telemetryData?.['uptime'] ||
+      telemetryData?.['hostCount'] ||
+      healthScoreBreakdown ||
+      activeAlerts.length > 0 ||
+      lastIntervention?.found
+    "
+  >
+    <span class="material-symbols-rounded text-purple-500 text-xl"
+      >developer_board</span
+    >
+    <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200">
+      Sistema
+    </h2>
+    <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700 ml-2"></div>
+  </div>
+
   <!-- Card Sistema -->
   <div
     class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
@@ -523,6 +544,28 @@
     </ul>
   </div>
 
+  <!-- ═══ SEÇÃO: Conectividade WAN ═══ -->
+  <div
+    class="col-span-full flex items-center gap-2 mt-2 mb-1"
+    *ngIf="
+      telemetryData?.['wanStatus'] ||
+      telemetryData?.['wanDownstreamRate'] ||
+      cpe?.wan?.connType ||
+      cpe?.wan?.ipv6 ||
+      cpe?.wan?.ip ||
+      cpe?.wan?.gateway ||
+      cpe?.wan?.updatedAt ||
+      cpe?.wan?.pppoeUsername ||
+      cpe?.wanIp
+    "
+  >
+    <span class="material-symbols-rounded text-blue-500 text-xl">router</span>
+    <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200">
+      Conectividade WAN
+    </h2>
+    <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700 ml-2"></div>
+  </div>
+
   <!-- Card WAN Status — métricas em tempo real + dados estruturais WAN -->
   <div
     class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
@@ -611,7 +654,7 @@
     </ul>
   </div>
 
-  <!-- Card WAN Config — configuração via Bootstrap probe + edição SPV -->
+  <!-- Card WAN Config — somente leitura (edição removida por segurança) -->
   <div
     class="bg-white dark:bg-gray-800 shadow rounded-lg p-5 border border-gray-200 dark:border-gray-700"
     *ngIf="
@@ -629,146 +672,74 @@
       <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
         WAN — Configuração
       </h3>
-      <div class="flex items-center gap-2">
-        <span
-          *ngIf="cpe?.wan?.updatedAt || cpe?.wanConfigUpdatedAt"
-          class="text-xs text-gray-400"
-        >
-          Probe:
-          {{
-            cpe?.wan?.updatedAt || cpe?.wanConfigUpdatedAt | date: "dd/MM HH:mm"
-          }}
-        </span>
-        <button
-          *ngIf="!isEditingWanConfig"
-          (click)="loadWanConfig()"
-          class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-        >
-          Editar
-        </button>
-        <button
-          *ngIf="isEditingWanConfig"
-          (click)="isEditingWanConfig = false"
-          class="text-xs px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded transition-colors"
-        >
-          Cancelar
-        </button>
-      </div>
+      <span
+        *ngIf="cpe?.wan?.updatedAt || cpe?.wanConfigUpdatedAt"
+        class="text-xs text-gray-400"
+      >
+        Probe:
+        {{
+          cpe?.wan?.updatedAt || cpe?.wanConfigUpdatedAt | date: "dd/MM HH:mm"
+        }}
+      </span>
     </div>
 
-    <!-- Modo leitura em 2 colunas -->
-    <ng-container *ngIf="!isEditingWanConfig">
-      <div
-        class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-gray-700 dark:text-gray-300"
-      >
-        <div *ngIf="cpe?.wan?.pppoeUsername || cpe?.pppoeUsername">
-          <span class="font-medium block text-xs text-gray-500"
-            >PPPoE Usuário</span
-          >
-          {{ cpe?.wan?.pppoeUsername || cpe?.pppoeUsername }}
-        </div>
-        <div *ngIf="cpe?.wan?.ip || cpe?.wanIp">
-          <span class="font-medium block text-xs text-gray-500">IPv4 WAN</span>
-          {{ cpe?.wan?.ip || cpe?.wanIp }}
-        </div>
-        <div *ngIf="cpe?.wan?.subnetMask || cpe?.wanSubnetMask">
-          <span class="font-medium block text-xs text-gray-500">Máscara</span>
-          {{ cpe?.wan?.subnetMask || cpe?.wanSubnetMask }}
-        </div>
-        <div *ngIf="cpe?.wan?.gateway || cpe?.wanGateway">
-          <span class="font-medium block text-xs text-gray-500">Gateway</span>
-          {{ cpe?.wan?.gateway || cpe?.wanGateway }}
-        </div>
-        <div *ngIf="cpe?.wan?.dnsIsp || cpe?.wanDnsIsp">
-          <span class="font-medium block text-xs text-gray-500">DNS ISP</span>
-          {{ cpe?.wan?.dnsIsp || cpe?.wanDnsIsp }}
-        </div>
-        <div *ngIf="cpe?.wan?.mtu || cpe?.wanMtu">
-          <span class="font-medium block text-xs text-gray-500">MTU</span>
-          {{ cpe?.wan?.mtu || cpe?.wanMtu }} bytes
-        </div>
-        <div *ngIf="cpe?.wan?.vlanId || cpe?.wanVlanId">
-          <span class="font-medium block text-xs text-gray-500">VLAN ID</span>
-          {{ cpe?.wan?.vlanId || cpe?.wanVlanId }}
-        </div>
-      </div>
-    </ng-container>
-
-    <!-- Modo edição -->
-    <form
-      *ngIf="isEditingWanConfig"
-      (ngSubmit)="saveWanConfig()"
-      class="space-y-3"
+    <!-- Modo leitura em 2 colunas (100% somente leitura) -->
+    <div
+      class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-gray-700 dark:text-gray-300"
     >
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1"
-            >PPPoE Usuário</label
-          >
-          <input
-            type="text"
-            [(ngModel)]="wanConfigFields.pppoeUsername"
-            name="ppu"
-            class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-          />
-        </div>
-        <div>
-          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1"
-            >MTU (576–1500)</label
-          >
-          <input
-            type="number"
-            [(ngModel)]="wanConfigFields.mtu"
-            name="mtu"
-            min="576"
-            max="1500"
-            class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-          />
-        </div>
-        <div>
-          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1"
-            >DNS Primário</label
-          >
-          <input
-            type="text"
-            [(ngModel)]="wanConfigFields.dnsServer1"
-            name="dns1"
-            class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-          />
-        </div>
-        <div>
-          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1"
-            >DNS Secundário</label
-          >
-          <input
-            type="text"
-            [(ngModel)]="wanConfigFields.dnsServer2"
-            name="dns2"
-            class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-          />
-        </div>
-        <div>
-          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1"
-            >VLAN ID (1–4094)</label
-          >
-          <input
-            type="number"
-            [(ngModel)]="wanConfigFields.vlanId"
-            name="vlan"
-            min="1"
-            max="4094"
-            class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-          />
-        </div>
+      <div *ngIf="cpe?.wan?.pppoeUsername || cpe?.pppoeUsername">
+        <span class="font-medium block text-xs text-gray-500"
+          >PPPoE Usuário</span
+        >
+        {{ cpe?.wan?.pppoeUsername || cpe?.pppoeUsername }}
       </div>
-      <button
-        type="submit"
-        [disabled]="wanConfigSaving || isCpeOffline"
-        class="w-full px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded transition-colors"
-      >
-        {{ wanConfigSaving ? "Salvando..." : "Salvar Configuração" }}
-      </button>
-    </form>
+      <div *ngIf="cpe?.wan?.ip || cpe?.wanIp">
+        <span class="font-medium block text-xs text-gray-500">IPv4 WAN</span>
+        {{ cpe?.wan?.ip || cpe?.wanIp }}
+      </div>
+      <div *ngIf="cpe?.wan?.subnetMask || cpe?.wanSubnetMask">
+        <span class="font-medium block text-xs text-gray-500">Máscara</span>
+        {{ cpe?.wan?.subnetMask || cpe?.wanSubnetMask }}
+      </div>
+      <div *ngIf="cpe?.wan?.gateway || cpe?.wanGateway">
+        <span class="font-medium block text-xs text-gray-500">Gateway</span>
+        {{ cpe?.wan?.gateway || cpe?.wanGateway }}
+      </div>
+      <!-- DNS separado por vírgula — cada IP em linha própria com validação IPv4 -->
+      <div *ngFor="let dns of wanDnsList; trackBy: trackByDnsIp">
+        <span class="font-medium block text-xs text-gray-500">{{
+          dns.label
+        }}</span>
+        <span [ngClass]="dns.valid ? '' : 'text-red-500 dark:text-red-400'">
+          {{ dns.ip }}
+          <span *ngIf="!dns.valid" class="text-xs text-red-400 ml-1"
+            >(inválido)</span
+          >
+        </span>
+      </div>
+      <div *ngIf="cpe?.wan?.mtu || cpe?.wanMtu">
+        <span class="font-medium block text-xs text-gray-500">MTU</span>
+        {{ cpe?.wan?.mtu || cpe?.wanMtu }} bytes
+      </div>
+      <div *ngIf="cpe?.wan?.vlanId || cpe?.wanVlanId">
+        <span class="font-medium block text-xs text-gray-500">VLAN ID</span>
+        {{ cpe?.wan?.vlanId || cpe?.wanVlanId }}
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SEÇÃO: Sinal Óptico ═══ -->
+  <div
+    class="col-span-full flex items-center gap-2 mt-4 mb-1"
+    *ngIf="telemetryData?.['opticalRx'] || telemetryData?.['gponStatus']"
+  >
+    <span class="material-symbols-rounded text-green-500 text-xl"
+      >fiber_manual_record</span
+    >
+    <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200">
+      Sinal Óptico
+    </h2>
+    <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700 ml-2"></div>
   </div>
 
   <!-- Card Sinal Óptico -->
@@ -860,6 +831,18 @@
         {{ telemetryData | metric: "opticalDistance" : { unit: "m" } }}
       </li>
     </ul>
+  </div>
+
+  <!-- ═══ SEÇÃO: Rede Wi-Fi ═══ -->
+  <div
+    class="col-span-full flex items-center gap-2 mt-4 mb-1"
+    *ngIf="telemetryData?.['wifi2gChannel'] || telemetryData?.['wifi5gChannel']"
+  >
+    <span class="material-symbols-rounded text-amber-500 text-xl">wifi</span>
+    <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200">
+      Rede Wi-Fi
+    </h2>
+    <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700 ml-2"></div>
   </div>
 
   <!-- Card Wi-Fi com tabs -->
@@ -1199,6 +1182,17 @@
         ⬇ CSV
       </button>
     </div>
+  </div>
+
+  <!-- Aviso de dados limitados para períodos longos (memória/TX podem estar ausentes em docs históricos) -->
+  <div
+    *ngIf="hasLimitedChartData"
+    class="mb-3 px-3 py-2 rounded-lg bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-xs text-yellow-700 dark:text-yellow-300 flex items-center gap-2"
+  >
+    <span class="material-symbols-rounded text-sm">info</span>
+    Dados limitados para {{ selectedPeriodHours }}h — memória e/ou TX óptico
+    podem estar indisponíveis em registros históricos anteriores à correção do
+    agregador.
   </div>
 
   <!-- Gráficos -->

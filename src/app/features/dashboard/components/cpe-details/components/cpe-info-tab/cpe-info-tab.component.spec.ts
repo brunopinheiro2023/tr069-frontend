@@ -9,7 +9,13 @@
  * Regra: sem console.log em testes — usa spyOn para silenciar o logInfo/logWarn/logError interno.
  */
 
-import { ComponentFixture, TestBed, fakeAsync, tick, discardPeriodicTasks } from '@angular/core/testing';
+import {
+  ComponentFixture,
+  TestBed,
+  fakeAsync,
+  tick,
+  discardPeriodicTasks,
+} from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA, ChangeDetectorRef } from '@angular/core';
 import { PLATFORM_ID } from '@angular/core';
 import { Subject, of, throwError, EMPTY } from 'rxjs';
@@ -21,7 +27,12 @@ import { WebSocketService } from '../../../../../../core/services/websocket.serv
 import { ToastService } from '../../../../../../core/services/toast.service';
 import { DiagnosticParserService } from '../../../../../../core/services/diagnostic-parser.service';
 import { TelemetryCacheService } from '../../../../../../core/services/telemetry-cache.service';
-import { TelemetryData, TelemetryAlert, TelemetrySnapshot, CpeDevice } from '../../../../../../core/models';
+import {
+  TelemetryData,
+  TelemetryAlert,
+  TelemetrySnapshot,
+  CpeDevice,
+} from '../../../../../../core/models';
 
 // ── Helpers de fixture ────────────────────────────────────────────────────────
 
@@ -38,14 +49,14 @@ function makeCpe(overrides: Partial<CpeDevice> = {}): CpeDevice {
 /** Retorna um TelemetryData flat com os campos mais usados nos testes. */
 function makeTelemetry(overrides: Partial<TelemetryData> = {}): TelemetryData {
   return {
-    cpuUsage:   45,
+    cpuUsage: 45,
     memoryFree: 50000,
     memoryTotal: 128000,
-    uptime:     3600,
-    opticalRx:  -20,
-    opticalTx:  -3,
+    uptime: 3600,
+    opticalRx: -20,
+    opticalTx: -3,
     gponStatus: 'up',
-    wanStatus:  'connected',
+    wanStatus: 'connected',
     ...overrides,
   };
 }
@@ -81,91 +92,140 @@ class WsStub {
   }
 
   // Métodos que o componente subscreve
-  onTelemetryUpdate()        { return this.subject('telemetry_update').asObservable(); }
-  onTelemetryProgress()      { return this.subject('telemetry_progress').asObservable(); }
-  onTelemetryComplete()      { return this.subject('telemetry_complete').asObservable(); }
-  onTelemetryAlert()         { return this.subject('telemetry_alert').asObservable(); }
-  onTelemetryAlertResolved() { return this.subject('telemetry_alert_resolved').asObservable(); }
-  onTelemetryAlertBatch()    { return this.subject('telemetry_alert_batch').asObservable(); }
-  onAnalysisUpdate()         { return this.subject('analysis_update').asObservable(); }
-  onDriverAcquired()         { return this.subject('driver_acquired').asObservable(); }
-  onViewOnly()               { return this.subject('view_only').asObservable(); }
-  onForceViewOnly()          { return this.subject('force_view_only').asObservable(); }
-  onDriverReleased()         { return this.subject('driver_released').asObservable(); }
-  onViewersUpdated()         { return this.subject('viewers_updated').asObservable(); }
-  onCpeLocked()              { return this.subject('cpe_locked').asObservable(); }
-  onCpeUnlocked()            { return this.subject('cpe_unlocked').asObservable(); }
-  onCpeValueChange()         { return this.subject('cpe_value_change').asObservable(); }
+  onTelemetryUpdate() {
+    return this.subject('telemetry_update').asObservable();
+  }
+  onTelemetryProgress() {
+    return this.subject('telemetry_progress').asObservable();
+  }
+  onTelemetryComplete() {
+    return this.subject('telemetry_complete').asObservable();
+  }
+  onTelemetryAlert() {
+    return this.subject('telemetry_alert').asObservable();
+  }
+  onTelemetryAlertResolved() {
+    return this.subject('telemetry_alert_resolved').asObservable();
+  }
+  onTelemetryAlertBatch() {
+    return this.subject('telemetry_alert_batch').asObservable();
+  }
+  onAnalysisUpdate() {
+    return this.subject('analysis_update').asObservable();
+  }
+  onDriverAcquired() {
+    return this.subject('driver_acquired').asObservable();
+  }
+  onViewOnly() {
+    return this.subject('view_only').asObservable();
+  }
+  onForceViewOnly() {
+    return this.subject('force_view_only').asObservable();
+  }
+  onDriverReleased() {
+    return this.subject('driver_released').asObservable();
+  }
+  onViewersUpdated() {
+    return this.subject('viewers_updated').asObservable();
+  }
+  onCpeLocked() {
+    return this.subject('cpe_locked').asObservable();
+  }
+  onCpeUnlocked() {
+    return this.subject('cpe_unlocked').asObservable();
+  }
+  onCpeValueChange() {
+    return this.subject('cpe_value_change').asObservable();
+  }
+  onBootLoopAnomaly() {
+    return this.subject('boot_loop_anomaly').asObservable();
+  }
 
-  subscribeToCpe   = jasmine.createSpy('subscribeToCpe');
+  subscribeToCpe = jasmine.createSpy('subscribeToCpe');
   unsubscribeFromCpe = jasmine.createSpy('unsubscribeFromCpe');
   emitDriverKeepalive = jasmine.createSpy('emitDriverKeepalive');
   isConnected = true;
 }
 
 class CpeServiceStub {
-  requestTelemetry   = jasmine.createSpy().and.returnValue(of({ status: 'queued' }));
-  requestVitals      = jasmine.createSpy().and.returnValue(of({ status: 'queued' }));
-  getLatestVitals    = jasmine.createSpy().and.returnValue(of({ success: true, data: {} }));
-  getTelemetryCache  = jasmine.createSpy().and.returnValue(EMPTY);
+  requestTelemetry = jasmine
+    .createSpy()
+    .and.returnValue(of({ status: 'queued' }));
+  requestVitals = jasmine.createSpy().and.returnValue(of({ status: 'queued' }));
+  getLatestVitals = jasmine
+    .createSpy()
+    .and.returnValue(of({ success: true, data: {} }));
+  getTelemetryCache = jasmine.createSpy().and.returnValue(EMPTY);
   getTelemetryAnalysis = jasmine.createSpy().and.returnValue(EMPTY);
-  getTelemetryVitalsHistory = jasmine.createSpy().and.returnValue(
-    of({ success: true, data: [], count: 0 })
-  );
+  getTelemetryVitalsHistory = jasmine
+    .createSpy()
+    .and.returnValue(of({ success: true, data: [], count: 0 }));
   getHealthScoreBreakdown = jasmine.createSpy().and.returnValue(EMPTY);
   getCpeAlerts = jasmine.createSpy().and.returnValue(of({ data: [] }));
-  getIncidentStatus = jasmine.createSpy().and.returnValue(
-    of({ active: false, expiresInSeconds: null })
-  );
-  getLastIntervention = jasmine.createSpy().and.returnValue(of({ found: false }));
+  getIncidentStatus = jasmine
+    .createSpy()
+    .and.returnValue(of({ active: false, expiresInSeconds: null }));
+  getLastIntervention = jasmine
+    .createSpy()
+    .and.returnValue(of({ found: false }));
   updateWanConfig = jasmine.createSpy().and.returnValue(of({}));
 }
 
 class ToastStub {
   success = jasmine.createSpy('success');
-  error   = jasmine.createSpy('error');
+  error = jasmine.createSpy('error');
   warning = jasmine.createSpy('warning');
-  info    = jasmine.createSpy('info');
+  info = jasmine.createSpy('info');
 }
 
 class CacheSvcStub {
   saveLatestTelemetry = jasmine.createSpy('saveLatestTelemetry');
-  loadLatestTelemetry = jasmine.createSpy('loadLatestTelemetry').and.returnValue(null);
-  saveHistory         = jasmine.createSpy('saveHistory').and.returnValue(Promise.resolve());
-  loadHistory         = jasmine.createSpy('loadHistory').and.returnValue(Promise.resolve(null));
-  clearSerialHistory  = jasmine.createSpy('clearSerialHistory').and.returnValue(Promise.resolve());
+  loadLatestTelemetry = jasmine
+    .createSpy('loadLatestTelemetry')
+    .and.returnValue(null);
+  saveHistory = jasmine
+    .createSpy('saveHistory')
+    .and.returnValue(Promise.resolve());
+  loadHistory = jasmine
+    .createSpy('loadHistory')
+    .and.returnValue(Promise.resolve(null));
+  clearSerialHistory = jasmine
+    .createSpy('clearSerialHistory')
+    .and.returnValue(Promise.resolve());
 }
 
 // ── Suite principal ───────────────────────────────────────────────────────────
 
 describe('CpeInfoTabComponent', () => {
-  let fixture:   ComponentFixture<CpeInfoTabComponent>;
+  let fixture: ComponentFixture<CpeInfoTabComponent>;
   let component: CpeInfoTabComponent;
-  let cpeStub:   CpeServiceStub;
-  let wsStub:    WsStub;
+  let cpeStub: CpeServiceStub;
+  let wsStub: WsStub;
   let toastStub: ToastStub;
   let cacheStub: CacheSvcStub;
 
   beforeEach(async () => {
-    cpeStub   = new CpeServiceStub();
-    wsStub    = new WsStub();
+    cpeStub = new CpeServiceStub();
+    wsStub = new WsStub();
     toastStub = new ToastStub();
     cacheStub = new CacheSvcStub();
 
     await TestBed.configureTestingModule({
       imports: [CpeInfoTabComponent, HttpClientTestingModule],
       providers: [
-        { provide: CpeService,           useValue: cpeStub   },
-        { provide: WebSocketService,     useValue: wsStub    },
-        { provide: ToastService,         useValue: toastStub },
+        { provide: CpeService, useValue: cpeStub },
+        { provide: WebSocketService, useValue: wsStub },
+        { provide: ToastService, useValue: toastStub },
         { provide: TelemetryCacheService, useValue: cacheStub },
-        { provide: DiagnosticParserService, useValue: {
-            parseOmciRx:      (v: string) => parseFloat(v) / 500,
-            parseOmciTx:      (v: string) => parseFloat(v) / 1000,
-            parseOmciTemp:    (v: string) => parseFloat(v) / 256,
+        {
+          provide: DiagnosticParserService,
+          useValue: {
+            parseOmciRx: (v: string) => parseFloat(v) / 500,
+            parseOmciTx: (v: string) => parseFloat(v) / 1000,
+            parseOmciTemp: (v: string) => parseFloat(v) / 256,
             parseOmciVoltage: (v: string) => parseFloat(v) * 0.0001,
-            parseOmciBias:    (v: string) => parseFloat(v) * 0.002,
-          }
+            parseOmciBias: (v: string) => parseFloat(v) * 0.002,
+          },
         },
         { provide: PLATFORM_ID, useValue: 'browser' },
       ],
@@ -173,7 +233,7 @@ describe('CpeInfoTabComponent', () => {
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
 
-    fixture   = TestBed.createComponent(CpeInfoTabComponent);
+    fixture = TestBed.createComponent(CpeInfoTabComponent);
     component = fixture.componentInstance;
     component.serialNumber = 'TEST001';
     component.cpe = makeCpe();
@@ -220,14 +280,24 @@ describe('CpeInfoTabComponent', () => {
     beforeEach(() => fixture.detectChanges());
 
     describe('formatUptimeHuman()', () => {
-      it('retorna "—" para null', () => expect(component.formatUptimeHuman(null)).toBe('—'));
-      it('retorna "—" para NaN', () => expect(component.formatUptimeHuman(NaN)).toBe('—'));
-      it('retorna segundos quando < 60s', () => expect(component.formatUptimeHuman(45)).toBe('45s'));
-      it('retorna minutos quando 60–3599s', () => expect(component.formatUptimeHuman(90)).toBe('1m'));
-      it('retorna horas quando 3600–86399s', () => expect(component.formatUptimeHuman(7200)).toBe('2h'));
-      it('retorna dias quando >= 86400s', () => expect(component.formatUptimeHuman(86400)).toBe('1d'));
-      it('retorna "2d 3h" para 2 dias e 3 horas', () => expect(component.formatUptimeHuman(86400 * 2 + 3600 * 3)).toBe('2d 3h'));
-      it('omite horas quando resto é zero (ex: "3d")', () => expect(component.formatUptimeHuman(86400 * 3)).toBe('3d'));
+      it('retorna "—" para null', () =>
+        expect(component.formatUptimeHuman(null)).toBe('—'));
+      it('retorna "—" para NaN', () =>
+        expect(component.formatUptimeHuman(NaN)).toBe('—'));
+      it('retorna segundos quando < 60s', () =>
+        expect(component.formatUptimeHuman(45)).toBe('45s'));
+      it('retorna minutos quando 60–3599s', () =>
+        expect(component.formatUptimeHuman(90)).toBe('1m'));
+      it('retorna horas quando 3600–86399s', () =>
+        expect(component.formatUptimeHuman(7200)).toBe('2h'));
+      it('retorna dias quando >= 86400s', () =>
+        expect(component.formatUptimeHuman(86400)).toBe('1d'));
+      it('retorna "2d 3h" para 2 dias e 3 horas', () =>
+        expect(component.formatUptimeHuman(86400 * 2 + 3600 * 3)).toBe(
+          '2d 3h',
+        ));
+      it('omite horas quando resto é zero (ex: "3d")', () =>
+        expect(component.formatUptimeHuman(86400 * 3)).toBe('3d'));
     });
 
     describe('ramUsagePercent', () => {
@@ -237,24 +307,33 @@ describe('CpeInfoTabComponent', () => {
       });
 
       it('retorna null quando memoryTotal é 0 (evita divisão por zero)', () => {
-        component.telemetryData = makeTelemetry({ memoryFree: 0, memoryTotal: 0 });
+        component.telemetryData = makeTelemetry({
+          memoryFree: 0,
+          memoryTotal: 0,
+        });
         expect(component.ramUsagePercent).toBeNull();
       });
 
       it('calcula percentual correto (50% uso)', () => {
         // memFree=64000, memTotal=128000 → uso = 64000/128000 = 50%
-        component.telemetryData = makeTelemetry({ memoryFree: 64000, memoryTotal: 128000 });
+        component.telemetryData = makeTelemetry({
+          memoryFree: 64000,
+          memoryTotal: 128000,
+        });
         expect(component.ramUsagePercent).toBe(50);
       });
 
       it('calcula corretamente quando uso é 0% (tudo livre)', () => {
-        component.telemetryData = makeTelemetry({ memoryFree: 128000, memoryTotal: 128000 });
+        component.telemetryData = makeTelemetry({
+          memoryFree: 128000,
+          memoryTotal: 128000,
+        });
         expect(component.ramUsagePercent).toBe(0);
       });
 
       it('suporta telemetryData no formato TelemetryMetric {value, unit}', () => {
         component.telemetryData = {
-          memoryFree:  { value: '32000', unit: 'KB', description: '' },
+          memoryFree: { value: '32000', unit: 'KB', description: '' },
           memoryTotal: { value: '128000', unit: 'KB', description: '' },
         };
         expect(component.ramUsagePercent).toBe(75);
@@ -323,12 +402,17 @@ describe('CpeInfoTabComponent', () => {
           makeAlert({ status: 'active' }),
         ];
         expect(component.activeAlerts.length).toBe(2);
-        expect(component.activeAlerts.every(a => a.status === 'active')).toBeTrue();
+        expect(
+          component.activeAlerts.every((a) => a.status === 'active'),
+        ).toBeTrue();
       });
 
       it('limita a 10 alertas mesmo que hajam mais', () => {
         component.cpeAlerts = Array.from({ length: 15 }, (_, i) =>
-          makeAlert({ metric: `metric${i}`, triggeredAt: new Date(i * 1000).toISOString() })
+          makeAlert({
+            metric: `metric${i}`,
+            triggeredAt: new Date(i * 1000).toISOString(),
+          }),
         );
         expect(component.activeAlerts.length).toBe(10);
       });
@@ -346,9 +430,9 @@ describe('CpeInfoTabComponent', () => {
           analyzedAt: new Date().toISOString(),
           summary: { overallHealth: 'warning', alertCount: 2, alerts: [] },
           analyses: {
-            a: { severity: 'ok',       message: 'ok' },
+            a: { severity: 'ok', message: 'ok' },
             b: { severity: 'critical', message: 'crit' },
-            c: { severity: 'warning',  message: 'warn' },
+            c: { severity: 'warning', message: 'warn' },
           },
         } as any;
         const entries = component.sortedAnalysisEntries;
@@ -398,7 +482,7 @@ describe('CpeInfoTabComponent', () => {
 
       it('retorna string de TelemetryMetric { value }', () => {
         component.telemetryData = {
-          gponStatus: { value: 'up', unit: '', description: '' }
+          gponStatus: { value: 'up', unit: '', description: '' },
         };
         expect(component.stringValue('gponStatus')).toBe('up');
       });
@@ -416,12 +500,16 @@ describe('CpeInfoTabComponent', () => {
       });
 
       it('traduz "critical" → "Crítico"', () => {
-        component.analysisData = { summary: { overallHealth: 'critical' } } as any;
+        component.analysisData = {
+          summary: { overallHealth: 'critical' },
+        } as any;
         expect(component.overallHealthLabel).toBe('Crítico');
       });
 
       it('traduz "warning" → "Atenção"', () => {
-        component.analysisData = { summary: { overallHealth: 'warning' } } as any;
+        component.analysisData = {
+          summary: { overallHealth: 'warning' },
+        } as any;
         expect(component.overallHealthLabel).toBe('Atenção');
       });
     });
@@ -500,13 +588,18 @@ describe('CpeInfoTabComponent', () => {
     });
 
     it('trackByAlertSeverityMsg retorna metric+triggeredAt', () => {
-      const alert = makeAlert({ metric: 'cpuUsage', triggeredAt: '2024-01-01T00:00:00Z' });
+      const alert = makeAlert({
+        metric: 'cpuUsage',
+        triggeredAt: '2024-01-01T00:00:00Z',
+      });
       const result = component.trackByAlertSeverityMsg(0, alert);
       expect(result).toBe('cpuUsage2024-01-01T00:00:00Z');
     });
 
     it('trackByKvKey retorna a chave', () => {
-      expect(component.trackByKvKey(0, { key: 'connectivity' } as any)).toBe('connectivity');
+      expect(component.trackByKvKey(0, { key: 'connectivity' } as any)).toBe(
+        'connectivity',
+      );
     });
   });
 
@@ -544,8 +637,10 @@ describe('CpeInfoTabComponent', () => {
   describe('alertIcon()', () => {
     beforeEach(() => fixture.detectChanges());
 
-    it('retorna 🔴 para "critical"', () => expect(component.alertIcon('critical')).toBe('🔴'));
-    it('retorna ⚠️ para "warning"',  () => expect(component.alertIcon('warning')).toBe('⚠️'));
+    it('retorna 🔴 para "critical"', () =>
+      expect(component.alertIcon('critical')).toBe('🔴'));
+    it('retorna ⚠️ para "warning"', () =>
+      expect(component.alertIcon('warning')).toBe('⚠️'));
   });
 
   describe('analysisBadge()', () => {
@@ -575,7 +670,9 @@ describe('CpeInfoTabComponent', () => {
       expect(component.opticalZoneClass('ok')).toContain('text-green-500');
     });
     it('retorna classe amarela para warning', () => {
-      expect(component.opticalZoneClass('warning')).toContain('text-yellow-500');
+      expect(component.opticalZoneClass('warning')).toContain(
+        'text-yellow-500',
+      );
     });
     it('retorna classe vermelha para critical', () => {
       expect(component.opticalZoneClass('critical')).toContain('text-red-500');
@@ -910,7 +1007,10 @@ describe('CpeInfoTabComponent', () => {
 
     it('sai do modo view-only ao receber driver_acquired', () => {
       component['isViewOnly'] = true;
-      wsStub.emit('driver_acquired', { serialNumber: 'TEST001', username: 'tech1' });
+      wsStub.emit('driver_acquired', {
+        serialNumber: 'TEST001',
+        username: 'tech1',
+      });
       expect(component.isViewOnly).toBeFalse();
     });
 
@@ -946,7 +1046,10 @@ describe('CpeInfoTabComponent', () => {
     });
 
     it('seta isCpeBusy=true ao receber cpe_locked', () => {
-      wsStub.emit('cpe_locked', { serialNumber: 'TEST001', source: 'telemetry' });
+      wsStub.emit('cpe_locked', {
+        serialNumber: 'TEST001',
+        source: 'telemetry',
+      });
       expect(component.isCpeBusy).toBeTrue();
     });
 
@@ -958,7 +1061,11 @@ describe('CpeInfoTabComponent', () => {
 
     it('ignora eventos de outro serialNumber', () => {
       component['isViewOnly'] = false;
-      wsStub.emit('view_only', { serialNumber: 'OUTRO', driver: 'x', message: '' });
+      wsStub.emit('view_only', {
+        serialNumber: 'OUTRO',
+        driver: 'x',
+        message: '',
+      });
       expect(component.isViewOnly).toBeFalse();
     });
   });
@@ -969,7 +1076,11 @@ describe('CpeInfoTabComponent', () => {
     beforeEach(() => fixture.detectChanges());
 
     it('atualiza analysisData e analysisUpdatedAt ao receber evento', () => {
-      const analysis = { serialNumber: 'TEST001', analyses: {}, summary: {} } as any;
+      const analysis = {
+        serialNumber: 'TEST001',
+        analyses: {},
+        summary: {},
+      } as any;
       const ts = '2024-06-01T10:00:00Z';
       wsStub.emit('analysis_update', {
         serialNumber: 'TEST001',
@@ -977,7 +1088,9 @@ describe('CpeInfoTabComponent', () => {
         timestamp: ts,
       });
       expect(component.analysisData).toEqual(analysis);
-      expect(component.analysisUpdatedAt?.toISOString()).toBe(new Date(ts).toISOString());
+      expect(component.analysisUpdatedAt?.toISOString()).toBe(
+        new Date(ts).toISOString(),
+      );
     });
   });
 
@@ -1016,7 +1129,9 @@ describe('CpeInfoTabComponent', () => {
     }));
 
     it('exibe toast de erro quando API falha', fakeAsync(() => {
-      cpeStub.requestTelemetry.and.returnValue(throwError(() => ({ error: { error: 'CPE offline' } })));
+      cpeStub.requestTelemetry.and.returnValue(
+        throwError(() => ({ error: { error: 'CPE offline' } })),
+      );
       component.requestTelemetry();
       tick(1);
       expect(toastStub.error).toHaveBeenCalledWith('CPE offline');
@@ -1028,11 +1143,13 @@ describe('CpeInfoTabComponent', () => {
     }));
 
     it('exibe toast de info para cache hit', fakeAsync(() => {
-      cpeStub.requestTelemetry.and.returnValue(of({
-        source: 'cache',
-        cacheAgeMs: 5000,
-        message: 'dados do cache',
-      }));
+      cpeStub.requestTelemetry.and.returnValue(
+        of({
+          source: 'cache',
+          cacheAgeMs: 5000,
+          message: 'dados do cache',
+        }),
+      );
       component.requestTelemetry();
       tick(1);
       expect(toastStub.info).toHaveBeenCalled();
@@ -1067,9 +1184,11 @@ describe('CpeInfoTabComponent', () => {
     });
 
     it('exibe toast de erro quando API falha', fakeAsync(() => {
-      cpeStub.requestVitals.and.returnValue(throwError(() => ({
-        error: { error: 'Timeout vitals' }
-      })));
+      cpeStub.requestVitals.and.returnValue(
+        throwError(() => ({
+          error: { error: 'Timeout vitals' },
+        })),
+      );
       component.requestVitals();
       // retry({ count: 2, delay: 2000 }) → aguarda 2 tentativas × 2000ms antes do catchError
       tick(4001);
@@ -1080,94 +1199,147 @@ describe('CpeInfoTabComponent', () => {
     }));
   });
 
-  // ── 18. saveWanConfig() ──────────────────────────────────────────────────
+  // ── 18. wanDnsList (getter) — separa string DNS por vírgula e valida IPv4 ─
 
-  describe('saveWanConfig()', () => {
-    beforeEach(() => {
-      fixture.detectChanges();
-      component.cpe = makeCpe({ pppoeUsername: 'user1', wanDnsIsp: '8.8.8.8', wanMtu: 1492, wanVlanId: 100 });
-      component['wanConfigFields'] = {
-        pppoeUsername: 'user1',
-        dnsServer1: '8.8.8.8',
-        dnsServer2: '',
-        mtu: 1492,
-        vlanId: 100,
-      };
+  describe('wanDnsList', () => {
+    beforeEach(() => fixture.detectChanges());
+
+    it('retorna lista vazia quando não há dnsIsp', () => {
+      component.cpe = makeCpe({});
+      expect(component.wanDnsList).toEqual([]);
     });
 
-    it('exibe warning quando nenhuma alteração é detectada', () => {
-      component.saveWanConfig();
-      expect(toastStub.warning).toHaveBeenCalledWith('Nenhuma alteração detectada.');
-      expect(cpeStub.updateWanConfig).not.toHaveBeenCalled();
+    it('separa string com 2 DNS por vírgula', () => {
+      component.cpe = makeCpe({ wanDnsIsp: '10.10.10.10,10.10.11.11' });
+      const list = component.wanDnsList;
+      expect(list.length).toBe(2);
+      expect(list[0].ip).toBe('10.10.10.10');
+      expect(list[0].label).toBe('DNS Primário');
+      expect(list[0].valid).toBeTrue();
+      expect(list[1].ip).toBe('10.10.11.11');
+      expect(list[1].label).toBe('DNS Secundário');
+      expect(list[1].valid).toBeTrue();
     });
 
-    it('chama updateWanConfig quando há mudança detectada', () => {
-      component['wanConfigFields'].pppoeUsername = 'user2';
-      component.saveWanConfig();
-      expect(cpeStub.updateWanConfig).toHaveBeenCalledWith(
-        'TEST001',
-        jasmine.objectContaining({ pppoeUsername: 'user2' })
-      );
+    it('marca IP inválido como valid=false', () => {
+      component.cpe = makeCpe({ wanDnsIsp: '8.8.8.8,invalid' });
+      const list = component.wanDnsList;
+      expect(list[0].valid).toBeTrue();
+      expect(list[1].valid).toBeFalse();
     });
 
-    it('exibe erro para DNS primário inválido', () => {
-      component['wanConfigFields'].dnsServer1 = '999.999.999.999';
-      component.saveWanConfig();
-      expect(toastStub.error).toHaveBeenCalledWith(jasmine.stringMatching(/DNS Primário inválido/));
-      expect(cpeStub.updateWanConfig).not.toHaveBeenCalled();
+    it('lê do schema novo cpe.wan.dnsIsp', () => {
+      component.cpe = makeCpe({ wan: { dnsIsp: '1.1.1.1,1.0.0.1' } });
+      const list = component.wanDnsList;
+      expect(list.length).toBe(2);
+      expect(list[0].ip).toBe('1.1.1.1');
     });
 
-    it('exibe erro para DNS secundário inválido', () => {
-      component['wanConfigFields'].dnsServer2 = 'invalid';
-      component.saveWanConfig();
-      expect(toastStub.error).toHaveBeenCalledWith(jasmine.stringMatching(/DNS Secundário inválido/));
+    it('label incrementa para 3+ DNS', () => {
+      component.cpe = makeCpe({ wanDnsIsp: '1.1.1.1,8.8.8.8,9.9.9.9' });
+      const list = component.wanDnsList;
+      expect(list[2].label).toBe('DNS 3');
     });
 
-    it('aceita DNS primário vazio (campo opcional)', () => {
-      component['wanConfigFields'].pppoeUsername = 'user2';
-      component['wanConfigFields'].dnsServer1 = '';
-      expect(() => component.saveWanConfig()).not.toThrow();
-      expect(cpeStub.updateWanConfig).toHaveBeenCalled();
+    it('trim espaços ao redor dos IPs', () => {
+      component.cpe = makeCpe({ wanDnsIsp: ' 8.8.8.8 ,  8.8.4.4 ' });
+      const list = component.wanDnsList;
+      expect(list[0].ip).toBe('8.8.8.8');
+      expect(list[1].ip).toBe('8.8.4.4');
     });
 
-    it('exibe toast de sucesso após salvar', () => {
-      component['wanConfigFields'].mtu = 1400;
-      component.saveWanConfig();
-      expect(toastStub.success).toHaveBeenCalled();
+    it('retorna lista vazia quando dnsIsp não é string (defesa contra tipo inesperado)', () => {
+      component.cpe = makeCpe({ wanDnsIsp: 12345 as any });
+      expect(component.wanDnsList).toEqual([]);
     });
 
-    it('exibe toast de erro quando updateWanConfig falha', () => {
-      cpeStub.updateWanConfig.and.returnValue(throwError(() => ({
-        error: { error: 'Erro de rede' }
-      })));
-      component['wanConfigFields'].mtu = 1400;
-      component.saveWanConfig();
-      expect(toastStub.error).toHaveBeenCalledWith('Erro de rede');
+    it('retorna lista vazia quando dnsIsp é undefined', () => {
+      component.cpe = makeCpe({ wanDnsIsp: undefined });
+      expect(component.wanDnsList).toEqual([]);
     });
   });
 
-  // ── 19. loadWanConfig() ──────────────────────────────────────────────────
+  // ── 19. hasLimitedChartData (getter) — detecta dados limitados em períodos >48h
 
-  describe('loadWanConfig()', () => {
+  describe('hasLimitedChartData', () => {
     beforeEach(() => fixture.detectChanges());
 
-    it('preenche wanConfigFields com dados da CPE', () => {
-      component.cpe = makeCpe({ pppoeUsername: 'pppe', wanDnsIsp: '1.1.1.1', wanMtu: 1400, wanVlanId: 10 });
-      component.loadWanConfig();
-      expect(component['wanConfigFields'].pppoeUsername).toBe('pppe');
-      expect(component['wanConfigFields'].dnsServer1).toBe('1.1.1.1');
-      expect(component['wanConfigFields'].mtu).toBe(1400);
-      expect(component['wanConfigFields'].vlanId).toBe(10);
+    it('retorna false quando período ≤48h (usa TelemetryVitals)', () => {
+      component.selectedPeriodHours = 48;
+      component.rawHistory = [
+        { timestamp: '2024-01-01T00:00:00Z', cpuUsage: 50 },
+      ];
+      expect(component.hasLimitedChartData).toBeFalse();
     });
 
-    it('ativa isEditingWanConfig', () => {
-      component.loadWanConfig();
-      expect(component['isEditingWanConfig']).toBeTrue();
+    it('retorna false quando período ≤48h mesmo com datasets vazios', () => {
+      component.selectedPeriodHours = 6;
+      component['chartDatasets'] = [
+        { label: 'CPU (%)', data: [50] } as any,
+        { label: 'Memória Usada (%)', data: [null] } as any,
+      ];
+      component['opticalChartDatasets'] = [
+        { label: 'RX (dBm)', data: [-20] } as any,
+        { label: 'TX (dBm)', data: [null] } as any,
+      ];
+      component.rawHistory = [
+        { timestamp: '2024-01-01T00:00:00Z', cpuUsage: 50 },
+      ];
+      expect(component.hasLimitedChartData).toBeFalse();
     });
 
-    it('não lança exceção quando cpe é null', () => {
-      component.cpe = null;
-      expect(() => component.loadWanConfig()).not.toThrow();
+    it('retorna false quando rawHistory está vazio', () => {
+      component.selectedPeriodHours = 168;
+      component.rawHistory = [];
+      expect(component.hasLimitedChartData).toBeFalse();
+    });
+
+    it('retorna true no 72h quando memória está toda null', () => {
+      component.selectedPeriodHours = 72;
+      component.rawHistory = [
+        { timestamp: '2024-01-01T00:00:00Z', cpuUsage: 50 },
+      ];
+      component['chartDatasets'] = [
+        { label: 'CPU (%)', data: [50] } as any,
+        { label: 'Memória Usada (%)', data: [null] } as any,
+      ];
+      component['opticalChartDatasets'] = [
+        { label: 'RX (dBm)', data: [-20] } as any,
+        { label: 'TX (dBm)', data: [2] } as any,
+      ];
+      expect(component.hasLimitedChartData).toBeTrue();
+    });
+
+    it('retorna true no 168h quando TX óptico está todo null', () => {
+      component.selectedPeriodHours = 168;
+      component.rawHistory = [
+        { timestamp: '2024-01-01T00:00:00Z', cpuUsage: 50 },
+      ];
+      component['chartDatasets'] = [
+        { label: 'CPU (%)', data: [50] } as any,
+        { label: 'Memória Usada (%)', data: [66] } as any,
+      ];
+      component['opticalChartDatasets'] = [
+        { label: 'RX (dBm)', data: [-20] } as any,
+        { label: 'TX (dBm)', data: [null] } as any,
+      ];
+      expect(component.hasLimitedChartData).toBeTrue();
+    });
+
+    it('retorna false no 7d quando memória e TX têm dados', () => {
+      component.selectedPeriodHours = 168;
+      component.rawHistory = [
+        { timestamp: '2024-01-01T00:00:00Z', cpuUsage: 50 },
+      ];
+      component['chartDatasets'] = [
+        { label: 'CPU (%)', data: [50] } as any,
+        { label: 'Memória Usada (%)', data: [66] } as any,
+      ];
+      component['opticalChartDatasets'] = [
+        { label: 'RX (dBm)', data: [-20] } as any,
+        { label: 'TX (dBm)', data: [2] } as any,
+      ];
+      expect(component.hasLimitedChartData).toBeFalse();
     });
   });
 
@@ -1189,13 +1361,17 @@ describe('CpeInfoTabComponent', () => {
       spyOn(URL, 'createObjectURL').and.returnValue('blob:mock');
       spyOn(URL, 'revokeObjectURL');
 
-      component.rawHistory = [{
-        timestamp: '2024-01-01T00:00:00Z',
-        cpuUsage: 50,
-      }];
+      component.rawHistory = [
+        {
+          timestamp: '2024-01-01T00:00:00Z',
+          cpuUsage: 50,
+        },
+      ];
       component.exportHistoryCsv();
 
-      expect(linkSpy.download).toMatch(/telemetria_TEST001_\d+h_\d{4}-\d{2}-\d{2}\.csv/);
+      expect(linkSpy.download).toMatch(
+        /telemetria_TEST001_\d+h_\d{4}-\d{2}-\d{2}\.csv/,
+      );
       expect(linkSpy.click).toHaveBeenCalled();
       expect(URL.revokeObjectURL).toHaveBeenCalled();
     });
@@ -1215,7 +1391,9 @@ describe('CpeInfoTabComponent', () => {
     it('chama loadHistory quando período muda', () => {
       const callsBefore = cpeStub.getTelemetryVitalsHistory.calls.count();
       component.changeHistoryPeriod(24);
-      expect(cpeStub.getTelemetryVitalsHistory.calls.count()).toBeGreaterThan(callsBefore);
+      expect(cpeStub.getTelemetryVitalsHistory.calls.count()).toBeGreaterThan(
+        callsBefore,
+      );
     });
 
     it('reseta datasets do gráfico ao mudar período', () => {
@@ -1232,17 +1410,29 @@ describe('CpeInfoTabComponent', () => {
 
     it('não lança exceção quando cpe é null', () => {
       expect(() => {
-        component.ngOnChanges({ cpe: { currentValue: null, previousValue: null, firstChange: false, isFirstChange: () => false } });
+        component.ngOnChanges({
+          cpe: {
+            currentValue: null,
+            previousValue: null,
+            firstChange: false,
+            isFirstChange: () => false,
+          },
+        });
       }).not.toThrow();
     });
 
     it('extrai fallback de telemetria quando cpe.parameters muda', () => {
       const cpe = makeCpe({
-        parameters: [{ name: 'Device.SomeNS.CPUUsage', value: '42' }]
+        parameters: [{ name: 'Device.SomeNS.CPUUsage', value: '42' }],
       } as any);
       component.cpe = cpe;
       component.ngOnChanges({
-        cpe: { currentValue: cpe, previousValue: null, firstChange: false, isFirstChange: () => false }
+        cpe: {
+          currentValue: cpe,
+          previousValue: null,
+          firstChange: false,
+          isFirstChange: () => false,
+        },
       });
       // Deve não lançar exceção — fallback extraído silenciosamente
       expect(component).toBeTruthy();
@@ -1255,13 +1445,21 @@ describe('CpeInfoTabComponent', () => {
     beforeEach(() => fixture.detectChanges());
 
     it('retorna label em português para chaves conhecidas', () => {
-      expect(component.getAnalysisInfo('opticalTrend')).toBe('Tendência Óptica');
-      expect(component.getAnalysisInfo('rebootStability')).toBe('Estabilidade de Reboot');
-      expect(component.getAnalysisInfo('memoryLeak')).toBe('Vazamento de Memória');
+      expect(component.getAnalysisInfo('opticalTrend')).toBe(
+        'Tendência Óptica',
+      );
+      expect(component.getAnalysisInfo('rebootStability')).toBe(
+        'Estabilidade de Reboot',
+      );
+      expect(component.getAnalysisInfo('memoryLeak')).toBe(
+        'Vazamento de Memória',
+      );
     });
 
     it('retorna a própria chave para análises desconhecidas', () => {
-      expect(component.getAnalysisInfo('chaveInexistente')).toBe('chaveInexistente');
+      expect(component.getAnalysisInfo('chaveInexistente')).toBe(
+        'chaveInexistente',
+      );
     });
   });
 
@@ -1308,7 +1506,6 @@ describe('CpeInfoTabComponent', () => {
       expect(component['refreshCountdownSeconds']).toBe(0);
     }));
   });
-
 });
 
 // ── Constante exportada para testes (espelha TELEMETRY_CONFIG interno) ───────

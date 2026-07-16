@@ -381,16 +381,10 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     return this.cpeAlerts.filter((a) => a.status === 'active').slice(0, 10);
   }
 
-  // ── Configuração WAN ─────────────────────────────────────────────────────
-  wanConfigFields = {
-    pppoeUsername: '',
-    dnsServer1: '',
-    dnsServer2: '',
-    mtu: 1492,
-    vlanId: 0,
-  };
-  isEditingWanConfig = false;
-  wanConfigSaving = false;
+  // ── Configuração WAN (somente leitura — edição removida por segurança) ──
+  // O card WAN — Configuração é 100% somente leitura para evitar que o técnico
+  // altere PPPoE/DNS/MTU/VLAN e derrube a conexão do cliente sem confirmação.
+  // Para alterar WAN, usar a aba dedicada ou API administrativa.
 
   // ── Configuração do gráfico CPU/Memória ────────────────────────────────
   chartLabels: string[] = [];
@@ -442,6 +436,11 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
       y: {
         ...(CHART_COMMON_OPTIONS.scales?.['y'] as any),
         title: { display: true, text: 'dBm', color: '#94a3b8' },
+        // Escala sugerida para RX e TX não distorcem o gráfico quando um está ausente
+        // RX óptico GPON: -30 a -15 dBm (normal); -35 em fibra degradada; TX: 0 a 5 dBm
+        // suggested (não min/max absoluto) — chart.js expande se dados ultrapassarem
+        suggestedMin: -35,
+        suggestedMax: 5,
       },
     },
   };
@@ -1136,6 +1135,9 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
   trackByKvKey(_: number, kv: { key: string }): string {
     return kv.key;
   }
+  trackByDnsIp(_: number, dns: { ip: string }): string {
+    return dns.ip;
+  }
 
   // ── Alertas enriquecidos ─────────────────────────────────────────────────
   /** Ícone de severidade para o card de alertas */
@@ -1174,6 +1176,20 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     if (seconds < 60) return `Atualizado há ${seconds}s`;
     const minutes = Math.floor(seconds / 60);
     return `Atualizado há ${minutes}min`;
+  }
+
+  /**
+   * Detecta se o gráfico tem dados limitados (memória ou TX óptico ausentes).
+   * Períodos >48h usam TelemetryHourly que agrega memUsedPercent e txPowerAvg,
+   * mas documentos históricos anteriores à correção do endpoint podem não ter
+   * esses campos. Retorna true quando período >48h E algum dataset está vazio.
+   */
+  get hasLimitedChartData(): boolean {
+    if (this.selectedPeriodHours <= 48) return false;
+    if (!this.rawHistory.length) return false;
+    const hasMem = this.chartDatasets[1]?.data.some((v) => v !== null);
+    const hasTx = this.opticalChartDatasets[1]?.data.some((v) => v !== null);
+    return !hasMem || !hasTx;
   }
 
   /** Retorna métrica como string, ou null. */
@@ -1671,86 +1687,28 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
       });
   }
 
-  loadWanConfig(): void {
-    if (!this.cpe) return;
-    const c = this.cpe as any;
-    // Compatível com ambos os schemas: novo (cpe.wan.*) e legacy (cpe.wanMtu, etc.)
-    // cpe-details.component.ts normaliza legacy fields via normalizeLegacyFields()
-    this.wanConfigFields = {
-      pppoeUsername: c.pppoeUsername || c.wan?.pppoeUsername || '',
-      dnsServer1: c.wanDnsIsp || c.wan?.dnsIsp || '',
-      dnsServer2: '', // Campo wanDnsIsp2 não existe no modelo CpeDevice
-      mtu: c.wanMtu || c.wan?.mtu || 1492,
-      vlanId: c.wanVlanId || c.wan?.vlanId || 0,
-    };
-    this.isEditingWanConfig = true;
-  }
-
-  saveWanConfig(): void {
-    if (!this.serialNumber) return;
-    const payload: Record<string, unknown> = {};
-    const f = this.wanConfigFields;
-    const c = this.cpe;
-
-    // Validação IPv4 para servidores DNS
-    if (f.dnsServer1 && !isValidIPv4(f.dnsServer1)) {
-      this.toastService.error(
-        'DNS Primário inválido. Use um endereço IPv4 válido (ex: 8.8.8.8).',
-      );
-      return;
-    }
-    if (f.dnsServer2 && !isValidIPv4(f.dnsServer2)) {
-      this.toastService.error(
-        'DNS Secundário inválido. Use um endereço IPv4 válido (ex: 8.8.4.4).',
-      );
-      return;
-    }
-
-    if (
-      f.pppoeUsername !==
-      (c?.pppoeUsername || (c as any)?.wan?.pppoeUsername || '')
-    )
-      payload['pppoeUsername'] = f.pppoeUsername;
-    if (f.dnsServer1 !== (c?.wanDnsIsp || (c as any)?.wan?.dnsIsp || ''))
-      payload['dnsServer1'] = f.dnsServer1;
-    if (f.dnsServer2 !== '') payload['dnsServer2'] = f.dnsServer2;
-    if (f.mtu && f.mtu !== (c?.wanMtu || (c as any)?.wan?.mtu || 1492))
-      payload['mtu'] = f.mtu;
-    if (
-      f.vlanId !== undefined &&
-      f.vlanId !== (c?.wanVlanId || (c as any)?.wan?.vlanId || 0)
-    )
-      payload['vlanId'] = f.vlanId;
-
-    if (!Object.keys(payload).length) {
-      this.toastService.warning('Nenhuma alteração detectada.');
-      this.isEditingWanConfig = false;
-      return;
-    }
-
-    this.wanConfigSaving = true;
-    this.cpeService
-      .updateWanConfig(this.serialNumber, payload)
-      .pipe(
-        takeUntilDestroyed(this.destroyRef),
-        catchError((err: { error?: { error?: string } }) => {
-          this.wanConfigSaving = false;
-          this.toastService.error(
-            err.error?.error || 'Erro ao atualizar configuração WAN.',
-          );
-          return EMPTY;
-        }),
-      )
-      .subscribe({
-        next: () => {
-          this.wanConfigSaving = false;
-          this.isEditingWanConfig = false;
-          this.toastService.success(
-            'Configuração WAN enviada. A CPE será atualizada na próxima conexão.',
-          );
-          this.cdr.markForCheck();
-        },
-      });
+  /**
+   * Separa a string de DNS ISP (ex: "10.10.10.10,10.10.11.11") em lista de IPs
+   * válidos para exibição em linhas separadas no card WAN — Configuração.
+   * Cada IP é validado com isValidIPv4; IPs inválidos são marcados.
+   */
+  get wanDnsList(): Array<{ ip: string; valid: boolean; label: string }> {
+    const raw = this.cpe?.wan?.dnsIsp || (this.cpe as any)?.wanDnsIsp || '';
+    if (!raw || typeof raw !== 'string') return [];
+    return raw
+      .split(',')
+      .map((s: string) => s.trim())
+      .filter((s: string) => s.length > 0)
+      .map((ip: string, idx: number) => ({
+        ip,
+        valid: isValidIPv4(ip),
+        label:
+          idx === 0
+            ? 'DNS Primário'
+            : idx === 1
+              ? 'DNS Secundário'
+              : `DNS ${idx + 1}`,
+      }));
   }
 
   /** Carrega painéis suplementares (Health Score, Alertas, Incidente, Intervenção). */
@@ -2448,10 +2406,19 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
         'system',
         'memoryTotal',
       ]);
+      // Fallback para 7d: TelemetryHourly não agrega memoryFree/Total separados,
+      // mas agrega memUsedPercent (memAvg). Usa diretamente quando disponível.
+      const memUsedPercent = this.extractHistoryValue(d, 'memUsedPercent', [
+        'telemetry',
+        'system',
+        'memAvg',
+      ]);
       memData.push(
         memFree !== null && memTotal !== null && memTotal > 0
           ? Math.round(((memTotal - memFree) / memTotal) * 100)
-          : null,
+          : memUsedPercent !== null
+            ? Math.round(memUsedPercent)
+            : null,
       );
 
       rxData.push(
@@ -2509,10 +2476,14 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
     const cpuValue = this.safeExtractValue(data, 'cpuUsage');
     const memFree = this.safeExtractValue(data, 'memoryFree');
     const memTotal = this.safeExtractValue(data, 'memoryTotal');
+    // Fallback defensivo: se memoryFree/Total ausentes, tenta memUsedPercent direto
+    const memUsedPercent = this.safeExtractValue(data, 'memUsedPercent');
     const memValue =
       memFree !== null && memTotal !== null && memTotal > 0
         ? Math.round(((memTotal - memFree) / memTotal) * 100)
-        : null;
+        : memUsedPercent !== null
+          ? Math.round(memUsedPercent)
+          : null;
     const rxValue = this.safeExtractValue(data, 'opticalRx');
     const txValue = this.safeExtractValue(data, 'opticalTx');
 
