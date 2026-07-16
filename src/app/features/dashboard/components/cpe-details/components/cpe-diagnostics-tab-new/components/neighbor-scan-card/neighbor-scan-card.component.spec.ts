@@ -57,7 +57,7 @@ function makeInsight(overrides: Partial<WifiInsight> = {}): WifiInsight {
     sourceParam: 'Device.WiFi.Radio.1.Channel',
     actionable: true,
     action: {
-      type: 'set_channel',
+      type: 'change_channel',
       band: '2.4GHz',
       parameter: 'Device.WiFi.Radio.1.Channel',
       value: '11',
@@ -861,10 +861,10 @@ describe('NeighborScanCardComponent', () => {
   // ── 15. insightActionLabel ──────────────────────────────────────────────────
 
   describe('insightActionLabel', () => {
-    it('deve formatar ação set_channel', () => {
+    it('deve formatar ação change_channel', () => {
       const insight = makeInsight({
         action: {
-          type: 'set_channel',
+          type: 'change_channel',
           band: '2.4GHz',
           parameter: 'p',
           value: '11',
@@ -873,10 +873,10 @@ describe('NeighborScanCardComponent', () => {
       expect(component.insightActionLabel(insight)).toBe('Canal 2.4GHz → 11');
     });
 
-    it('deve formatar ação set_power', () => {
+    it('deve formatar ação adjust_power', () => {
       const insight = makeInsight({
         action: {
-          type: 'set_power',
+          type: 'adjust_power',
           band: '5GHz',
           parameter: 'p',
           value: '50',
