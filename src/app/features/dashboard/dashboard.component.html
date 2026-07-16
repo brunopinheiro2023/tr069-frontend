@@ -667,6 +667,7 @@
               (click)="goToDetails(cpe.serialNumber)"
               class="table-row-clickable vmoas-grid-row"
               [class.row-offline]="!cpe.isOnline"
+              [class.row-quarantined]="cpe.quarantine?.active"
               role="row"
               [attr.aria-label]="
                 'CPE ' +

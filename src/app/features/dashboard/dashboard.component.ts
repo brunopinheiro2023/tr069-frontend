@@ -424,7 +424,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.toastService.error(`Erro no filtro: ${data.message}`);
           this.cpes = this.applyFilters(this.allCpes); // Fallback: aplica filtros na thread principal
         } else {
-          this.cpes = data;
+          // Ordena: CPEs não-quarentenadas primeiro, quarentenadas no final
+          this.cpes = data.sort((a: DashboardCpe, b: DashboardCpe) => {
+            const aQ = a.quarantine?.active ? 1 : 0;
+            const bQ = b.quarantine?.active ? 1 : 0;
+            return aQ - bQ;
+          });
         }
         // Reaplica ordenação por health score se ativa, mantendo-a estável durante atualizações WS
         if (this.healthScoreSortDirection !== null) {
@@ -882,7 +887,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private triggerFilter(showLoadingOverlay: boolean = true): void {
     // Atalho: sem filtros ativos → atualiza cpes diretamente, sem Worker
     if (!this.hasActiveFilters) {
-      this.cpes = [...this.allCpes];
+      // Ordena: CPEs não-quarentenadas primeiro, quarentenadas no final
+      this.cpes = [...this.allCpes].sort((a, b) => {
+        const aQ = a.quarantine?.active ? 1 : 0;
+        const bQ = b.quarantine?.active ? 1 : 0;
+        return aQ - bQ;
+      });
       if (this.healthScoreSortDirection !== null) {
         this.applyHealthScoreSort();
       }
@@ -1124,6 +1134,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return cpes.filter((cpe) => {
       if (filters.isOnline !== undefined && cpe.isOnline !== filters.isOnline)
         return false;
+      // Filtro "Online" exclui quarentenadas — CPE em quarentena está isolada,
+      // não deve aparecer como "online" para o técnico mesmo se enviar Inform.
+      if (filters.isOnline === true && cpe.quarantine?.active) return false;
       if (filters.isQuarantined && !cpe.quarantine?.active) return false;
       if (
         filters.manufacturer &&

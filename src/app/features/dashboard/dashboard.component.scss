@@ -641,6 +641,20 @@
   }
 }
 
+// CPE em quarentena — destaque visual amber na linha inteira
+.vmoas-grid-row.row-quarantined {
+  background-color: color-mix(in srgb, var(--accent-warning) 6%, transparent);
+  border-left: 3px solid var(--accent-warning);
+
+  &:hover {
+    background-color: color-mix(
+      in srgb,
+      var(--accent-warning) 10%,
+      transparent
+    );
+  }
+}
+
 /* Badge "Bloqueada" — exibido ao lado do status Offline */
 .locked-badge {
   display: inline-flex;

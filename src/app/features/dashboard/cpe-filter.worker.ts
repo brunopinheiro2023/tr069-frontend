@@ -53,6 +53,11 @@ addEventListener('message', ({ data }) => {
         ) {
           return false;
         }
+        // Filtro "Online" exclui quarentenadas — CPE em quarentena está isolada,
+        // não deve aparecer como "online" para o técnico mesmo se enviar Inform.
+        if (filters.isOnline === true && cpe.quarantine?.active) {
+          return false;
+        }
         // Filtro de quarentena — CPEs com quarantine.active === true
         if (filters.isQuarantined && !cpe.quarantine?.active) {
           return false;
