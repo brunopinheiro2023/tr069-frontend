@@ -791,6 +791,33 @@ export class NeighborScanCardComponent {
   }
 
   /**
+   * Gradiente CSS vertical para a barra de saturação — dá profundidade 3D
+   * e melhora o contraste. Topo mais claro (highlight), base mais sólida.
+   * Usado no [style.background] do col-bar-fill no template.
+   */
+  getCongestionGradient(level: string): string {
+    if (typeof level !== 'string') {
+      return 'linear-gradient(180deg, #94a3b8 0%, #64748b 100%)';
+    }
+
+    switch (level) {
+      case 'empty':
+        return 'linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 100%)';
+      case 'low':
+        // Verde: topo claro → base sólida
+        return 'linear-gradient(180deg, #4ade80 0%, #16a34a 100%)';
+      case 'medium':
+        // Ambar/laranja: topo claro → base sólida
+        return 'linear-gradient(180deg, #fbbf24 0%, #d97706 100%)';
+      case 'high':
+        // Vermelho: topo claro → base sólida
+        return 'linear-gradient(180deg, #f87171 0%, #dc2626 100%)';
+      default:
+        return 'linear-gradient(180deg, #94a3b8 0%, #64748b 100%)';
+    }
+  }
+
+  /**
    * Largura proporcional da barra usando o interferenceScore real (max útil = 5.0).
    * Para dados demo sem score, usa neighborCount com max = 10.
    */

@@ -475,7 +475,7 @@
                       )
                     "
                     [style.background]="
-                      getCongestionColor(
+                      getCongestionGradient(
                         getCongestionLevel(
                           channel.interferenceScore || channel.neighborCount
                         )
@@ -633,7 +633,7 @@
                       )
                     "
                     [style.background]="
-                      getCongestionColor(
+                      getCongestionGradient(
                         getCongestionLevel(
                           channel.interferenceScore || channel.neighborCount
                         )
