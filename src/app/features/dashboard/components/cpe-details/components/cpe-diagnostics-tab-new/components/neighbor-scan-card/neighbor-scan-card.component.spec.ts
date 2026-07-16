@@ -230,6 +230,80 @@ describe('NeighborScanCardComponent', () => {
       component.result = makeResult({ timestamp: undefined });
       expect(component.lastScanTimestamp).toBe('');
     });
+
+    // ── lastScanInfo (prioridade sobre timestamp genérico) ──────────────────
+
+    it('lastScanTimestamp prioriza lastScanInfo.timestamp sobre timestamp genérico', () => {
+      component.result = makeResult({
+        timestamp: '2026-01-15T10:00:00.000Z',
+        lastScanInfo: {
+          timestamp: '2026-07-16T12:23:12.493Z',
+          scanSource: 'scheduler',
+          triggeredBy: 'wifi-scan-scheduler',
+          neighborCount: 31,
+        },
+      });
+      expect(component.lastScanTimestamp).toBe('2026-07-16T12:23:12.493Z');
+    });
+
+    it('lastScanTimestamp fallback para timestamp genérico quando lastScanInfo é null', () => {
+      component.result = makeResult({
+        timestamp: '2026-01-15T10:00:00.000Z',
+        lastScanInfo: null,
+      });
+      expect(component.lastScanTimestamp).toBe('2026-01-15T10:00:00.000Z');
+    });
+
+    it('lastScanTimestamp retorna vazio quando ambos lastScanInfo e timestamp ausentes', () => {
+      component.result = makeResult({
+        timestamp: undefined,
+        lastScanInfo: null,
+      });
+      expect(component.lastScanTimestamp).toBe('');
+    });
+
+    // ── scanSourceLabel ─────────────────────────────────────────────────────
+
+    it('scanSourceLabel retorna "Automática" quando scanSource=scheduler', () => {
+      component.result = makeResult({
+        lastScanInfo: {
+          timestamp: '2026-07-16T12:23:12.493Z',
+          scanSource: 'scheduler',
+          triggeredBy: 'wifi-scan-scheduler',
+          neighborCount: 31,
+        },
+      });
+      expect(component.scanSourceLabel).toBe('Automática');
+    });
+
+    it('scanSourceLabel retorna "Manual" quando scanSource=on-demand', () => {
+      component.result = makeResult({
+        lastScanInfo: {
+          timestamp: '2026-07-16T12:23:12.493Z',
+          scanSource: 'on-demand',
+          triggeredBy: 'admin',
+          neighborCount: 5,
+        },
+      });
+      expect(component.scanSourceLabel).toBe('Manual');
+    });
+
+    it('scanSourceLabel retorna string vazia quando lastScanInfo é null', () => {
+      component.result = makeResult({ lastScanInfo: null });
+      expect(component.scanSourceLabel).toBe('');
+    });
+
+    it('scanSourceLabel retorna string vazia quando scanSource é null', () => {
+      component.result = makeResult({
+        lastScanInfo: {
+          timestamp: '2026-07-16T12:23:12.493Z',
+          scanSource: null,
+          triggeredBy: null,
+          neighborCount: 0,
+        },
+      });
+      expect(component.scanSourceLabel).toBe('');
+    });
   });
 
   // ── 3. Memoização de canais (setter de result) ──────────────────────────────

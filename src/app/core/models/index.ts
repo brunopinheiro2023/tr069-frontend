@@ -423,6 +423,16 @@ export interface WifiDiagnosticsData {
   timestamp?: string;
   neighboringWiFiResultCount?: number; // contagem de vizinhos do scan mais recente
 
+  // Metadata do último scan de vizinhança (data/hora real da coleta + origem)
+  // Diferente de timestamp (que é o momento da chamada do endpoint), lastScanInfo
+  // reflete quando o scan foi efetivamente executado na CPE e se foi automático ou manual.
+  lastScanInfo?: {
+    timestamp: string; // ISO 8601 — data/hora da última coleta
+    scanSource: 'scheduler' | 'on-demand' | null; // periódica (automática) ou manual (técnico)
+    triggeredBy: string | null; // 'wifi-scan-scheduler' ou username do técnico
+    neighborCount: number; // redes vizinhas detectadas
+  } | null;
+
   bands: {
     '2.4GHz': WifiBandDiagnostics;
     '5GHz': WifiBandDiagnostics;

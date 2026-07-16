@@ -19,7 +19,14 @@
       </span>
       <span class="timestamp" *ngIf="lastScanTimestamp">
         <span class="material-symbols-rounded">schedule</span>
-        Última análise: {{ formatTimestamp(lastScanTimestamp) }}
+        Última coleta: {{ formatTimestamp(lastScanTimestamp) }}
+        <span
+          class="scan-source-badge"
+          *ngIf="scanSourceLabel"
+          [class.scheduler]="scanSourceLabel === 'Automática'"
+        >
+          {{ scanSourceLabel }}
+        </span>
       </span>
     </div>
   </div>

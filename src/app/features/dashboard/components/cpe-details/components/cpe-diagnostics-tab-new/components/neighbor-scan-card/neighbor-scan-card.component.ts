@@ -113,6 +113,13 @@ export interface NeighborScanResult {
   bands?: WifiBands;
   summary?: WifiSummary;
   timestamp?: string;
+  // Metadata do último scan (data/hora real da coleta + origem on-demand/periódica)
+  lastScanInfo?: {
+    timestamp: string;
+    scanSource: 'scheduler' | 'on-demand' | null;
+    triggeredBy: string | null;
+    neighborCount: number;
+  } | null;
 }
 
 @Component({
@@ -276,11 +283,24 @@ export class NeighborScanCardComponent {
   }
 
   get lastScanTimestamp(): string {
-    // Segurança: valida que timestamp é uma string válida
-    const timestamp = this._result?.timestamp;
-    return typeof timestamp === 'string' && timestamp.length > 0
-      ? timestamp
-      : '';
+    // Prioriza lastScanInfo.timestamp (data/hora real do scan de vizinhança)
+    // sobre timestamp genérico (momento da chamada do endpoint — menos preciso).
+    const scanTs = this._result?.lastScanInfo?.timestamp;
+    if (typeof scanTs === 'string' && scanTs.length > 0) return scanTs;
+    // Fallback: timestamp genérico da análise (compatibilidade com respostas sem lastScanInfo)
+    const ts = this._result?.timestamp;
+    return typeof ts === 'string' && ts.length > 0 ? ts : '';
+  }
+
+  /**
+   * Rótulo legível da origem do scan: 'Automática' (scheduler) ou 'Manual' (on-demand).
+   * Retorna string vazia se lastScanInfo não estiver disponível.
+   */
+  get scanSourceLabel(): string {
+    const source = this._result?.lastScanInfo?.scanSource;
+    if (source === 'scheduler') return 'Automática';
+    if (source === 'on-demand') return 'Manual';
+    return '';
   }
 
   /**

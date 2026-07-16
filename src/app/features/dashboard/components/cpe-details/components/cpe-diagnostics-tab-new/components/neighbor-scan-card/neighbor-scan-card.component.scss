@@ -99,6 +99,22 @@
           font-size: 1rem;
           color: #6366f1;
         }
+
+        .scan-source-badge {
+          font-size: 0.7rem;
+          font-weight: 600;
+          padding: 0.125rem 0.5rem;
+          border-radius: 9999px;
+          background: rgba(34, 197, 94, 0.12);
+          color: #16a34a;
+          border: 1px solid rgba(34, 197, 94, 0.2);
+
+          &.scheduler {
+            background: rgba(59, 130, 246, 0.12);
+            color: #2563eb;
+            border-color: rgba(59, 130, 246, 0.2);
+          }
+        }
       }
     }
   }
