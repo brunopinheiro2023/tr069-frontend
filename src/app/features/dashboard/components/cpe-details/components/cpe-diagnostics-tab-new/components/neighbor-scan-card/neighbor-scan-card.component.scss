@@ -590,11 +590,14 @@
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
       gap: 1.5rem;
+      align-items: stretch; // ambos cards mesma altura
 
       .saturation-band {
         background: rgba(0, 0, 0, 0.02);
         border-radius: 12px;
         padding: 1.25rem;
+        display: flex;
+        flex-direction: column; // layout coluna para chart ocupar espaço restante
 
         .band-header {
           display: flex;
@@ -744,6 +747,7 @@
           gap: 0.5rem;
           overflow-x: auto;
           padding-bottom: 0.5rem;
+          flex: 1; // ocupa espaço restante do card (iguala alturas)
 
           // Eixo Y (escala 0-5)
           .chart-y-axis {
@@ -751,7 +755,7 @@
             flex-direction: column;
             justify-content: space-between;
             width: 20px;
-            height: 300px;
+            min-height: 300px;
             padding: 1.25rem 0 3.5rem 0; // alinha com plot area
             flex-shrink: 0;
 
@@ -807,7 +811,8 @@
               display: flex;
               align-items: flex-end;
               gap: 0.5rem;
-              height: 300px;
+              min-height: 300px;
+              height: 100%;
               position: relative;
               z-index: 1;
 
