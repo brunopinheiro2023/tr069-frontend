@@ -535,9 +535,24 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
           // GETs usam X-Skip-Loading → não ativam overlay global (sem flicker).
           this.loadAllData();
         },
-        error: (err: { error?: { error?: string } }) => {
+        error: (err: {
+          status?: number;
+          error?: { error?: string; message?: string };
+        }) => {
           this.applyInProgress = false;
-          this.applyError = err?.error?.error || 'Erro ao aplicar otimização.';
+          // 409 = recomendação desatualizada — mostra mensagem completa e recarrega análise
+          if (err?.status === 409) {
+            this.applyError =
+              err?.error?.message ||
+              'Recomendação desatualizada. Recarregue a análise.';
+            // Auto-recarrega para que o técnico veja a sugestão atualizada
+            this.loadAllData();
+          } else {
+            this.applyError =
+              err?.error?.message ||
+              err?.error?.error ||
+              'Erro ao aplicar otimização.';
+          }
           this.applyErrorTimer = setTimeout(() => {
             this.applyError = null;
             this.cdr.markForCheck();
