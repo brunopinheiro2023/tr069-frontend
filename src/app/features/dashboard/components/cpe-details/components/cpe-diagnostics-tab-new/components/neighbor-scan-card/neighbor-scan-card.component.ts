@@ -791,29 +791,31 @@ export class NeighborScanCardComponent {
   }
 
   /**
-   * Gradiente CSS vertical para a barra de saturação — dá profundidade 3D
-   * e melhora o contraste. Topo mais claro (highlight), base mais sólida.
+   * Gradiente CSS para a barra de saturação — visual moderno e elegante com
+   * múltiplas paradas: highlight no topo (brilho), cor vibrante no meio e
+   * tom escuro na base (profundidade). Ângulo 165deg para efeito diagonal sutil.
    * Usado no [style.background] do col-bar-fill no template.
    */
   getCongestionGradient(level: string): string {
     if (typeof level !== 'string') {
-      return 'linear-gradient(180deg, #94a3b8 0%, #64748b 100%)';
+      return 'linear-gradient(165deg, #cbd5e1 0%, #94a3b8 45%, #64748b 100%)';
     }
 
     switch (level) {
       case 'empty':
-        return 'linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 100%)';
+        // Cinza neutro com leve brilho
+        return 'linear-gradient(165deg, #f8fafc 0%, #e2e8f0 45%, #cbd5e1 100%)';
       case 'low':
-        // Verde: topo claro → base sólida
-        return 'linear-gradient(180deg, #4ade80 0%, #16a34a 100%)';
+        // Verde esmeralda: brilho claro → verde vibrante → verde escuro
+        return 'linear-gradient(165deg, #86efac 0%, #22c55e 40%, #15803d 100%)';
       case 'medium':
-        // Ambar/laranja: topo claro → base sólida
-        return 'linear-gradient(180deg, #fbbf24 0%, #d97706 100%)';
+        // Ambar dourado: brilho → laranja vibrante → ambar escuro
+        return 'linear-gradient(165deg, #fcd34d 0%, #f59e0b 40%, #b45309 100%)';
       case 'high':
-        // Vermelho: topo claro → base sólida
-        return 'linear-gradient(180deg, #f87171 0%, #dc2626 100%)';
+        // Vermelho coral: brilho → vermelho vibrante → vermelho escuro
+        return 'linear-gradient(165deg, #fca5a5 0%, #ef4444 40%, #b91c1c 100%)';
       default:
-        return 'linear-gradient(180deg, #94a3b8 0%, #64748b 100%)';
+        return 'linear-gradient(165deg, #cbd5e1 0%, #94a3b8 45%, #64748b 100%)';
     }
   }
 
