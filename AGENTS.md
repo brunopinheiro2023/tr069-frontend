@@ -11,16 +11,16 @@ Instruções para qualquer agente de codificação IA (Claude Code, Devin, Curso
 
 ## Ambiente
 
-| Item | Valor |
-|------|-------|
-| Diretório | `/home/inova/projects/tr069` |
-| Remote | `github.com/brunopero2023/tr069-frontend.git` (branch `master`) |
-| VPS Dev | `10.91.0.21` (Ubuntu 24.04, RDP, Devin Desktop) |
-| VPS Produção | `10.90.0.77` — frontend servido via docker-compose do backend |
-| Build | `npx ng build --configuration=development` (~45s) |
-| Testes | `npx ng test --include="**/<component>.spec.ts" --watch=false` |
-| Dev server | `npx ng serve --host 0.0.0.0 --port 4200 --disable-host-check` |
-| Angular | v17.3.x (standalone components, signals não usados) |
+| Item         | Valor                                                           |
+| ------------ | --------------------------------------------------------------- |
+| Diretório    | `/home/inova/projects/tr069`                                    |
+| Remote       | `github.com/brunopero2023/tr069-frontend.git` (branch `master`) |
+| VPS Dev      | `10.91.0.21` (Ubuntu 24.04, RDP, Devin Desktop)                 |
+| VPS Produção | `10.90.0.77` — frontend servido via docker-compose do backend   |
+| Build        | `npx ng build --configuration=development` (~45s)               |
+| Testes       | `npx ng test --include="**/<component>.spec.ts" --watch=false`  |
+| Dev server   | `npx ng serve --host 0.0.0.0 --port 4200 --disable-host-check`  |
+| Angular      | v17.3.x (standalone components, signals não usados)             |
 
 ## Padrões de código
 
@@ -51,6 +51,7 @@ src/app/
 ### Visão geral
 
 Card de Análise Wi-Fi que exibe:
+
 1. **Resumo da varredura** — data/hora, origem (scheduler/manual/api), total de redes vizinhas
 2. **Gráficos de saturação 2.4GHz e 5GHz** — barras verticais com gradiente 3D por canal
 3. **Qualidade dos rádios** — RSSI, SNR, taxa de erro, clientes conectados
@@ -83,64 +84,64 @@ Card de Análise Wi-Fi que exibe:
 
 #### Funções TypeScript principais
 
-| Função | Descrição |
-|--------|-----------|
-| `getCongestionLevel(score)` | Classifica score: empty(0) / low(≤1) / medium(≤3) / high(>3) |
-| `getCongestionLabel(score)` | Rótulo textual: "Livre" / "Baixa" / "Média" / "Alta" |
-| `getCongestionColor(level)` | Cor sólida hex por nível (para score no topo) |
-| `getCongestionGradient(level)` | Gradiente CSS 3 paradas 165deg (para fill da barra) |
-| `getCongestionWidth(score, max=5)` | Altura % com escala **raiz cúbica** + piso 12% |
-| `shouldShowBarLabel(channel)` | Sempre true se há dados — mostra "Livre" em canais sem interferência |
-| `isNonOverlappingChannel(ch, band)` | true para CH 1/6/11 (2.4g) e 36/40/44/48/149/153/157/161/165 (5g) |
-| `isSuggestedChannel(ch, band)` | true se canal = suggestion.bestChannel |
-| `bandSummary2g` / `bandSummary5g` | { totalNeighbors, worstChannel, bestChannel } |
-| `displayChannels5g` | Filtra canais 5g vazios (sem vizinhos, sem score, não-sobrepostos, não-atual) |
+| Função                              | Descrição                                                                     |
+| ----------------------------------- | ----------------------------------------------------------------------------- |
+| `getCongestionLevel(score)`         | Classifica score: empty(0) / low(≤1) / medium(≤3) / high(>3)                  |
+| `getCongestionLabel(score)`         | Rótulo textual: "Livre" / "Baixa" / "Média" / "Alta"                          |
+| `getCongestionColor(level)`         | Cor sólida hex por nível (para score no topo)                                 |
+| `getCongestionGradient(level)`      | Gradiente CSS 3 paradas 165deg (para fill da barra)                           |
+| `getCongestionWidth(score, max=5)`  | Altura % com escala **raiz cúbica** + piso 12%                                |
+| `shouldShowBarLabel(channel)`       | Sempre true se há dados — mostra "Livre" em canais sem interferência          |
+| `isNonOverlappingChannel(ch, band)` | true para CH 1/6/11 (2.4g) e 36/40/44/48/149/153/157/161/165 (5g)             |
+| `isSuggestedChannel(ch, band)`      | true se canal = suggestion.bestChannel                                        |
+| `bandSummary2g` / `bandSummary5g`   | { totalNeighbors, worstChannel, bestChannel }                                 |
+| `displayChannels5g`                 | Filtra canais 5g vazios (sem vizinhos, sem score, não-sobrepostos, não-atual) |
 
 #### Escala não-linear (raiz cúbica)
 
 `getCongestionWidth` usa `Math.cbrt(score/max) * 100` em vez de linear:
 
 | Score | Linear (antigo) | cbrt (atual) |
-|-------|-----------------|--------------|
-| 0 | 0% | 0% |
-| 0.5 | 10% | **50%** |
-| 1 | 20% | **58%** |
-| 2 | 40% | **74%** |
-| 3 | 60% | **84%** |
-| 5 | 100% | **100%** |
+| ----- | --------------- | ------------ |
+| 0     | 0%              | 0%           |
+| 0.5   | 10%             | **50%**      |
+| 1     | 20%             | **58%**      |
+| 2     | 40%             | **74%**      |
+| 3     | 60%             | **84%**      |
+| 5     | 100%            | **100%**     |
 
 Piso mínimo de 12% quando `score > 0` — garante que canais com interferência mínima tenham gradiente visível.
 
 #### Gradientes 3D por nível
 
-| Nível | Gradiente (topo → meio → base) |
-|-------|-------------------------------|
-| Livre | `#f8fafc → #e2e8f0 → #cbd5e1` (cinza neutro) |
+| Nível | Gradiente (topo → meio → base)                  |
+| ----- | ----------------------------------------------- |
+| Livre | `#f8fafc → #e2e8f0 → #cbd5e1` (cinza neutro)    |
 | Baixa | `#86efac → #22c55e → #15803d` (verde esmeralda) |
-| Média | `#fcd34d → #f59e0b → #b45309` (âmbar dourado) |
-| Alta | `#fca5a5 → #ef4444 → #b91c1c` (vermelho coral) |
+| Média | `#fcd34d → #f59e0b → #b45309` (âmbar dourado)   |
+| Alta  | `#fca5a5 → #ef4444 → #b91c1c` (vermelho coral)  |
 
 Ângulo 165deg (diagonal sutil) + `::before` glass effect (reflexo branco 40% topo) + box-shadow tripla (glow externo + highlight interno + sombra base).
 
 #### Destaques visuais por tipo de canal
 
-| Tipo | Borde do track | Background do track | Marcador |
-|------|----------------|---------------------|----------|
-| Não-sobreposto | Verde `#22c55e` | — | — |
-| Atual | Indigo `#6366f1` | Gradient indigo + inset glow | `●` após número |
-| Sugerido | Verde `#16a34a` (4px) | Gradient verde + inset glow | `★` após número |
-| Atual + Sugerido | Indigo (prevalece) | — | `●★` |
+| Tipo             | Borde do track        | Background do track          | Marcador        |
+| ---------------- | --------------------- | ---------------------------- | --------------- |
+| Não-sobreposto   | Verde `#22c55e`       | —                            | —               |
+| Atual            | Indigo `#6366f1`      | Gradient indigo + inset glow | `●` após número |
+| Sugerido         | Verde `#16a34a` (4px) | Gradient verde + inset glow  | `★` após número |
+| Atual + Sugerido | Indigo (prevalece)    | —                            | `●★`            |
 
 #### Alturas e responsividade
 
-| Elemento | Desktop | Mobile |
-|----------|---------|--------|
-| Chart (eixo + plot) | min-height 300px | min-height 250px |
+| Elemento              | Desktop          | Mobile           |
+| --------------------- | ---------------- | ---------------- |
+| Chart (eixo + plot)   | min-height 300px | min-height 250px |
 | Track (poço da barra) | min-height 140px | min-height 120px |
-| Fill (gradiente) | min-height 28px | — |
-| Coluna (largura) | 60-90px | 44-60px |
-| Score (font) | 0.8rem | 0.68rem |
-| Canal (font) | 0.9rem | 0.75rem |
+| Fill (gradiente)      | min-height 28px  | —                |
+| Coluna (largura)      | 60-90px          | 44-60px          |
+| Score (font)          | 0.8rem           | 0.68rem          |
+| Canal (font)          | 0.9rem           | 0.75rem          |
 
 #### Igualação de altura dos cards
 
@@ -174,19 +175,20 @@ O `docker-compose.yml` do backend define o serviço `frontend` com `context: ../
 
 **Commits (9):**
 
-| Commit | Descrição |
-|--------|-----------|
-| `8fad8cd` | Redesenho inicial: horizontal → vertical (colunas) |
+| Commit    | Descrição                                                                    |
+| --------- | ---------------------------------------------------------------------------- |
+| `8fad8cd` | Redesenho inicial: horizontal → vertical (colunas)                           |
 | `e345915` | Gráficos mais informativos: eixo Y, grid lines, resumo banda, badge contagem |
-| `a802f6c` | Gradientes 3D: 2 paradas vertical com box-shadow |
-| `c281f2d` | Altura das colunas: 240px → 300px (desktop), 200px → 250px (mobile) |
-| `6a045d7` | Gradientes modernos: 3 paradas 165deg + glass effect + border-radius 8px |
-| `c7e00d0` | Escala não-linear cbrt + piso 12% + min-height 18px |
-| `4be9585` | Threshold label: 35% → 15% + min-height 28px |
-| `d5b4fc1` | Label "Livre" em canais 5GHz sem interferência (shouldShowBarLabel) |
-| `93d3045` | Igualar altura dos cards 2.4GHz e 5GHz (flex stretch) |
+| `a802f6c` | Gradientes 3D: 2 paradas vertical com box-shadow                             |
+| `c281f2d` | Altura das colunas: 240px → 300px (desktop), 200px → 250px (mobile)          |
+| `6a045d7` | Gradientes modernos: 3 paradas 165deg + glass effect + border-radius 8px     |
+| `c7e00d0` | Escala não-linear cbrt + piso 12% + min-height 18px                          |
+| `4be9585` | Threshold label: 35% → 15% + min-height 28px                                 |
+| `d5b4fc1` | Label "Livre" em canais 5GHz sem interferência (shouldShowBarLabel)          |
+| `93d3045` | Igualar altura dos cards 2.4GHz e 5GHz (flex stretch)                        |
 
 **Resultado final:**
+
 - Barras verticais com gradiente 3D moderno (3 paradas, diagonal 165deg, glass effect)
 - Eixo Y com escala 0-5 e linhas de referência horizontais
 - Labels "Baixa/Média/Alta/Livre" dentro de cada barra
@@ -200,3 +202,23 @@ O `docker-compose.yml` do backend define o serviço `frontend` com `context: ../
 ### Auditoria Wi-Fi Backend (2026-07-15)
 
 Ver `AGENTS.md` do backend (`/home/inova/projects/tr069-inova/AGENTS.md`) para detalhes da auditoria e correções.
+
+### Recálculo de insights ao abrir aba + loading state pós-otimização (2026-07-16)
+
+**Commit:** `12e8a33`
+
+**Problema:** A aba Análise Wi-Fi não recalcular os insights quando o canal ou largura de banda eram alterados via SPV. O MongoDB era atualizado e `cpe_updated` era emitido, mas o componente filho não escutava esse evento — continuava exibindo insights do cache Redis (90s) com valores antigos. Além disso, o botão "Aplicar" desligava o loading imediatamente após POST 200, sem aguardar a CPE confirmar.
+
+**Alterações (5 arquivos):**
+
+| Arquivo                                | Alteração                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cpe-wifi-analysis-tab.component.ts`   | `ngOnInit`: `loadAllData(true)` (bypassa cache Redis). Listener `cpe_updated` com guard `!== undefined` detecta mudança em `wifi2g/wifi5g.channel` ou `.bandwidth` → `loadAllData(true)`. `applyWaitingConfirmation`: estado amber intermediário. `handleWifiOptimizationResult`: desliga loading + recarrega. Failsafe 65s. `neighbor_scan_completed`/`auto_wifi_optimize_applied` agora usam `forceRefresh=true`. |
+| `cpe.service.ts`                       | `getWifiHosts`: adicionado parâmetro `forceRefresh` (bypassa cache frontend Map + sessionStorage).                                                                                                                                                                                                                                                                                                                  |
+| `websocket.service.ts`                 | `onWifiOptimizationResult()`: listener do evento `wifi_optimization_result` emitido pelo backend 30s pós-enqueue do SPV.                                                                                                                                                                                                                                                                                            |
+| `cpe-wifi-analysis-tab.component.html` | Indicador visual amber durante `applyWaitingConfirmation` (spinner + mensagem "Aguardando confirmação da CPE...").                                                                                                                                                                                                                                                                                                  |
+| `cpe-wifi-analysis-tab.component.scss` | Classe `.apply-waiting` (amber, mesmo padrão das `.apply-success`/`.apply-error`).                                                                                                                                                                                                                                                                                                                                  |
+
+**Guard crítico `!== undefined`:** o evento `cpe_updated` é emitido por múltiplas origens com payloads parciais. O SPV handler envia `wifi2g` completo (com `channel`), mas o GPV handler envia só `wifi2g.bandwidth` (sem `channel`). Sem o guard, campos ausentes (`undefined`) no payload disparariam reloads falsos em cada Inform/GPV.
+
+**Validação E2E (CPE 54504C47DDECCAA0):** Ver `AGENTS.md` do backend, TODO-17.
