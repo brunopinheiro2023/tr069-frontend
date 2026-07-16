@@ -820,14 +820,24 @@ export class NeighborScanCardComponent {
   }
 
   /**
-   * Largura proporcional da barra usando o interferenceScore real (max útil = 5.0).
+   * Altura proporcional da barra vertical usando o interferenceScore real (max útil = 5.0).
+   * Aplica escala não-linear (raiz cúbica) para ampliar barras baixas — assim o
+   * gradiente ocupa mais espaço dentro da coluna mesmo com scores baixos, mantendo
+   * a proporção relativa entre canais. Altura mínima de 12% garante que qualquer
+   * canal com interferência seja visível.
    * Para dados demo sem score, usa neighborCount com max = 10.
    */
   getCongestionWidth(score: number, max: number = 5): number {
     const sanitizedScore = sanitizeNumber(score, 0, 1000);
     const sanitizedMax = sanitizeNumber(max, 1, 1000);
     if (sanitizedMax === 0) return 0;
-    return Math.min((sanitizedScore / sanitizedMax) * 100, 100);
+    const ratio = sanitizedScore / sanitizedMax;
+    // Escala raiz cúbica: amplia valores baixos, comprime valores altos
+    // score=0 → 0%, score=0.5 → 50%, score=1 → 58%, score=3 → 84%, score=5 → 100%
+    const scaled = Math.cbrt(ratio) * 100;
+    // Mínimo de 12% quando há qualquer interferência (score > 0)
+    const withFloor = sanitizedScore > 0 ? Math.max(scaled, 12) : 0;
+    return Math.min(withFloor, 100);
   }
 
   formatTimestamp(timestamp: string): string {
