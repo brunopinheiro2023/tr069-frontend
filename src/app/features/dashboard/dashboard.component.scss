@@ -36,6 +36,14 @@
     background-color: color-mix(in srgb, var(--accent-danger) 4%, transparent);
     border-color: var(--accent-danger);
   }
+
+  &.active-warning {
+    background-color: color-mix(in srgb, var(--accent-warning) 4%, transparent);
+    border-color: var(--accent-warning);
+    &:hover {
+      border-color: color-mix(in srgb, var(--accent-warning) 40%, transparent);
+    }
+  }
 }
 
 .card-icon {
@@ -445,6 +453,16 @@
   &.offline.active {
     color: var(--accent-danger);
   }
+  &.quarantined.active {
+    color: var(--accent-warning);
+  }
+}
+
+// Ícone dentro do botão de filtro de quarentena
+.quarantined-icon {
+  font-size: 14px;
+  vertical-align: middle;
+  margin-right: 2px;
 }
 
 .btn-danger-outline {

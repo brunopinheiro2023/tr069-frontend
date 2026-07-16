@@ -52,6 +52,26 @@
 
       <div
         class="card metric-card clickable-card"
+        [class.active-warning]="filterStatus === 'quarantined'"
+        (click)="
+          onStatusFilterChange(
+            filterStatus === 'quarantined' ? 'all' : 'quarantined'
+          )
+        "
+        title="Clique para filtrar apenas CPEs em quarentena"
+        *ngIf="globalQuarantinedCount > 0"
+      >
+        <div class="card-icon warning">
+          <span class="material-symbols-rounded">shield_lock</span>
+        </div>
+        <div class="card-info">
+          <h3>Em Quarentena</h3>
+          <p>{{ globalQuarantinedCount }}</p>
+        </div>
+      </div>
+
+      <div
+        class="card metric-card clickable-card"
         [class.active-danger]="filterCriticalGpon"
         (click)="toggleCriticalGponFilter()"
         title="Clique para filtrar apenas CPEs com sinal crítico"
@@ -448,6 +468,18 @@
                 (click)="onStatusFilterChange('offline')"
               >
                 Offline
+              </button>
+              <button
+                class="filter-btn quarantined"
+                [class.active]="filterStatus === 'quarantined'"
+                (click)="onStatusFilterChange('quarantined')"
+                *ngIf="globalQuarantinedCount > 0"
+                title="CPEs em quarentena — boot loop ou isolamento manual"
+              >
+                <span class="material-symbols-rounded quarantined-icon"
+                  >shield_lock</span
+                >
+                Quarentena ({{ globalQuarantinedCount }})
               </button>
             </div>
           </div>

@@ -91,6 +91,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // Métricas Globais (Reais do Banco de Dados)
   globalTotalCpes: number = 0;
   globalOnlineCount: number = 0;
+  globalQuarantinedCount: number = 0;
   globalCriticalGponCount: number = 0;
   globalPendingTasksCount: number = 0;
 
@@ -212,7 +213,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   searchQuery: string = '';
   searchSubject = new Subject<string>();
   private refilterSubject = new Subject<void>();
-  filterStatus: 'all' | 'online' | 'offline' = 'all';
+  filterStatus: 'all' | 'online' | 'offline' | 'quarantined' = 'all';
   filterManufacturer: string = '';
   filterModel: string = '';
   filterFirmware: string = '';
@@ -802,6 +803,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         // Recebe as métricas agregadas diretamente do MongoDB (agregação global, não paginada)
         if (response.metrics) {
           this.globalOnlineCount = response.metrics.onlineCount;
+          this.globalQuarantinedCount = response.metrics.quarantinedCount || 0;
           // globalCriticalGponCount calculado localmente via _rx (opticalRx removido do schema Cpe EP28)
           this.globalCriticalGponCount = this.allCpes.filter(
             (c) => c._rx !== undefined && c._rx < -27,
@@ -900,6 +902,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const filters: Record<string, any> = {};
     if (this.filterStatus === 'online') filters['isOnline'] = true;
     if (this.filterStatus === 'offline') filters['isOnline'] = false;
+    if (this.filterStatus === 'quarantined') filters['isQuarantined'] = true;
     if (this.filterManufacturer)
       filters['manufacturer'] = this.filterManufacturer;
     if (this.filterModel) filters['productClass'] = this.filterModel;
@@ -927,7 +930,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.searchSubject.next(this.searchQuery);
   }
 
-  onStatusFilterChange(status: 'all' | 'online' | 'offline'): void {
+  onStatusFilterChange(
+    status: 'all' | 'online' | 'offline' | 'quarantined',
+  ): void {
     this.filterStatus = status;
     this.triggerFilter();
   }
@@ -1107,6 +1112,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.filterStatus === 'all'
           ? undefined
           : this.filterStatus === 'online',
+      isQuarantined: this.filterStatus === 'quarantined' || undefined,
       manufacturer: this.filterManufacturer || undefined,
       productClass: this.filterModel || undefined,
       softwareVersion: this.filterFirmware || undefined,
@@ -1118,6 +1124,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return cpes.filter((cpe) => {
       if (filters.isOnline !== undefined && cpe.isOnline !== filters.isOnline)
         return false;
+      if (filters.isQuarantined && !cpe.quarantine?.active) return false;
       if (
         filters.manufacturer &&
         (cpe.deviceInfo?.manufacturer || cpe.manufacturer) !==
