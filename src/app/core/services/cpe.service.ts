@@ -334,8 +334,18 @@ export class CpeService {
       }>(`${this.API_URL}/${serialNumber}/wifi-optimization`, payload)
       .pipe(
         // Invalida cache de wifi-hosts e wifi-diagnostics para que o loadAllData()
-        // busque insights frescos do backend (sem o insight recém-aplicado).
-        tap(() => this.clearCache(serialNumber)),
+        // busque insights frescos do backend. Roda em sucesso E erro (ex: 409
+        // recomendação desatualizada — o loadAllData() auto-recarrega e precisa
+        // de dados frescos, não do cache stale).
+        tap({ next: () => this.clearCache(serialNumber) }),
+        catchError((err) => {
+          // 409 = recomendação desatualizada — limpa cache antes de propagar o erro
+          // para que o loadAllData() no handler de erro busque dados frescos.
+          if (err?.status === 409) {
+            this.clearCache(serialNumber);
+          }
+          return throwError(() => err);
+        }),
         timeout(30000),
       );
   }
