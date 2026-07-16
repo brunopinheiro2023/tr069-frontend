@@ -485,12 +485,11 @@
                     <!-- Label dentro da barra (visível quando barra alta) -->
                     <span
                       class="col-bar-label"
-                      *ngIf="
-                        getCongestionWidth(
-                          channel.interferenceScore || channel.neighborCount,
-                          5
-                        ) > 15
+                      [class.col-bar-label-free]="
+                        !channel.interferenceScore ||
+                        channel.interferenceScore === 0
                       "
+                      *ngIf="shouldShowBarLabel(channel)"
                     >
                       {{
                         getCongestionLabel(
@@ -642,12 +641,11 @@
                   >
                     <span
                       class="col-bar-label"
-                      *ngIf="
-                        getCongestionWidth(
-                          channel.interferenceScore || channel.neighborCount,
-                          5
-                        ) > 15
+                      [class.col-bar-label-free]="
+                        !channel.interferenceScore ||
+                        channel.interferenceScore === 0
                       "
+                      *ngIf="shouldShowBarLabel(channel)"
                     >
                       {{
                         getCongestionLabel(

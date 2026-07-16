@@ -840,6 +840,19 @@ export class NeighborScanCardComponent {
     return Math.min(withFloor, 100);
   }
 
+  /**
+   * Determina se o label "Baixa/Média/Alta/Livre" deve aparecer dentro da barra.
+   * Mostra sempre — mesmo canais sem interferência (score=0) exibem "Livre"
+   * para o técnico saber que aquele canal está disponível.
+   * Só não mostra quando não há dados do canal (null/undefined).
+   */
+  shouldShowBarLabel(channel: ChannelEntry): boolean {
+    if (!channel || typeof channel !== 'object') return false;
+    // Sempre mostra: canal com interferência → "Baixa/Média/Alta"
+    // Canal sem interferência → "Livre"
+    return true;
+  }
+
   formatTimestamp(timestamp: string): string {
     // Segurança: valida timestamp antes de criar Date
     if (!timestamp || typeof timestamp !== 'string') return '';

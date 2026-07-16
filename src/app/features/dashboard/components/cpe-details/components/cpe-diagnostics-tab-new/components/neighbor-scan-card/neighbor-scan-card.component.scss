@@ -890,7 +890,7 @@
                       pointer-events: none;
                     }
 
-                    // Label dentro da barra (Baixa/Média/Alta)
+                    // Label dentro da barra (Baixa/Média/Alta/Livre)
                     .col-bar-label {
                       font-size: 0.68rem;
                       font-weight: 700;
@@ -900,6 +900,20 @@
                       letter-spacing: 0.02em;
                       position: relative;
                       z-index: 1;
+
+                      // Label "Livre" em canais sem interferência —
+                      // barra tem altura 0, então posiciona acima do fill
+                      // com cor verde escura para contraste com o track
+                      &.col-bar-label-free {
+                        position: absolute;
+                        bottom: 4px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        color: #16a34a;
+                        text-shadow: none;
+                        font-size: 0.62rem;
+                        font-weight: 600;
+                      }
                     }
                   }
                 }

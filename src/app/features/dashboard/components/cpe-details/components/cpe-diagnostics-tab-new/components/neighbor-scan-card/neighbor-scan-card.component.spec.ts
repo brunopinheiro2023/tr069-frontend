@@ -781,11 +781,19 @@ describe('NeighborScanCardComponent', () => {
       expect(component.getCongestionColor('invalid')).toBe('#64748b');
     });
 
-    it('getCongestionWidth deve calcular porcentagem proporcional', () => {
-      expect(component.getCongestionWidth(2.5, 5)).toBe(50);
+    it('getCongestionWidth deve calcular porcentagem com escala não-linear (cbrt)', () => {
+      // Escala raiz cúbica: amplia valores baixos, comprime altos
+      // score=0 → 0%, score=5 → 100%, cap em 100
       expect(component.getCongestionWidth(5, 5)).toBe(100);
       expect(component.getCongestionWidth(10, 5)).toBe(100); // cap em 100
       expect(component.getCongestionWidth(0, 5)).toBe(0);
+      // score > 0 tem piso mínimo de 12%
+      expect(component.getCongestionWidth(0.01, 5)).toBeGreaterThanOrEqual(12);
+      // Valores intermediários usam cbrt (não mais linear)
+      expect(component.getCongestionWidth(2.5, 5)).toBeCloseTo(
+        Math.cbrt(0.5) * 100,
+        1,
+      );
     });
   });
 
