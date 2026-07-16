@@ -332,7 +332,12 @@ export class CpeService {
         status: string;
         message: string;
       }>(`${this.API_URL}/${serialNumber}/wifi-optimization`, payload)
-      .pipe(timeout(30000));
+      .pipe(
+        // Invalida cache de wifi-hosts e wifi-diagnostics para que o loadAllData()
+        // busque insights frescos do backend (sem o insight recém-aplicado).
+        tap(() => this.clearCache(serialNumber)),
+        timeout(30000),
+      );
   }
 
   /**
