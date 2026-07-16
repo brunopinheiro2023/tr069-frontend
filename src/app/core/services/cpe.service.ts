@@ -1,7 +1,7 @@
 // Caminho do arquivo: frontend/src/app/core/services/cpe.service.ts
 
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, of, throwError } from 'rxjs';
 import { tap, timeout, catchError } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
@@ -34,6 +34,13 @@ import {
 })
 export class CpeService {
   private readonly API_URL = `${environment.apiUrl}/api/cpe`;
+
+  // Header para suprimir o overlay de loading global em requisições de leitura
+  // que já possuem loading local no componente (evita flicker do overlay).
+  // O interceptor loading.interceptor.ts verifica este header e pula o startGlobal.
+  private readonly SKIP_LOADING_HEADERS = {
+    headers: new HttpHeaders({ 'X-Skip-Loading': 'true' }),
+  };
 
   // IMPLEMENTAÇÃO DE CACHE PARA SUPORTAR 6.000+ CPEs
   // Cache em memória para reduzir tráfego HTTP e latência percebida
@@ -257,7 +264,7 @@ export class CpeService {
     if (forceRefresh) params.refresh = 'true';
     return this.http.get<WifiDiagnosticsData>(
       `${this.API_URL}/${serialNumber}/wifi-diagnostics`,
-      { params },
+      { params, ...this.SKIP_LOADING_HEADERS },
     );
   }
 
@@ -306,6 +313,7 @@ export class CpeService {
     return this.http.post<{ message: string }>(
       `${this.API_URL}/${serialNumber}/wifi-neighbor-scan`,
       {},
+      this.SKIP_LOADING_HEADERS,
     );
   }
 
@@ -338,7 +346,7 @@ export class CpeService {
   ): Observable<WifiNeighborHistoryResponse> {
     return this.http.get<WifiNeighborHistoryResponse>(
       `${this.API_URL}/${serialNumber}/diagnostics/wifi-neighbor/history`,
-      { params: { limit: String(limit) } },
+      { params: { limit: String(limit) }, ...this.SKIP_LOADING_HEADERS },
     );
   }
 
@@ -369,7 +377,10 @@ export class CpeService {
     }
 
     return this.http
-      .get<WifiHostsData>(`${this.API_URL}/${serialNumber}/wifi-hosts`)
+      .get<WifiHostsData>(
+        `${this.API_URL}/${serialNumber}/wifi-hosts`,
+        this.SKIP_LOADING_HEADERS,
+      )
       .pipe(
         tap((data) => {
           if (this.cache.size >= this.MAX_CACHE_SIZE) {
