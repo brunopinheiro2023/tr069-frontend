@@ -860,7 +860,7 @@
                     width: 100%;
                     border-radius: 8px 8px 0 0;
                     transition: height 0.35s ease;
-                    min-height: 18px; // gradiente sempre visível mesmo com score muito baixo
+                    min-height: 28px; // altura mínima para label "Baixa/Média/Alta" caber dentro
                     display: flex;
                     align-items: center;
                     justify-content: center;
