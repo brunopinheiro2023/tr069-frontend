@@ -357,22 +357,43 @@
       <div class="saturation-band">
         <div class="band-header">
           <h5>2.4 GHz <small>— Canais 1 a 13 (20MHz)</small></h5>
+          <div class="band-summary" *ngIf="channels2g.length > 0">
+            <span class="summary-item">
+              <span class="summary-label">Redes</span>
+              <span class="summary-value">{{
+                bandSummary2g.totalNeighbors
+              }}</span>
+            </span>
+            <span class="summary-item" *ngIf="bandSummary2g.worstChannel">
+              <span class="summary-label">Pior</span>
+              <span class="summary-value summary-worst"
+                >CH{{ bandSummary2g.worstChannel }}</span
+              >
+            </span>
+            <span class="summary-item" *ngIf="bandSummary2g.bestChannel">
+              <span class="summary-label">Melhor</span>
+              <span class="summary-value summary-best"
+                >CH{{ bandSummary2g.bestChannel }}</span
+              >
+            </span>
+          </div>
         </div>
         <div class="band-note">
           <span class="material-symbols-rounded">lightbulb</span>
-          Canais não sobrepostos: 1, 6, 11
+          Canais não sobrepostos: 1, 6, 11 — use estes para evitar interferência
+          adjacente
         </div>
 
         <!-- Legenda inline -->
         <div class="band-legend">
           <span class="legend-inline"
-            ><span class="dot dot-low"></span>Baixa</span
+            ><span class="dot dot-low"></span>Baixa (0-1)</span
           >
           <span class="legend-inline"
-            ><span class="dot dot-medium"></span>Média</span
+            ><span class="dot dot-medium"></span>Média (1-3)</span
           >
           <span class="legend-inline"
-            ><span class="dot dot-high"></span>Alta</span
+            ><span class="dot dot-high"></span>Alta (>3)</span
           >
           <span class="legend-inline"
             ><span class="bar-marker"></span>Não sobreposto</span
@@ -385,67 +406,111 @@
           >
         </div>
 
-        <!-- Gráfico de barras verticais -->
+        <!-- Gráfico de barras verticais com eixo Y -->
         <div class="channel-chart">
-          <div class="chart-area">
-            <div
-              *ngFor="let channel of channels2g"
-              class="channel-col"
-              [class.non-overlapping]="
-                isNonOverlappingChannel(channel.channel, '2.4GHz')
-              "
-              [class.channel-current]="
-                channel.channel === suggestion2g?.currentChannel
-              "
-              [class.channel-suggested]="
-                isSuggestedChannel(channel.channel, '2.4GHz')
-              "
-              [title]="
-                'CH ' +
-                channel.channel +
-                ' | ' +
-                channel.neighborCount +
-                ' redes | Score: ' +
-                (channel.interferenceScore | number: '1.2-2') +
-                ' | Ruído: ' +
-                channel.noiseLevel +
-                ' dBm'
-              "
-            >
-              <!-- Score no topo da barra -->
-              <span
-                class="col-score"
-                [style.color]="
-                  getCongestionColor(
-                    getCongestionLevel(channel.interferenceScore || 0)
-                  )
+          <!-- Eixo Y com linhas de referência -->
+          <div class="chart-y-axis">
+            <span class="y-label">5</span>
+            <span class="y-label">3</span>
+            <span class="y-label">1</span>
+            <span class="y-label">0</span>
+          </div>
+          <div class="chart-plot">
+            <!-- Linhas de referência horizontais -->
+            <div class="grid-lines">
+              <div class="grid-line grid-line-high"></div>
+              <div class="grid-line grid-line-medium"></div>
+              <div class="grid-line grid-line-low"></div>
+            </div>
+            <!-- Colunas (barras verticais) -->
+            <div class="chart-bars">
+              <div
+                *ngFor="let channel of channels2g"
+                class="channel-col"
+                [class.non-overlapping]="
+                  isNonOverlappingChannel(channel.channel, '2.4GHz')
                 "
-                >{{
-                  (channel.interferenceScore | number: "1.1-1") || "0"
-                }}</span
+                [class.channel-current]="
+                  channel.channel === suggestion2g?.currentChannel
+                "
+                [class.channel-suggested]="
+                  isSuggestedChannel(channel.channel, '2.4GHz')
+                "
+                [title]="
+                  'Canal ' +
+                  channel.channel +
+                  ' | ' +
+                  channel.neighborCount +
+                  ' redes vizinhas' +
+                  ' | Score: ' +
+                  (channel.interferenceScore | number: '1.2-2') +
+                  ' | Ruído: ' +
+                  (channel.noiseLevel ?? '—') +
+                  ' dBm' +
+                  ' | RSSI médio: ' +
+                  (channel.avgRssi ?? '—') +
+                  ' dBm'
+                "
               >
-              <!-- Barra vertical -->
-              <div class="col-bar-track">
-                <div
-                  class="col-bar-fill"
-                  [style.height.%]="
-                    getCongestionWidth(
-                      channel.interferenceScore || channel.neighborCount,
-                      5
-                    )
-                  "
-                  [style.background-color]="
+                <!-- Score no topo -->
+                <span
+                  class="col-score"
+                  [style.color]="
                     getCongestionColor(
-                      getCongestionLevel(
-                        channel.interferenceScore || channel.neighborCount
-                      )
+                      getCongestionLevel(channel.interferenceScore || 0)
                     )
                   "
-                ></div>
+                  >{{
+                    (channel.interferenceScore | number: "1.1-1") || "0"
+                  }}</span
+                >
+                <!-- Barra vertical -->
+                <div class="col-bar-track">
+                  <div
+                    class="col-bar-fill"
+                    [style.height.%]="
+                      getCongestionWidth(
+                        channel.interferenceScore || channel.neighborCount,
+                        5
+                      )
+                    "
+                    [style.background]="
+                      getCongestionColor(
+                        getCongestionLevel(
+                          channel.interferenceScore || channel.neighborCount
+                        )
+                      )
+                    "
+                  >
+                    <!-- Label dentro da barra (visível quando barra alta) -->
+                    <span
+                      class="col-bar-label"
+                      *ngIf="
+                        getCongestionWidth(
+                          channel.interferenceScore || channel.neighborCount,
+                          5
+                        ) > 35
+                      "
+                    >
+                      {{
+                        getCongestionLabel(
+                          channel.interferenceScore || channel.neighborCount
+                        )
+                      }}
+                    </span>
+                  </div>
+                </div>
+                <!-- Número do canal na base -->
+                <span class="col-channel">{{ channel.channel }}</span>
+                <!-- Badge de contagem de redes -->
+                <span
+                  class="col-count-badge"
+                  [class.has-neighbors]="channel.neighborCount > 0"
+                >
+                  {{ channel.neighborCount }}
+                  {{ channel.neighborCount === 1 ? "rede" : "redes" }}
+                </span>
               </div>
-              <!-- Número do canal + contagem na base -->
-              <span class="col-channel">CH{{ channel.channel }}</span>
-              <span class="col-count">{{ channel.neighborCount }}</span>
             </div>
           </div>
         </div>
@@ -455,6 +520,26 @@
       <div class="saturation-band">
         <div class="band-header">
           <h5>5 GHz <small>— Canais UNII-1/2/3 (20-160MHz)</small></h5>
+          <div class="band-summary" *ngIf="displayChannels5g.length > 0">
+            <span class="summary-item">
+              <span class="summary-label">Redes</span>
+              <span class="summary-value">{{
+                bandSummary5g.totalNeighbors
+              }}</span>
+            </span>
+            <span class="summary-item" *ngIf="bandSummary5g.worstChannel">
+              <span class="summary-label">Pior</span>
+              <span class="summary-value summary-worst"
+                >CH{{ bandSummary5g.worstChannel }}</span
+              >
+            </span>
+            <span class="summary-item" *ngIf="bandSummary5g.bestChannel">
+              <span class="summary-label">Melhor</span>
+              <span class="summary-value summary-best"
+                >CH{{ bandSummary5g.bestChannel }}</span
+              >
+            </span>
+          </div>
         </div>
         <div class="band-note">
           <span class="material-symbols-rounded">lightbulb</span>
@@ -465,13 +550,13 @@
         <!-- Legenda inline -->
         <div class="band-legend">
           <span class="legend-inline"
-            ><span class="dot dot-low"></span>Baixa</span
+            ><span class="dot dot-low"></span>Baixa (0-1)</span
           >
           <span class="legend-inline"
-            ><span class="dot dot-medium"></span>Média</span
+            ><span class="dot dot-medium"></span>Média (1-3)</span
           >
           <span class="legend-inline"
-            ><span class="dot dot-high"></span>Alta</span
+            ><span class="dot dot-high"></span>Alta (>3)</span
           >
           <span class="legend-inline"
             ><span class="bar-marker"></span>Não sobreposto</span
@@ -484,67 +569,103 @@
           >
         </div>
 
-        <!-- Gráfico de barras verticais -->
+        <!-- Gráfico de barras verticais com eixo Y -->
         <div class="channel-chart">
-          <div class="chart-area">
-            <div
-              *ngFor="let channel of displayChannels5g"
-              class="channel-col"
-              [class.non-overlapping]="
-                isNonOverlappingChannel(channel.channel, '5GHz')
-              "
-              [class.channel-current]="
-                channel.channel === suggestion5g?.currentChannel
-              "
-              [class.channel-suggested]="
-                isSuggestedChannel(channel.channel, '5GHz')
-              "
-              [title]="
-                'CH ' +
-                channel.channel +
-                ' | ' +
-                channel.neighborCount +
-                ' redes | Score: ' +
-                (channel.interferenceScore | number: '1.2-2') +
-                ' | Ruído: ' +
-                channel.noiseLevel +
-                ' dBm'
-              "
-            >
-              <!-- Score no topo da barra -->
-              <span
-                class="col-score"
-                [style.color]="
-                  getCongestionColor(
-                    getCongestionLevel(channel.interferenceScore || 0)
-                  )
+          <div class="chart-y-axis">
+            <span class="y-label">5</span>
+            <span class="y-label">3</span>
+            <span class="y-label">1</span>
+            <span class="y-label">0</span>
+          </div>
+          <div class="chart-plot">
+            <div class="grid-lines">
+              <div class="grid-line grid-line-high"></div>
+              <div class="grid-line grid-line-medium"></div>
+              <div class="grid-line grid-line-low"></div>
+            </div>
+            <div class="chart-bars">
+              <div
+                *ngFor="let channel of displayChannels5g"
+                class="channel-col"
+                [class.non-overlapping]="
+                  isNonOverlappingChannel(channel.channel, '5GHz')
                 "
-                >{{
-                  (channel.interferenceScore | number: "1.1-1") || "0"
-                }}</span
+                [class.channel-current]="
+                  channel.channel === suggestion5g?.currentChannel
+                "
+                [class.channel-suggested]="
+                  isSuggestedChannel(channel.channel, '5GHz')
+                "
+                [title]="
+                  'Canal ' +
+                  channel.channel +
+                  ' | ' +
+                  channel.neighborCount +
+                  ' redes vizinhas' +
+                  ' | Score: ' +
+                  (channel.interferenceScore | number: '1.2-2') +
+                  ' | Ruído: ' +
+                  (channel.noiseLevel ?? '—') +
+                  ' dBm' +
+                  ' | RSSI médio: ' +
+                  (channel.avgRssi ?? '—') +
+                  ' dBm'
+                "
               >
-              <!-- Barra vertical -->
-              <div class="col-bar-track">
-                <div
-                  class="col-bar-fill"
-                  [style.height.%]="
-                    getCongestionWidth(
-                      channel.interferenceScore || channel.neighborCount,
-                      5
-                    )
-                  "
-                  [style.background-color]="
+                <span
+                  class="col-score"
+                  [style.color]="
                     getCongestionColor(
-                      getCongestionLevel(
-                        channel.interferenceScore || channel.neighborCount
-                      )
+                      getCongestionLevel(channel.interferenceScore || 0)
                     )
                   "
-                ></div>
+                  >{{
+                    (channel.interferenceScore | number: "1.1-1") || "0"
+                  }}</span
+                >
+                <div class="col-bar-track">
+                  <div
+                    class="col-bar-fill"
+                    [style.height.%]="
+                      getCongestionWidth(
+                        channel.interferenceScore || channel.neighborCount,
+                        5
+                      )
+                    "
+                    [style.background]="
+                      getCongestionColor(
+                        getCongestionLevel(
+                          channel.interferenceScore || channel.neighborCount
+                        )
+                      )
+                    "
+                  >
+                    <span
+                      class="col-bar-label"
+                      *ngIf="
+                        getCongestionWidth(
+                          channel.interferenceScore || channel.neighborCount,
+                          5
+                        ) > 35
+                      "
+                    >
+                      {{
+                        getCongestionLabel(
+                          channel.interferenceScore || channel.neighborCount
+                        )
+                      }}
+                    </span>
+                  </div>
+                </div>
+                <span class="col-channel">{{ channel.channel }}</span>
+                <span
+                  class="col-count-badge"
+                  [class.has-neighbors]="channel.neighborCount > 0"
+                >
+                  {{ channel.neighborCount }}
+                  {{ channel.neighborCount === 1 ? "rede" : "redes" }}
+                </span>
               </div>
-              <!-- Número do canal + contagem na base -->
-              <span class="col-channel">CH{{ channel.channel }}</span>
-              <span class="col-count">{{ channel.neighborCount }}</span>
             </div>
           </div>
         </div>

@@ -247,6 +247,57 @@ export class NeighborScanCardComponent {
     });
   }
 
+  /**
+   * Resumo da banda 2.4GHz para exibição no header do gráfico:
+   * total de redes vizinhas, pior canal (maior score) e melhor canal (menor score).
+   */
+  get bandSummary2g(): {
+    totalNeighbors: number;
+    worstChannel: number | null;
+    bestChannel: number | null;
+  } {
+    return this.buildBandSummary(this._channels2g);
+  }
+
+  /** Resumo da banda 5GHz (mesma lógica do bandSummary2g). */
+  get bandSummary5g(): {
+    totalNeighbors: number;
+    worstChannel: number | null;
+    bestChannel: number | null;
+  } {
+    return this.buildBandSummary(this.displayChannels5g);
+  }
+
+  /**
+   * Constrói resumo de uma lista de canais: soma de redes vizinhas,
+   * canal com maior interferência (pior) e menor interferência (melhor).
+   */
+  private buildBandSummary(channels: ChannelEntry[]): {
+    totalNeighbors: number;
+    worstChannel: number | null;
+    bestChannel: number | null;
+  } {
+    if (!channels || channels.length === 0) {
+      return { totalNeighbors: 0, worstChannel: null, bestChannel: null };
+    }
+    const totalNeighbors = channels.reduce(
+      (sum, c) => sum + (c.neighborCount || 0),
+      0,
+    );
+    let worst = channels[0];
+    let best = channels[0];
+    for (const c of channels) {
+      const score = c.interferenceScore ?? 0;
+      if (score > (worst.interferenceScore ?? 0)) worst = c;
+      if (score < (best.interferenceScore ?? Infinity)) best = c;
+    }
+    return {
+      totalNeighbors,
+      worstChannel: worst.channel,
+      bestChannel: best.channel,
+    };
+  }
+
   get suggestion2g(): ChannelSuggestion | null {
     // Segurança: valida que suggestion é um objeto válido
     const suggestion = this.channelSaturation?.bands?.['2.4GHz']?.suggestion;

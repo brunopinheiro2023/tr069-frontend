@@ -702,129 +702,251 @@
           }
         }
 
-        // Gráfico de barras verticais (cada canal = 1 coluna)
-        .channel-chart {
-          overflow-x: auto;
-          padding-bottom: 0.5rem;
-
-          .chart-area {
+        // Resumo da banda no header (redes, pior, melhor)
+        .band-header {
+          .band-summary {
             display: flex;
-            align-items: flex-end;
-            gap: 0.375rem;
-            min-height: 180px;
-            padding-top: 1.5rem; // espaço para o score no topo
+            gap: 0.75rem;
+            align-items: center;
 
-            .channel-col {
+            .summary-item {
               display: flex;
               flex-direction: column;
               align-items: center;
-              flex: 1 1 0;
-              min-width: 42px;
-              max-width: 64px;
-              gap: 0.25rem;
-              cursor: default;
-              transition: transform 0.15s;
+              gap: 0.1rem;
 
-              &:hover {
-                transform: translateY(-3px);
-
-                .col-bar-track {
-                  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-                }
-              }
-
-              // Score no topo (sempre visível, alinhado à base)
-              .col-score {
-                font-size: 0.72rem;
-                font-weight: 700;
-                line-height: 1;
-                min-height: 0.85rem;
-              }
-
-              // Track da barra vertical (cresce de baixo → cima)
-              .col-bar-track {
-                width: 100%;
-                flex: 1;
-                max-height: 140px;
-                background: rgba(0, 0, 0, 0.04);
-                border-radius: 6px 6px 0 0;
-                overflow: hidden;
-                display: flex;
-                align-items: flex-end;
-                transition: box-shadow 0.2s;
-                border-bottom: 3px solid transparent;
-
-                .col-bar-fill {
-                  width: 100%;
-                  border-radius: 6px 6px 0 0;
-                  transition: height 0.35s ease;
-                  min-height: 2px; // sempre visível mesmo com score=0
-                }
-              }
-
-              // Número do canal + contagem na base
-              .col-channel {
-                font-size: 0.78rem;
-                font-weight: 600;
-                color: var(--text-primary);
-                line-height: 1.1;
-              }
-
-              .col-count {
-                font-size: 0.68rem;
+              .summary-label {
+                font-size: 0.65rem;
                 color: var(--text-secondary);
-                line-height: 1;
+                text-transform: uppercase;
+                letter-spacing: 0.03em;
               }
 
-              // Canal não-sobreposto: borda verde na base do track
-              &.non-overlapping {
-                .col-bar-track {
-                  border-bottom-color: #22c55e;
+              .summary-value {
+                font-size: 0.85rem;
+                font-weight: 700;
+                color: var(--text-primary);
+
+                &.summary-worst {
+                  color: #ef4444;
                 }
-                .col-channel {
+                &.summary-best {
                   color: #16a34a;
                 }
               }
+            }
+          }
+        }
 
-              // Canal atual: highlight indigo
-              &.channel-current {
-                .col-bar-track {
-                  border-bottom-color: #6366f1;
-                  background: rgba(99, 102, 241, 0.06);
+        // Gráfico de barras verticais com eixo Y e grid lines
+        .channel-chart {
+          display: flex;
+          gap: 0.5rem;
+          overflow-x: auto;
+          padding-bottom: 0.5rem;
+
+          // Eixo Y (escala 0-5)
+          .chart-y-axis {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            width: 20px;
+            height: 240px;
+            padding: 1.25rem 0 3.5rem 0; // alinha com plot area
+            flex-shrink: 0;
+
+            .y-label {
+              font-size: 0.65rem;
+              color: var(--text-secondary);
+              text-align: right;
+              font-weight: 600;
+            }
+          }
+
+          // Área do gráfico (plot)
+          .chart-plot {
+            flex: 1;
+            position: relative;
+            min-width: 0;
+
+            // Linhas de referência horizontais (grid)
+            .grid-lines {
+              position: absolute;
+              top: 1.25rem; // espaço para score
+              left: 0;
+              right: 0;
+              bottom: 3.5rem; // espaço para canal + badge
+              pointer-events: none;
+
+              .grid-line {
+                position: absolute;
+                left: 0;
+                right: 0;
+                height: 1px;
+                border-top: 1px dashed rgba(0, 0, 0, 0.08);
+
+                // Linha do score=5 (topo)
+                &.grid-line-high {
+                  top: 0;
                 }
-                .col-channel {
-                  color: #6366f1;
+                // Linha do score=3 (60% da altura)
+                &.grid-line-medium {
+                  top: 40%;
+                  border-top-color: rgba(245, 158, 11, 0.15);
+                }
+                // Linha do score=1 (80% da altura)
+                &.grid-line-low {
+                  top: 80%;
+                  border-top-color: rgba(34, 197, 94, 0.15);
+                }
+              }
+            }
 
-                  &::after {
-                    content: " ●";
-                    font-size: 0.6rem;
-                    color: #6366f1;
+            // Container das barras
+            .chart-bars {
+              display: flex;
+              align-items: flex-end;
+              gap: 0.5rem;
+              height: 240px;
+              position: relative;
+              z-index: 1;
+
+              .channel-col {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                flex: 1 1 0;
+                min-width: 60px;
+                max-width: 90px;
+                gap: 0.2rem;
+                cursor: default;
+                transition: transform 0.15s;
+
+                &:hover {
+                  transform: translateY(-4px);
+
+                  .col-bar-track {
+                    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
                   }
                 }
-              }
 
-              // Canal sugerido: borda verde destacada
-              &.channel-suggested {
-                .col-bar-track {
-                  border-bottom: 3px solid #16a34a;
-                  background: rgba(34, 197, 94, 0.06);
+                // Score no topo (número colorido)
+                .col-score {
+                  font-size: 0.8rem;
+                  font-weight: 800;
+                  line-height: 1;
+                  min-height: 1rem;
                 }
-                .col-channel {
-                  color: #16a34a;
-                  font-weight: 700;
 
-                  &::after {
-                    content: " ★";
-                    font-size: 0.65rem;
+                // Track da barra vertical (cresce de baixo → cima)
+                .col-bar-track {
+                  width: 100%;
+                  flex: 1;
+                  background: rgba(0, 0, 0, 0.03);
+                  border-radius: 6px 6px 0 0;
+                  overflow: hidden;
+                  display: flex;
+                  align-items: flex-end;
+                  transition: box-shadow 0.2s;
+                  border-bottom: 4px solid transparent;
+                  min-height: 100px;
+
+                  .col-bar-fill {
+                    width: 100%;
+                    border-radius: 6px 6px 0 0;
+                    transition: height 0.35s ease;
+                    min-height: 3px; // sempre visível mesmo com score=0
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+
+                    // Label dentro da barra (Baixa/Média/Alta)
+                    .col-bar-label {
+                      font-size: 0.68rem;
+                      font-weight: 700;
+                      color: #fff;
+                      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+                      white-space: nowrap;
+                      letter-spacing: 0.02em;
+                    }
+                  }
+                }
+
+                // Número do canal na base (grande e bold)
+                .col-channel {
+                  font-size: 0.9rem;
+                  font-weight: 700;
+                  color: var(--text-primary);
+                  line-height: 1.2;
+                  margin-top: 0.15rem;
+                }
+
+                // Badge de contagem de redes
+                .col-count-badge {
+                  font-size: 0.62rem;
+                  color: var(--text-secondary);
+                  background: rgba(0, 0, 0, 0.04);
+                  padding: 0.1rem 0.4rem;
+                  border-radius: 10px;
+                  line-height: 1.3;
+                  white-space: nowrap;
+
+                  &.has-neighbors {
+                    color: #b45309;
+                    background: rgba(245, 158, 11, 0.1);
+                    font-weight: 600;
+                  }
+                }
+
+                // Canal não-sobreposto: borda verde na base
+                &.non-overlapping {
+                  .col-bar-track {
+                    border-bottom-color: #22c55e;
+                  }
+                  .col-channel {
                     color: #16a34a;
                   }
                 }
-              }
 
-              // Atual + sugerido simultâneo
-              &.channel-current.channel-suggested {
-                .col-bar-track {
-                  border-bottom-color: #6366f1;
+                // Canal atual: highlight indigo
+                &.channel-current {
+                  .col-bar-track {
+                    border-bottom-color: #6366f1;
+                    background: rgba(99, 102, 241, 0.06);
+                  }
+                  .col-channel {
+                    color: #6366f1;
+
+                    &::after {
+                      content: " ●";
+                      font-size: 0.65rem;
+                      color: #6366f1;
+                    }
+                  }
+                }
+
+                // Canal sugerido: borda verde destacada + ★
+                &.channel-suggested {
+                  .col-bar-track {
+                    border-bottom: 4px solid #16a34a;
+                    background: rgba(34, 197, 94, 0.06);
+                  }
+                  .col-channel {
+                    color: #16a34a;
+                    font-weight: 800;
+
+                    &::after {
+                      content: " ★";
+                      font-size: 0.7rem;
+                      color: #16a34a;
+                    }
+                  }
+                }
+
+                &.channel-current.channel-suggested {
+                  .col-bar-track {
+                    border-bottom-color: #6366f1;
+                  }
                 }
               }
             }
@@ -1160,21 +1282,52 @@
         grid-template-columns: 1fr;
 
         .saturation-band {
-          .channel-chart .chart-area {
-            // Mobile: colunas mais estreitas para caber mais canais sem scroll
-            .channel-col {
-              min-width: 34px;
-              max-width: 48px;
-              gap: 0.15rem;
+          // Mobile: resumo compacto no header
+          .band-header .band-summary {
+            gap: 0.5rem;
 
-              .col-score {
-                font-size: 0.65rem;
+            .summary-item .summary-label {
+              font-size: 0.55rem;
+            }
+            .summary-item .summary-value {
+              font-size: 0.75rem;
+            }
+          }
+
+          .channel-chart {
+            .chart-y-axis {
+              height: 200px;
+              width: 16px;
+
+              .y-label {
+                font-size: 0.58rem;
               }
-              .col-channel {
-                font-size: 0.7rem;
-              }
-              .col-count {
-                font-size: 0.6rem;
+            }
+
+            .chart-plot {
+              .chart-bars {
+                height: 200px;
+                gap: 0.3rem;
+
+                .channel-col {
+                  min-width: 44px;
+                  max-width: 60px;
+                  gap: 0.12rem;
+
+                  .col-score {
+                    font-size: 0.68rem;
+                  }
+                  .col-bar-track {
+                    min-height: 80px;
+                  }
+                  .col-channel {
+                    font-size: 0.75rem;
+                  }
+                  .col-count-badge {
+                    font-size: 0.55rem;
+                    padding: 0.08rem 0.3rem;
+                  }
+                }
               }
             }
           }
