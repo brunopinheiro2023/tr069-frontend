@@ -659,9 +659,8 @@ export interface WifiHost {
 /** Ação corretiva proposta por um insight (quando actionable=true). */
 export interface WifiInsightAction {
   type:
-    | 'set_channel'
     | 'change_channel'
-    | 'set_power'
+    | 'adjust_power'
     | 'set_bandwidth'
     | 'enable_beamforming'
     | 'info';

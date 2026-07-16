@@ -13,6 +13,7 @@ import { Subscription } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CpeService } from '../../../../../../core/services/cpe.service';
 import { WebSocketService } from '../../../../../../core/services/websocket.service';
+import { LoadingService } from '../../../../../../core/services/loading.service';
 import { NeighborScanCardComponent } from '../cpe-diagnostics-tab-new/components/neighbor-scan-card/neighbor-scan-card.component';
 import { WifiNeighborScanEntry } from '../../../../../../core/models';
 import { sanitizeNumber, sanitizeString } from '@app/core/utils/sanitize';
@@ -74,6 +75,7 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
   constructor(
     private cpeService: CpeService,
     private wsService: WebSocketService,
+    private loadingService: LoadingService,
   ) {}
 
   ngOnInit(): void {
@@ -513,6 +515,7 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
     this.applyInProgress = true;
     this.applyError = null;
     this.applySuccess = null;
+    this.loadingService.startGlobal(`Aplicando otimização Wi-Fi (${band})...`);
     this.cdr.markForCheck();
 
     this.cpeService
@@ -527,6 +530,9 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
             this.cdr.markForCheck();
           }, 5000);
           this.cdr.markForCheck();
+          // Recarrega análise para refletir o novo dado aplicado
+          this.loadingService.stopGlobal();
+          this.loadAllData();
         },
         error: (err: { error?: { error?: string } }) => {
           this.applyInProgress = false;
@@ -535,6 +541,7 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
             this.applyError = null;
             this.cdr.markForCheck();
           }, 8000);
+          this.loadingService.stopGlobal();
           this.cdr.markForCheck();
         },
       });

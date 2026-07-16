@@ -725,11 +725,9 @@ export class NeighborScanCardComponent {
     const a = insight?.action;
     if (!a) return '';
     switch (a.type) {
-      case 'set_channel':
-        return `Canal ${a.band} → ${a.value}`;
       case 'change_channel':
         return `Canal ${a.band} → ${a.value}`;
-      case 'set_power':
+      case 'adjust_power':
         return `Potência ${a.band} → ${a.value}%`;
       case 'set_bandwidth':
         return `Largura ${a.band} → ${a.value}`;
