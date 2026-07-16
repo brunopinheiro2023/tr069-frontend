@@ -15,6 +15,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CpeService } from '../../../../core/services/cpe.service';
 import { WebSocketService } from '../../../../core/services/websocket.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { AuthService } from '../../../../core/services/auth.service';
 import { DataAgePipe } from '../../../../core/pipes/data-age.pipe';
 import { CpeDevice } from '../../../../core/models';
 
@@ -84,6 +85,7 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
     private cpeService: CpeService,
     private wsService: WebSocketService,
     private toastService: ToastService,
+    private authService: AuthService,
     private cdr: ChangeDetectorRef,
   ) {}
 
@@ -118,6 +120,94 @@ export class CpeDetailsComponent implements OnInit, OnDestroy {
   goToDiagnostics(): void {
     // Ativa a tab de diagnóstico internamente (não navega para rota inexistente)
     this.setActiveTab('diagnostics');
+  }
+
+  // ── SISTEMA DE QUARENTENA ──────────────────────────────────────────────
+  // Apenas admin e supervisor podem quarentenar/liberar CPEs.
+
+  /**
+   * Verifica se o usuário atual tem permissão para gerenciar quarentena.
+   * Backend exige role 'admin' ou 'supervisor' nos endpoints POST/DELETE /quarantine.
+   */
+  canManageQuarantine(): boolean {
+    const role = this.authService.getRole();
+    return role === 'admin' || role === 'supervisor';
+  }
+
+  /**
+   * Coloca a CPE atual em quarentena manual via API.
+   * Pede confirmação do técnico com motivo da quarentena.
+   */
+  quarantineCpe(): void {
+    const reason = prompt(
+      `Motivo da quarentena manual para ${this.serialNumber}?`,
+      'Isolamento manual — intervenção técnica necessária',
+    );
+    if (!reason) return;
+    this.cpeService.quarantineCpe(this.serialNumber, reason).subscribe({
+      next: () => {
+        this.toastService.success(
+          `CPE ${this.serialNumber} colocada em quarentena manual.`,
+        );
+        // Atualiza o estado local para refletir o badge imediatamente
+        if (this.cpe) {
+          this.cpe.quarantine = {
+            active: true,
+            reason: 'manual',
+            since: new Date().toISOString(),
+            detectedBy: this.authService.getUsername() || 'admin',
+          };
+          this.cdr.markForCheck();
+        }
+      },
+      error: (err: any) => {
+        if (err?.status === 409) {
+          this.toastService.warning(
+            `CPE ${this.serialNumber} já está em quarentena.`,
+          );
+        } else {
+          this.toastService.error(
+            `Falha ao quarentenar CPE ${this.serialNumber}.`,
+          );
+        }
+      },
+    });
+  }
+
+  /**
+   * Liberta a CPE atual da quarentena via API.
+   * Pede confirmação do técnico antes de liberar.
+   */
+  releaseCpe(): void {
+    if (
+      !confirm(
+        `Confirmar liberação da quarentena para ${this.serialNumber}?\n` +
+          'Todos os comandos outbound serão reativados.',
+      )
+    )
+      return;
+    this.cpeService.releaseCpe(this.serialNumber).subscribe({
+      next: () => {
+        this.toastService.success(
+          `CPE ${this.serialNumber} liberta de quarentena. Comandos reativados.`,
+        );
+        // Atualiza o estado local para remover o badge imediatamente
+        if (this.cpe) {
+          this.cpe.quarantine = {
+            active: false,
+            reason: null,
+            since: null,
+            detectedBy: null,
+          };
+          this.cdr.markForCheck();
+        }
+      },
+      error: () => {
+        this.toastService.error(
+          `Falha ao liberar quarentena da CPE ${this.serialNumber}.`,
+        );
+      },
+    });
   }
 
   ngOnInit(): void {

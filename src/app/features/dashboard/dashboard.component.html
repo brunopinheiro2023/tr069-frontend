@@ -665,6 +665,24 @@
                 >
                   <span class="material-symbols-rounded">lock</span> Bloqueada
                 </span>
+                <!-- Badge de quarentena — CPE em boot loop severo ou isolamento manual -->
+                <span
+                  class="quarantine-badge"
+                  *ngIf="cpe.quarantine?.active"
+                  [title]="
+                    'CPE em quarentena — motivo: ' +
+                    (cpe.quarantine.reason === 'boot_loop'
+                      ? 'boot loop detectado'
+                      : 'isolamento manual') +
+                    (cpe.quarantine.detectedBy
+                      ? ' por ' + cpe.quarantine.detectedBy
+                      : '') +
+                    '. Todas as ações outbound suspensas. Libere via API.'
+                  "
+                >
+                  <span class="material-symbols-rounded">shield_lock</span>
+                  Quarentena
+                </span>
                 <!-- Indicador de Tempo Atrás -->
                 <div class="time-ago">
                   {{ getTimeAgo(cpe.lastInform) }}

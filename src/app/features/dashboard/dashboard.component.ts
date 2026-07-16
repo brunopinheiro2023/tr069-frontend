@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Subject, from, of, timer, forkJoin, zip, Observable } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
@@ -1046,6 +1047,52 @@ export class DashboardComponent implements OnInit, OnDestroy {
       .subscribe((data: any) => {
         this.removeCpe(data.serialNumber);
       });
+
+    // cpe_quarantined: CPE foi colocada em quarentena (automática ou manual).
+    // Atualiza o estado da CPE no dashboard e notifica o técnico.
+    this.wsService
+      .onCpeQuarantined()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((data) => {
+        const hasChanges = this.processCpeUpdate({
+          serialNumber: data.serialNumber,
+          quarantine: {
+            active: true,
+            reason: data.reason as 'boot_loop' | 'manual',
+            since: new Date().toISOString(),
+            detectedBy: data.detectedBy,
+            bootLoopCount: data.bootLoopCount,
+          },
+        });
+        this.applyChangesIfAny(hasChanges);
+        const motivo =
+          data.reason === 'boot_loop'
+            ? 'boot loop detectado'
+            : 'quarentena manual';
+        this.toastService.warning(
+          `CPE ${data.serialNumber} em quarentena — ${motivo}. Ações suspensas.`,
+        );
+      });
+
+    // cpe_quarantine_released: CPE foi liberta de quarentena.
+    this.wsService
+      .onCpeQuarantineReleased()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((data) => {
+        const hasChanges = this.processCpeUpdate({
+          serialNumber: data.serialNumber,
+          quarantine: {
+            active: false,
+            reason: null,
+            since: null,
+            detectedBy: null,
+          },
+        });
+        this.applyChangesIfAny(hasChanges);
+        this.toastService.success(
+          `CPE ${data.serialNumber} liberta de quarentena. Comandos reativados.`,
+        );
+      });
   }
 
   // --- HELPER METHODS PARA ATUALIZAÇÃO EM TEMPO REAL ---
@@ -1285,9 +1332,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.cdr.markForCheck();
         }, 10000);
       },
-      error: () => {
+      error: (err: HttpErrorResponse) => {
         this.wakingUpCpes.delete(serialNumber);
         this.cdr.markForCheck();
+        if (this.isQuarantineError(err, serialNumber)) return;
         this.toastService.error(`Falha ao acordar a CPE ${serialNumber}.`);
       },
     });
@@ -1315,12 +1363,33 @@ export class DashboardComponent implements OnInit, OnDestroy {
           }
         }, 60000);
       },
-      error: () => {
+      error: (err: HttpErrorResponse) => {
         this.rebootingCpes.delete(serialNumber);
         this.cdr.markForCheck();
+        if (this.isQuarantineError(err, serialNumber)) return;
         this.toastService.error(`Falha ao reiniciar a CPE ${serialNumber}.`);
       },
     });
+  }
+
+  /**
+   * Verifica se o erro HTTP é 423 (CPE em quarentena) e exibe toast específico.
+   * Retorna true se o erro foi tratado (caller não deve mostrar toast genérico).
+   */
+  private isQuarantineError(
+    err: HttpErrorResponse,
+    serialNumber: string,
+  ): boolean {
+    if (err.status === 423 && err.error?.code === 'CPE_QUARANTINED') {
+      const reason = err.error?.error?.includes('boot_loop')
+        ? 'boot loop'
+        : 'isolamento manual';
+      this.toastService.warning(
+        `CPE ${serialNumber} em quarentena (${reason}). Libere a quarentena antes de enviar comandos.`,
+      );
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -1820,6 +1889,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       error?: boolean;
       serial?: string;
       message?: string;
+      status?: number;
     }
 
     from(serialNumbers)
@@ -1839,6 +1909,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
                       error: true,
                       serial,
                       message: err?.message || 'Erro desconhecido',
+                      status: err?.status,
                     }),
                 ),
               ),
@@ -1857,7 +1928,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
           if (Array.isArray(batchResults)) {
             batchResults.forEach((r) => {
               if (r && r.error) {
-                failed++;
+                if (r.status === 423) {
+                  // CPE em quarentena — não conta como falha genérica
+                  this.toastService.warning(
+                    `CPE ${r.serial} em quarentena — comando bloqueado.`,
+                  );
+                } else {
+                  failed++;
+                }
               } else {
                 success++;
               }

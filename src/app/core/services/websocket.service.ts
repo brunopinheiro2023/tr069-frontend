@@ -159,6 +159,24 @@ export class WebSocketService {
   onCpeOnline(): Observable<any> {
     return this.on('cpe_online');
   }
+  // Evento emitido quando uma CPE é colocada em quarentena (automática ou manual).
+  // Payload inclui serialNumber, reason, detectedBy, bootLoopCount.
+  onCpeQuarantined(): Observable<{
+    serialNumber: string;
+    reason: string;
+    detectedBy: string;
+    bootLoopCount?: number;
+  }> {
+    return this.on('cpe_quarantined');
+  }
+  // Evento emitido quando uma CPE é liberta de quarentena (manual ou auto-release).
+  // Payload inclui serialNumber e quarantinedFor (duração em segundos).
+  onCpeQuarantineReleased(): Observable<{
+    serialNumber: string;
+    quarantinedFor?: string;
+  }> {
+    return this.on('cpe_quarantine_released');
+  }
   onCpeBatchUpdate(): Observable<{
     eventName: string;
     items: any[];

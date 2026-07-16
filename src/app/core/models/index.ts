@@ -319,9 +319,26 @@ export interface CpeDevice {
   // F10: Contagem de alertas ativos (preenchido pelo endpoint /api/cpe via aggregation)
   activeAlertsCount?: number;
 
+  // Sistema de quarentena — espelha Cpe.js quarantine subdoc
+  quarantine?: CpeQuarantine;
+
   // Timestamps do Mongoose
   createdAt?: string;
   updatedAt?: string;
+}
+
+/**
+ * Espelha o subdocumento quarantine em src/models/Cpe.js — manter sincronizado.
+ * CPE quarentenada tem todas as ações outbound suspensas (SPV, SPA, probes, scans,
+ * diagnósticos, otimização). Inform ainda é processado (lastInform, isOnline, boot loop detection).
+ */
+export interface CpeQuarantine {
+  active: boolean;
+  reason: 'boot_loop' | 'manual' | null;
+  since: string | null; // ISO 8601
+  detectedBy: string | null; // 'system' | username
+  details?: string | null; // explicação human-readable para o técnico
+  bootLoopCount?: number; // snapshot do contador no momento da quarentena
 }
 
 export interface CpeLanDhcp {
@@ -1266,6 +1283,7 @@ export interface ProviderConfig {
   hasPppoePassword: boolean;
   isActive: boolean;
   autoWifiOptimizationEnabled: boolean;
+  periodicDiagnosticsEnabled: boolean;
 }
 
 export interface ProviderConfigUpdate {
@@ -1275,6 +1293,7 @@ export interface ProviderConfigUpdate {
   superAdminPassword?: string | null;
   pppoePassword?: string | null;
   autoWifiOptimizationEnabled?: boolean;
+  periodicDiagnosticsEnabled?: boolean;
 }
 
 // =============================================================================

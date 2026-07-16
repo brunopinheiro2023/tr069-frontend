@@ -644,6 +644,28 @@
   }
 }
 
+// Badge de quarentena — CPE em boot loop severo ou isolamento manual.
+// Cor amber/warning para distinguir de "offline" (vermelho) e "online" (verde).
+.quarantine-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  background-color: color-mix(in srgb, var(--accent-warning) 15%, transparent);
+  color: var(--accent-warning);
+  border: 1px solid color-mix(in srgb, var(--accent-warning) 30%, transparent);
+
+  .material-symbols-rounded {
+    font-size: 12px;
+  }
+}
+
 .time-ago {
   font-size: 11px;
   margin-top: 4px;
