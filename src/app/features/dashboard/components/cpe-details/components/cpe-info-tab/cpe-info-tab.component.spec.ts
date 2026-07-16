@@ -21,7 +21,12 @@ import { PLATFORM_ID } from '@angular/core';
 import { Subject, of, throwError, EMPTY } from 'rxjs';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 
-import { CpeInfoTabComponent } from './cpe-info-tab.component';
+import {
+  CpeInfoTabComponent,
+  isValidSerialNumber,
+  isValidTelemetryData,
+  hasTelemetryFields,
+} from './cpe-info-tab.component';
 import { CpeService } from '../../../../../../core/services/cpe.service';
 import { WebSocketService } from '../../../../../../core/services/websocket.service';
 import { ToastService } from '../../../../../../core/services/toast.service';
@@ -1505,6 +1510,182 @@ describe('CpeInfoTabComponent', () => {
       (component as any).stopRefreshCooldown();
       expect(component['refreshCountdownSeconds']).toBe(0);
     }));
+  });
+
+  // ── 22. isValidSerialNumber (regex) — segurança contra injection ──────────
+
+  describe('isValidSerialNumber — regex alfanumérica (segurança)', () => {
+    beforeEach(() => fixture.detectChanges());
+
+    it('não chama requestTelemetry com serial contendo caracteres especiais', () => {
+      component.serialNumber = "'; DROP TABLE--";
+      component.requestTelemetry();
+      expect(cpeStub.requestTelemetry).not.toHaveBeenCalled();
+    });
+
+    it('não chama requestVitals com serial contendo SQL injection', () => {
+      component.serialNumber = "admin' OR '1'='1";
+      component.requestVitals();
+      expect(cpeStub.requestVitals).not.toHaveBeenCalled();
+    });
+
+    it('não chama API com serial contendo path traversal', () => {
+      component.serialNumber = '../../../etc/passwd';
+      component.requestTelemetry();
+      expect(cpeStub.requestTelemetry).not.toHaveBeenCalled();
+    });
+
+    it('não chama API com serial contendo espaços', () => {
+      component.serialNumber = 'TEST 001';
+      component.requestTelemetry();
+      expect(cpeStub.requestTelemetry).not.toHaveBeenCalled();
+    });
+
+    it('aceita serial alfanumérico válido com hífen', () => {
+      component.serialNumber = 'ITBS-5F9B-8B8E';
+      component.requestTelemetry();
+      expect(cpeStub.requestTelemetry).toHaveBeenCalledWith('ITBS-5F9B-8B8E');
+    });
+
+    it('aceita serial alfanumérico puro', () => {
+      component.serialNumber = 'AABBCCDD11223344';
+      component.requestTelemetry();
+      expect(cpeStub.requestTelemetry).toHaveBeenCalledWith('AABBCCDD11223344');
+    });
+
+    it('rejeita serial muito curto (< 4 chars)', () => {
+      component.serialNumber = 'AB';
+      component.requestTelemetry();
+      expect(cpeStub.requestTelemetry).not.toHaveBeenCalled();
+    });
+
+    it('rejeita serial muito longo (> 64 chars)', () => {
+      component.serialNumber = 'A'.repeat(65);
+      component.requestTelemetry();
+      expect(cpeStub.requestTelemetry).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── 23. isValidTelemetryData — validação estrutural de payload WS ────────
+
+  describe('isValidTelemetryData — validação estrutural (segurança WS)', () => {
+    it('rejeita payload null', () => {
+      expect(isValidTelemetryData(null)).toBeFalse();
+    });
+
+    it('rejeita payload que não é objeto (string)', () => {
+      expect(isValidTelemetryData('not-an-object')).toBeFalse();
+    });
+
+    it('rejeita payload que não é objeto (número)', () => {
+      expect(isValidTelemetryData(42)).toBeFalse();
+    });
+
+    it('rejeita array (não é payload de telemetria)', () => {
+      expect(isValidTelemetryData([1, 2, 3])).toBeFalse();
+    });
+
+    it('aceita objeto vazio como partial válido (backend emite data:{})', () => {
+      expect(isValidTelemetryData({})).toBeTrue();
+    });
+
+    it('aceita objeto com campos desconhecidos (não corrompe estado)', () => {
+      expect(
+        isValidTelemetryData({
+          maliciousField: 'evil',
+          anotherField: 123,
+        }),
+      ).toBeTrue();
+    });
+
+    it('aceita payload com cpuUsage numérico', () => {
+      expect(isValidTelemetryData({ cpuUsage: 50 })).toBeTrue();
+    });
+
+    it('aceita payload com memoryFree e memoryTotal', () => {
+      expect(
+        isValidTelemetryData({
+          memoryFree: 1024,
+          memoryTotal: 4096,
+        }),
+      ).toBeTrue();
+    });
+
+    it('aceita payload com opticalRx string', () => {
+      expect(isValidTelemetryData({ opticalRx: '-20.5' })).toBeTrue();
+    });
+
+    it('aceita payload com campos conhecidos null (partial válido)', () => {
+      expect(
+        isValidTelemetryData({
+          cpuUsage: null,
+          memoryFree: null,
+        }),
+      ).toBeTrue();
+    });
+  });
+
+  // ── 24. hasTelemetryFields — verifica se payload tem dados para gráfico ──
+
+  describe('hasTelemetryFields — verificação de campos de telemetria', () => {
+    it('retorna false para null', () => {
+      expect(hasTelemetryFields(null)).toBeFalse();
+    });
+
+    it('retorna false para objeto vazio', () => {
+      expect(hasTelemetryFields({})).toBeFalse();
+    });
+
+    it('retorna false para objeto com apenas campos desconhecidos', () => {
+      expect(
+        hasTelemetryFields({
+          maliciousField: 'evil',
+          anotherField: 123,
+        }),
+      ).toBeFalse();
+    });
+
+    it('retorna false para campos conhecidos com valor null', () => {
+      expect(
+        hasTelemetryFields({
+          cpuUsage: null,
+          memoryFree: null,
+        }),
+      ).toBeFalse();
+    });
+
+    it('retorna false para campos conhecidos com valor undefined', () => {
+      expect(
+        hasTelemetryFields({
+          cpuUsage: undefined,
+        }),
+      ).toBeFalse();
+    });
+
+    it('retorna true para cpuUsage numérico', () => {
+      expect(hasTelemetryFields({ cpuUsage: 50 })).toBeTrue();
+    });
+
+    it('retorna true para memoryFree e memoryTotal', () => {
+      expect(
+        hasTelemetryFields({
+          memoryFree: 1024,
+          memoryTotal: 4096,
+        }),
+      ).toBeTrue();
+    });
+
+    it('retorna true para opticalRx string', () => {
+      expect(hasTelemetryFields({ opticalRx: '-20.5' })).toBeTrue();
+    });
+
+    it('retorna true para wanStatus boolean', () => {
+      expect(hasTelemetryFields({ wanStatus: true })).toBeTrue();
+    });
+
+    it('retorna false para array', () => {
+      expect(hasTelemetryFields([1, 2, 3])).toBeFalse();
+    });
   });
 });
 

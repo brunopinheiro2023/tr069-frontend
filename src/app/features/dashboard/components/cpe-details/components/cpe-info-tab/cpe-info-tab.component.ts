@@ -136,15 +136,60 @@ function logError(message: string, error?: unknown): void {
 }
 
 // ── Guard de validação de dados ──
-function isValidTelemetryData(data: unknown): data is TelemetryData {
+/**
+ * Validação estrutural de payload de telemetria recebido via WebSocket.
+ * Verifica que é objeto (não string/número/array). Aceita objeto vazio
+ * como "partial válido" (backend emite data:{} quando nenhum chunk respondeu).
+ * Rejeita payloads não-objeto que poderiam corromper o estado do componente.
+ */
+export function isValidTelemetryData(data: unknown): data is TelemetryData {
   if (!data || typeof data !== 'object') return false;
+  // Array é objeto em JS mas não é payload de telemetria válido
+  if (Array.isArray(data)) return false;
   return true;
 }
 
-function isValidSerialNumber(serial: string): boolean {
-  return (
-    typeof serial === 'string' && serial.length >= 4 && serial.length <= 40
+/**
+ * Verifica se o payload tem pelo menos 1 campo de telemetria conhecido
+ * com tipo primitivo válido. Usado para decidir se atualiza gráfico.
+ */
+const TELEMETRY_KNOWN_FIELDS = [
+  'cpuUsage',
+  'memoryFree',
+  'memoryTotal',
+  'memUsedPercent',
+  'opticalRx',
+  'opticalTx',
+  'uptime',
+  'wanStatus',
+  'gponStatus',
+  'hostCount',
+  'wanLatency',
+  'wanJitter',
+] as const;
+
+export function hasTelemetryFields(data: unknown): boolean {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+  const obj = data as Record<string, unknown>;
+  return TELEMETRY_KNOWN_FIELDS.some(
+    (field) =>
+      obj[field] !== undefined &&
+      obj[field] !== null &&
+      (typeof obj[field] === 'number' ||
+        typeof obj[field] === 'string' ||
+        typeof obj[field] === 'boolean'),
   );
+}
+
+/**
+ * Valida serial number com regex alfanumérica (alinhada com backend SERIAL_REGEX).
+ * Previne injection de caracteres perigosos em chamadas HTTP e WebSocket.
+ * Backend: /^[A-Za-z0-9\-.]{1,64}$/ (src/validators/schemas.js linha 25)
+ */
+const SERIAL_REGEX = /^[A-Za-z0-9\-.]{4,64}$/;
+
+export function isValidSerialNumber(serial: string): boolean {
+  return typeof serial === 'string' && SERIAL_REGEX.test(serial);
 }
 
 /** Valida se uma string é um endereço IPv4 válido */
@@ -2081,7 +2126,11 @@ export class CpeInfoTabComponent implements OnInit, OnDestroy, OnChanges {
         const isBackground = event.tabContext === 'background';
 
         // Atualiza gráfico O(1) - apenas se não for coleta on-demand (evita pontos parciais)
-        if (event.data && !this.suppressChartUpdates) {
+        if (
+          event.data &&
+          !this.suppressChartUpdates &&
+          hasTelemetryFields(event.data)
+        ) {
           this.addTelemetryPointToChart(event.data, event.timestamp);
         }
 

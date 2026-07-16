@@ -510,9 +510,11 @@ export class CpeService {
    * Retorna { success, data, timestamp, ageSeconds } ou 404 se vazio.
    */
   getTelemetryCache(serialNumber: string): Observable<TelemetryCacheResponse> {
-    return this.http.get<TelemetryCacheResponse>(
-      `${environment.apiUrl}/api/cpe/${serialNumber}/telemetry/cache`,
-    );
+    return this.http
+      .get<TelemetryCacheResponse>(
+        `${environment.apiUrl}/api/cpe/${serialNumber}/telemetry/cache`,
+      )
+      .pipe(timeout(10_000));
   }
 
   /**
@@ -533,10 +535,12 @@ export class CpeService {
     serialNumber: string,
     hours: number = 6,
   ): Observable<TelemetryHistoryResponse> {
-    return this.http.get<TelemetryHistoryResponse>(
-      `${environment.apiUrl}/api/cpe/${serialNumber}/telemetry/raw`,
-      { params: { hours: String(hours) } },
-    );
+    return this.http
+      .get<TelemetryHistoryResponse>(
+        `${environment.apiUrl}/api/cpe/${serialNumber}/telemetry/raw`,
+        { params: { hours: String(hours) } },
+      )
+      .pipe(timeout(30_000));
   }
 
   /**
@@ -549,10 +553,12 @@ export class CpeService {
     serialNumber: string,
     hours: number = 6,
   ): Observable<TelemetryHistoryResponse> {
-    return this.http.get<TelemetryHistoryResponse>(
-      `${environment.apiUrl}/api/cpe/${serialNumber}/telemetry/vitals-history`,
-      { params: { hours: String(hours) } },
-    );
+    return this.http
+      .get<TelemetryHistoryResponse>(
+        `${environment.apiUrl}/api/cpe/${serialNumber}/telemetry/vitals-history`,
+        { params: { hours: String(hours) } },
+      )
+      .pipe(timeout(30_000));
   }
 
   /**
@@ -562,29 +568,36 @@ export class CpeService {
   getLatestVitals(
     serialNumber: string,
   ): Observable<{ success: boolean; data: TelemetrySnapshot }> {
-    return this.http.get<{ success: boolean; data: TelemetrySnapshot }>(
-      `${this.API_URL}/${serialNumber}/telemetry/vitals/latest`,
-    );
+    return this.http
+      .get<{
+        success: boolean;
+        data: TelemetrySnapshot;
+      }>(`${this.API_URL}/${serialNumber}/telemetry/vitals/latest`)
+      .pipe(timeout(10_000));
   }
 
   getTelemetryHourly(
     serialNumber: string,
     days: number = 7,
   ): Observable<TelemetryHistoryResponse> {
-    return this.http.get<TelemetryHistoryResponse>(
-      `${environment.apiUrl}/api/cpe/${serialNumber}/telemetry/hourly`,
-      { params: { days: String(days) } },
-    );
+    return this.http
+      .get<TelemetryHistoryResponse>(
+        `${environment.apiUrl}/api/cpe/${serialNumber}/telemetry/hourly`,
+        { params: { days: String(days) } },
+      )
+      .pipe(timeout(30_000));
   }
 
   getTelemetryDaily(
     serialNumber: string,
     days: number = 30,
   ): Observable<TelemetryHistoryResponse> {
-    return this.http.get<TelemetryHistoryResponse>(
-      `${environment.apiUrl}/api/cpe/${serialNumber}/telemetry/daily`,
-      { params: { days: String(days) } },
-    );
+    return this.http
+      .get<TelemetryHistoryResponse>(
+        `${environment.apiUrl}/api/cpe/${serialNumber}/telemetry/daily`,
+        { params: { days: String(days) } },
+      )
+      .pipe(timeout(30_000));
   }
 
   /**
@@ -964,24 +977,24 @@ export class CpeService {
   /**
    * Busca breakdown do Health Score por CPE (5 componentes + total).
    */
-  getHealthScoreBreakdown(
-    serialNumber: string,
-  ): Observable<{
+  getHealthScoreBreakdown(serialNumber: string): Observable<{
     total: number;
     components: Record<string, { score: number; weight: number }>;
   }> {
-    return this.http.get<any>(
-      `${environment.apiUrl}/api/cpe/${serialNumber}/health-score-breakdown`,
-    );
+    return this.http
+      .get<any>(
+        `${environment.apiUrl}/api/cpe/${serialNumber}/health-score-breakdown`,
+      )
+      .pipe(timeout(10_000));
   }
 
   /**
    * Busca alertas de telemetria específicos de uma CPE.
    */
   getCpeAlerts(serialNumber: string): Observable<{ data: any[] }> {
-    return this.http.get<any>(
-      `${environment.apiUrl}/api/cpe/${serialNumber}/alerts`,
-    );
+    return this.http
+      .get<any>(`${environment.apiUrl}/api/cpe/${serialNumber}/alerts`)
+      .pipe(timeout(10_000));
   }
 
   /**
@@ -990,24 +1003,24 @@ export class CpeService {
   getIncidentStatus(
     serialNumber: string,
   ): Observable<{ active: boolean; expiresInSeconds: number | null }> {
-    return this.http.get<any>(
-      `${environment.apiUrl}/api/cpe/${serialNumber}/incident-status`,
-    );
+    return this.http
+      .get<any>(`${environment.apiUrl}/api/cpe/${serialNumber}/incident-status`)
+      .pipe(timeout(10_000));
   }
 
   /**
    * Busca última intervenção (AuditLog REBOOT + snapshots before/after).
    */
-  getLastIntervention(
-    serialNumber: string,
-  ): Observable<{
+  getLastIntervention(serialNumber: string): Observable<{
     found: boolean;
     before?: any;
     after?: any;
     pending?: boolean;
   }> {
-    return this.http.get<any>(
-      `${environment.apiUrl}/api/cpe/${serialNumber}/last-intervention`,
-    );
+    return this.http
+      .get<any>(
+        `${environment.apiUrl}/api/cpe/${serialNumber}/last-intervention`,
+      )
+      .pipe(timeout(10_000));
   }
 }
