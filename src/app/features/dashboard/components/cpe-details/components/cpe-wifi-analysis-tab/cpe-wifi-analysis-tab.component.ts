@@ -60,10 +60,12 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
 
   // ── Apply Optimization ──────────────────────────────────────────────────
   applyInProgress = false;
+  applyWaitingConfirmation = false;
   applyError: string | null = null;
   applySuccess: string | null = null;
   private applySuccessTimer?: ReturnType<typeof setTimeout>;
   private applyErrorTimer?: ReturnType<typeof setTimeout>;
+  private applyFailsafe?: ReturnType<typeof setTimeout>;
 
   // ── Loading Coordenado ────────────────────────────────────────────────────
   private loadingCount = 0;
@@ -90,7 +92,10 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
     // Inscreve-se na sala da CPE para receber eventos WebSocket específicos
     this.wsService.subscribeToCpe(this.serialNumber);
 
-    this.loadAllData();
+    // forceRefresh=true ao abrir: bypassa cache Redis (90s) e recalcula com dados
+    // atuais do MongoDB. Garante que insights reflitam o canal/bandwidth configurado
+    // mais recente, mesmo se o cache Redis ainda tiver valores antigos.
+    this.loadAllData(true);
     this.setupWebSocketListeners();
   }
 
@@ -103,6 +108,7 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
     }
     if (this.applySuccessTimer) clearTimeout(this.applySuccessTimer);
     if (this.applyErrorTimer) clearTimeout(this.applyErrorTimer);
+    if (this.applyFailsafe) clearTimeout(this.applyFailsafe);
   }
 
   /**
@@ -132,24 +138,24 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
    * Carrega todos os dados da aba de análise WiFi.
    * O loading só termina quando todos os dados são carregados ou em caso de erro.
    */
-  loadAllData(): void {
+  loadAllData(forceRefresh = false): void {
     if (!this.isValidSerialNumber(this.serialNumber)) {
       return;
     }
 
-    this.loadNeighborScanData();
+    this.loadNeighborScanData(forceRefresh);
     this.loadNeighborScanHistory();
-    this.loadWifiInsights();
+    this.loadWifiInsights(forceRefresh);
   }
 
-  loadNeighborScanData(): void {
+  loadNeighborScanData(forceRefresh = false): void {
     if (!this.isValidSerialNumber(this.serialNumber)) {
       return;
     }
 
     this.startLoading();
     this.cpeService
-      .getWifiDiagnostics(this.serialNumber)
+      .getWifiDiagnostics(this.serialNumber, forceRefresh)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (data) => {
@@ -207,14 +213,14 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
   /**
    * Carrega insights Wi-Fi do endpoint /wifi-hosts.
    */
-  private loadWifiInsights(): void {
+  private loadWifiInsights(forceRefresh = false): void {
     if (!this.isValidSerialNumber(this.serialNumber)) {
       return;
     }
     this.insightsLoading = true;
     this.startLoading();
     this.cpeService
-      .getWifiHosts(this.serialNumber) // retorna { hosts, insights, summary }
+      .getWifiHosts(this.serialNumber, forceRefresh) // retorna { hosts, insights, summary }
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (res: { insights?: WifiInsight[]; summary?: WifiHostsData }) => {
@@ -286,11 +292,44 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
             } as WifiDiagnosticsData;
             this.cdr.markForCheck();
           }
-          this.loadNeighborScanData();
-          this.loadWifiInsights();
+          this.loadNeighborScanData(true);
+          this.loadWifiInsights(true);
           this.loadNeighborScanHistory();
         }
       });
+
+    // cpe_updated: emitido após SPV (mudança manual de canal/bandwidth via nosso sistema).
+    // O pai cpe-details já atualiza this.cpe via mergeCpe, mas NÃO dispara recálculo dos
+    // insights. Aqui detectamos mudança em wifi2g/wifi5g.channel ou .bandwidth e forçamos
+    // reload com forceRefresh=true (bypassa cache Redis 90s).
+    //
+    // Guard !== undefined: o evento cpe_updated é emitido por múltiplas origens (SPV, GPV,
+    // handleInform) com payloads parciais. O SPV handler envia wifi2g completo (com channel),
+    // mas o GPV handler envia só wifi2g.bandwidth (sem channel). Sem o guard, campos
+    // ausentes (undefined) no payload disparariam reloads falsos em cada Inform/GPV.
+    this.wsSubscription.add(
+      this.wsService.onCpeUpdated().subscribe((updatedCpe) => {
+        if (!updatedCpe || updatedCpe.serialNumber !== this.serialNumber)
+          return;
+        const old2gCh = this.cpe?.wifi2g?.channel;
+        const old5gCh = this.cpe?.wifi5g?.channel;
+        const old2gBw = this.cpe?.wifi2g?.bandwidth;
+        const old5gBw = this.cpe?.wifi5g?.bandwidth;
+        const new2gCh = updatedCpe.wifi2g?.channel;
+        const new5gCh = updatedCpe.wifi5g?.channel;
+        const new2gBw = updatedCpe.wifi2g?.bandwidth;
+        const new5gBw = updatedCpe.wifi5g?.bandwidth;
+        const channelChanged =
+          (new2gCh !== undefined && new2gCh !== old2gCh) ||
+          (new5gCh !== undefined && new5gCh !== old5gCh);
+        const bandwidthChanged =
+          (new2gBw !== undefined && new2gBw !== old2gBw) ||
+          (new5gBw !== undefined && new5gBw !== old5gBw);
+        if (channelChanged || bandwidthChanged) {
+          this.loadAllData(true);
+        }
+      }),
+    );
 
     // Auto-otimização de canal aplicada pelo scheduler — mostra notificação visual
     // para o técnico/admin conectado, indicando que o sistema trocou o canal
@@ -309,8 +348,17 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
         }, 8000);
         this.cdr.markForCheck();
         // Recarrega dados para refletir o novo canal aplicado
-        this.loadWifiInsights();
-        this.loadNeighborScanData();
+        this.loadAllData(true);
+      }),
+    );
+
+    // Resultado da verificação pós-SPV de otimização Wi-Fi manual (REST API).
+    // O backend emite este evento 30s após enfileirar o SetParameterValues,
+    // verificando se a CPE aplicou o valor solicitado.
+    // CRÍTICO: o loading (applyInProgress) só desliga aqui, não no POST 200.
+    this.wsSubscription.add(
+      this.wsService.onWifiOptimizationResult().subscribe((event) => {
+        this.handleWifiOptimizationResult(event);
       }),
     );
   }
@@ -515,6 +563,7 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
     if (!type || !band || value === undefined) return;
 
     this.applyInProgress = true;
+    this.applyWaitingConfirmation = false;
     this.applyError = null;
     this.applySuccess = null;
     this.cdr.markForCheck();
@@ -524,29 +573,49 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
-          this.applyInProgress = false;
-          this.applySuccess = `Otimização "${band}" enviada para a CPE.`;
-          this.applySuccessTimer = setTimeout(() => {
-            this.applySuccess = null;
-            this.cdr.markForCheck();
-          }, 5000);
+          // POST 200 = task enfileirada na CPE, NÃO confirmada.
+          // Mantém applyInProgress=true e aguarda wifi_optimization_result via WS.
+          // O backend verifica em 30s se a CPE aplicou o valor e emite o evento.
+          this.applyWaitingConfirmation = true;
+          this.applySuccess = `Otimização "${band}" enviada. Aguardando confirmação da CPE...`;
           this.cdr.markForCheck();
-          // Recarrega análise para refletir o novo dado aplicado.
-          // GETs usam X-Skip-Loading → não ativam overlay global (sem flicker).
-          this.loadAllData();
+
+          // Failsafe: se o WS não emitir em 65s (30s verify + margem),
+          // desliga loading e recarrega com dados disponíveis.
+          if (this.applyFailsafe) clearTimeout(this.applyFailsafe);
+          this.applyFailsafe = setTimeout(() => {
+            if (this.applyInProgress) {
+              this.applyInProgress = false;
+              this.applyWaitingConfirmation = false;
+              this.applySuccess = null;
+              this.applyError =
+                'Tempo limite aguardando confirmação da CPE. Verifique o status manualmente.';
+              this.applyErrorTimer = setTimeout(() => {
+                this.applyError = null;
+                this.cdr.markForCheck();
+              }, 8000);
+              this.loadAllData(true);
+              this.cdr.markForCheck();
+            }
+          }, 65000);
         },
         error: (err: {
           status?: number;
           error?: { error?: string; message?: string };
         }) => {
           this.applyInProgress = false;
+          this.applyWaitingConfirmation = false;
+          if (this.applyFailsafe) {
+            clearTimeout(this.applyFailsafe);
+            this.applyFailsafe = undefined;
+          }
           // 409 = recomendação desatualizada — mostra mensagem completa e recarrega análise
           if (err?.status === 409) {
             this.applyError =
               err?.error?.message ||
               'Recomendação desatualizada. Recarregue a análise.';
             // Auto-recarrega para que o técnico veja a sugestão atualizada
-            this.loadAllData();
+            this.loadAllData(true);
           } else {
             this.applyError =
               err?.error?.message ||
@@ -560,6 +629,50 @@ export class CpeWifiAnalysisTabComponent implements OnInit, OnDestroy {
           this.cdr.markForCheck();
         },
       });
+  }
+
+  /**
+   * Processa o resultado da otimização Wi-Fi recebido via WebSocket.
+   * Chamado quando o backend emite wifi_optimization_result (30s pós-enqueue).
+   */
+  private handleWifiOptimizationResult(event: {
+    serialNumber: string;
+    type: string;
+    band: string;
+    expectedValue: string | number;
+    actualValue: string | number;
+    success: boolean;
+    message: string;
+  }): void {
+    if (!event || event.serialNumber !== this.serialNumber) return;
+    if (!this.applyInProgress) return;
+
+    if (this.applyFailsafe) {
+      clearTimeout(this.applyFailsafe);
+      this.applyFailsafe = undefined;
+    }
+
+    this.applyInProgress = false;
+    this.applyWaitingConfirmation = false;
+
+    if (event.success) {
+      this.applySuccess = `Otimização "${event.band}" confirmada pela CPE.`;
+      this.applySuccessTimer = setTimeout(() => {
+        this.applySuccess = null;
+        this.cdr.markForCheck();
+      }, 5000);
+      // Recarrega análise com dados frescos — CPE já aplicou o novo valor.
+      // forceRefresh=true para bypassar cache Redis (TTL 90s) que ainda teria o canal antigo.
+      this.loadAllData(true);
+    } else {
+      this.applyError =
+        event.message || 'CPE não aplicou a otimização solicitada.';
+      this.applyErrorTimer = setTimeout(() => {
+        this.applyError = null;
+        this.cdr.markForCheck();
+      }, 8000);
+    }
+    this.cdr.markForCheck();
   }
 
   /**

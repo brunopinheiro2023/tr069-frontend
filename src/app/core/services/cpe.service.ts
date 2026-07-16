@@ -371,7 +371,10 @@ export class CpeService {
    * Fonte: parâmetros já no MongoDB.
    * @param serialNumber - Número de série da CPE
    */
-  getWifiHosts(serialNumber: string): Observable<WifiHostsData> {
+  getWifiHosts(
+    serialNumber: string,
+    forceRefresh = false,
+  ): Observable<WifiHostsData> {
     const cacheKey = `wifi_hosts_${serialNumber}`;
     let cached = this.cache.get(cacheKey);
 
@@ -387,7 +390,11 @@ export class CpeService {
       }
     }
 
-    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+    if (
+      !forceRefresh &&
+      cached &&
+      Date.now() - cached.timestamp < this.CACHE_TTL
+    ) {
       return of(cached.data as WifiHostsData);
     }
 

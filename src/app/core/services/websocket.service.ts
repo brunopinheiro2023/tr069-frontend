@@ -218,6 +218,22 @@ export class WebSocketService {
     return this.on('auto_wifi_optimize_applied');
   }
 
+  // Resultado da verificação pós-SPV de otimização Wi-Fi manual (REST API).
+  // Emitido no room cpe_${serialNumber} 30s após o enqueue do SetParameterValues,
+  // verificando se a CPE aplicou o valor solicitado.
+  // success=true → CPE aplicou; success=false → CPE rejeitou ou não suporta.
+  onWifiOptimizationResult(): Observable<{
+    serialNumber: string;
+    type: string;
+    band: string;
+    expectedValue: string | number;
+    actualValue: string | number;
+    success: boolean;
+    message: string;
+  }> {
+    return this.on('wifi_optimization_result');
+  }
+
   // Diagnósticos ativos — 4 pares de evento (ipping/traceroute/dnslookup/udpecho × completed/error)
   // já emitidos pelo backend na sala cpe_${serialNumber}. Reaproveita os eventos
   // existentes — só adiciona listeners novos no frontend.

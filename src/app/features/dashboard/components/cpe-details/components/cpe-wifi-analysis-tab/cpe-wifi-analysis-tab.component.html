@@ -126,7 +126,16 @@
     </div>
 
     <!-- Apply feedback global — fica acima do card para visibilidade -->
-    <div *ngIf="applySuccess" class="apply-feedback apply-success">
+    <div *ngIf="applyWaitingConfirmation" class="apply-feedback apply-waiting">
+      <span class="material-symbols-rounded animate-spin"
+        >progress_activity</span
+      >
+      <span>{{ applySuccess }}</span>
+    </div>
+    <div
+      *ngIf="applySuccess && !applyWaitingConfirmation"
+      class="apply-feedback apply-success"
+    >
       <span class="material-symbols-rounded">check_circle</span>
       <span>{{ applySuccess }}</span>
     </div>

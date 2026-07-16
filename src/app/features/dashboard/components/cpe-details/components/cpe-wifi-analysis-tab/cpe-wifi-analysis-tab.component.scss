@@ -254,6 +254,16 @@
         color: #dc2626;
       }
     }
+
+    &.apply-waiting {
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+      color: #d97706;
+
+      .material-symbols-rounded {
+        color: #d97706;
+      }
+    }
   }
 
   // ─── Seção de Histórico de Scans ───────────────────────────────────────────
