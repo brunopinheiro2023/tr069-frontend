@@ -751,7 +751,7 @@
             flex-direction: column;
             justify-content: space-between;
             width: 20px;
-            height: 240px;
+            height: 300px;
             padding: 1.25rem 0 3.5rem 0; // alinha com plot area
             flex-shrink: 0;
 
@@ -807,7 +807,7 @@
               display: flex;
               align-items: flex-end;
               gap: 0.5rem;
-              height: 240px;
+              height: 300px;
               position: relative;
               z-index: 1;
 
@@ -853,7 +853,7 @@
                   align-items: flex-end;
                   transition: box-shadow 0.2s;
                   border-bottom: 4px solid transparent;
-                  min-height: 100px;
+                  min-height: 140px;
                   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
 
                   .col-bar-fill {
@@ -1318,7 +1318,7 @@
 
           .channel-chart {
             .chart-y-axis {
-              height: 200px;
+              height: 250px;
               width: 16px;
 
               .y-label {
@@ -1328,7 +1328,7 @@
 
             .chart-plot {
               .chart-bars {
-                height: 200px;
+                height: 250px;
                 gap: 0.3rem;
 
                 .channel-col {
@@ -1340,7 +1340,7 @@
                     font-size: 0.68rem;
                   }
                   .col-bar-track {
-                    min-height: 80px;
+                    min-height: 120px;
                   }
                   .col-channel {
                     font-size: 0.75rem;
