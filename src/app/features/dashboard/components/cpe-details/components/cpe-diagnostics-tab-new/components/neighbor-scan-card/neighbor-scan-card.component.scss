@@ -690,140 +690,142 @@
           }
         }
 
-        .channel-grid {
-          display: flex;
-          flex-direction: column;
-          gap: 0.625rem;
+        // Legenda — novos dots para atual/sugerido
+        .band-legend {
+          .legend-inline {
+            .dot.dot-current {
+              background: #6366f1;
+            }
+            .dot.dot-suggested {
+              background: #16a34a;
+            }
+          }
+        }
 
-          .channel-bar {
+        // Gráfico de barras verticais (cada canal = 1 coluna)
+        .channel-chart {
+          overflow-x: auto;
+          padding-bottom: 0.5rem;
+
+          .chart-area {
             display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.625rem;
-            background: var(--bg-surface);
-            border-radius: 8px;
-            border-left: 3px solid transparent;
-            transition: all 0.2s;
+            align-items: flex-end;
+            gap: 0.375rem;
+            min-height: 180px;
+            padding-top: 1.5rem; // espaço para o score no topo
 
-            &:hover {
-              transform: translateX(2px);
-              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-            }
-
-            &.non-overlapping {
-              border-left-color: #22c55e;
-              background: linear-gradient(
-                90deg,
-                rgba(34, 197, 94, 0.05) 0%,
-                var(--bg-surface) 100%
-              );
-            }
-
-            &.channel-current {
-              background: linear-gradient(
-                90deg,
-                rgba(99, 102, 241, 0.08) 0%,
-                var(--bg-surface) 100%
-              );
-              border: 1px solid rgba(99, 102, 241, 0.3);
-
-              .channel-num::after {
-                content: " (atual)";
-                font-size: 0.75rem;
-                color: #6366f1;
-                font-weight: 500;
-              }
-            }
-
-            // Canal sugerido pelo backend (bestChannel com shouldChange=true)
-            &.channel-suggested {
-              background: linear-gradient(
-                90deg,
-                rgba(34, 197, 94, 0.1) 0%,
-                var(--bg-surface) 100%
-              );
-              border: 1px solid rgba(34, 197, 94, 0.35);
-              border-left: 3px solid #16a34a;
-
-              .channel-num::after {
-                content: " ★";
-                font-size: 0.75rem;
-                color: #16a34a;
-                font-weight: 600;
-              }
-            }
-
-            // Estado quando ambos: atual e sugerido (não deveria acontecer,
-            // mas se shouldChange=false o sugerido não é destacado)
-            &.channel-current.channel-suggested {
-              border-left-color: #6366f1;
-            }
-
-            .channel-info {
+            .channel-col {
               display: flex;
               flex-direction: column;
-              gap: 0.125rem;
-              min-width: 50px;
+              align-items: center;
+              flex: 1 1 0;
+              min-width: 42px;
+              max-width: 64px;
+              gap: 0.25rem;
+              cursor: default;
+              transition: transform 0.15s;
 
-              .channel-num {
-                font-weight: 600;
-                color: var(--text-primary);
-                font-size: 0.9rem;
-              }
+              &:hover {
+                transform: translateY(-3px);
 
-              .channel-count {
-                font-size: 0.75rem;
-                color: var(--text-secondary);
-              }
-            }
-
-            .channel-progress {
-              flex: 1;
-              height: 24px;
-              background: rgba(0, 0, 0, 0.05);
-              border-radius: 4px;
-              overflow: hidden;
-              min-width: 80px;
-              position: relative;
-
-              .progress-bar {
-                height: 100%;
-                border-radius: 4px;
-                transition: width 0.3s ease;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                position: relative;
-
-                .progress-label {
-                  font-size: 0.7rem;
-                  font-weight: 600;
-                  color: #fff;
-                  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-                  white-space: nowrap;
-                  padding: 0 0.5rem;
-                  z-index: 1;
+                .col-bar-track {
+                  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
                 }
               }
-            }
 
-            .channel-score {
-              min-width: 90px;
-              text-align: right;
-              display: flex;
-              flex-direction: column;
-              align-items: flex-end;
-              gap: 0.125rem;
-
-              .score-label {
-                font-size: 0.7rem;
-                color: var(--text-secondary);
+              // Score no topo (sempre visível, alinhado à base)
+              .col-score {
+                font-size: 0.72rem;
+                font-weight: 700;
+                line-height: 1;
+                min-height: 0.85rem;
               }
 
-              .score-value {
-                font-size: 0.85rem;
+              // Track da barra vertical (cresce de baixo → cima)
+              .col-bar-track {
+                width: 100%;
+                flex: 1;
+                max-height: 140px;
+                background: rgba(0, 0, 0, 0.04);
+                border-radius: 6px 6px 0 0;
+                overflow: hidden;
+                display: flex;
+                align-items: flex-end;
+                transition: box-shadow 0.2s;
+                border-bottom: 3px solid transparent;
+
+                .col-bar-fill {
+                  width: 100%;
+                  border-radius: 6px 6px 0 0;
+                  transition: height 0.35s ease;
+                  min-height: 2px; // sempre visível mesmo com score=0
+                }
+              }
+
+              // Número do canal + contagem na base
+              .col-channel {
+                font-size: 0.78rem;
                 font-weight: 600;
                 color: var(--text-primary);
+                line-height: 1.1;
+              }
+
+              .col-count {
+                font-size: 0.68rem;
+                color: var(--text-secondary);
+                line-height: 1;
+              }
+
+              // Canal não-sobreposto: borda verde na base do track
+              &.non-overlapping {
+                .col-bar-track {
+                  border-bottom-color: #22c55e;
+                }
+                .col-channel {
+                  color: #16a34a;
+                }
+              }
+
+              // Canal atual: highlight indigo
+              &.channel-current {
+                .col-bar-track {
+                  border-bottom-color: #6366f1;
+                  background: rgba(99, 102, 241, 0.06);
+                }
+                .col-channel {
+                  color: #6366f1;
+
+                  &::after {
+                    content: " ●";
+                    font-size: 0.6rem;
+                    color: #6366f1;
+                  }
+                }
+              }
+
+              // Canal sugerido: borda verde destacada
+              &.channel-suggested {
+                .col-bar-track {
+                  border-bottom: 3px solid #16a34a;
+                  background: rgba(34, 197, 94, 0.06);
+                }
+                .col-channel {
+                  color: #16a34a;
+                  font-weight: 700;
+
+                  &::after {
+                    content: " ★";
+                    font-size: 0.65rem;
+                    color: #16a34a;
+                  }
+                }
+              }
+
+              // Atual + sugerido simultâneo
+              &.channel-current.channel-suggested {
+                .col-bar-track {
+                  border-bottom-color: #6366f1;
+                }
               }
             }
           }
@@ -1156,6 +1158,27 @@
     .saturation-content {
       .saturation-bands {
         grid-template-columns: 1fr;
+
+        .saturation-band {
+          .channel-chart .chart-area {
+            // Mobile: colunas mais estreitas para caber mais canais sem scroll
+            .channel-col {
+              min-width: 34px;
+              max-width: 48px;
+              gap: 0.15rem;
+
+              .col-score {
+                font-size: 0.65rem;
+              }
+              .col-channel {
+                font-size: 0.7rem;
+              }
+              .col-count {
+                font-size: 0.6rem;
+              }
+            }
+          }
+        }
       }
     }
   }
