@@ -53,13 +53,14 @@
       <div
         class="card metric-card clickable-card"
         [class.active-warning]="filterStatus === 'quarantined'"
+        [class.inactive-card]="globalQuarantinedCount === 0"
+        [style.pointer-events]="globalQuarantinedCount === 0 ? 'none' : 'auto'"
         (click)="
           onStatusFilterChange(
             filterStatus === 'quarantined' ? 'all' : 'quarantined'
           )
         "
         title="Clique para filtrar apenas CPEs em quarentena"
-        *ngIf="globalQuarantinedCount > 0"
       >
         <div class="card-icon warning">
           <span class="material-symbols-rounded">shield_lock</span>
@@ -808,91 +809,131 @@
                 </span>
               </div>
               <div class="actions-cell" (click)="$event.stopPropagation()">
-                <button
-                  class="action-btn"
-                  [disabled]="
-                    !cpe.isOnline || wakingUpCpes.has(cpe.serialNumber)
-                  "
-                  (click)="wakeUpDevice(cpe.serialNumber)"
-                  title="Forçar Conexão (Connection Request)"
-                  [attr.aria-label]="
-                    'Forçar conexão com CPE ' + cpe.serialNumber
-                  "
-                >
-                  <span
-                    class="material-symbols-rounded"
-                    [class.rotating]="wakingUpCpes.has(cpe.serialNumber)"
-                    >{{
-                      wakingUpCpes.has(cpe.serialNumber)
-                        ? "progress_activity"
-                        : "bolt"
-                    }}</span
-                  >
-                </button>
-
-                <button
-                  class="action-btn reboot"
-                  [disabled]="
-                    !cpe.isOnline || rebootingCpes.has(cpe.serialNumber)
-                  "
-                  (click)="rebootDevice(cpe.serialNumber)"
-                  title="Reiniciar CPE"
-                  [attr.aria-label]="'Reiniciar CPE ' + cpe.serialNumber"
-                >
-                  <span
-                    class="material-symbols-rounded"
-                    [class.rotating]="rebootingCpes.has(cpe.serialNumber)"
-                    >{{
-                      rebootingCpes.has(cpe.serialNumber)
-                        ? "progress_activity"
-                        : "power_settings_new"
-                    }}</span
-                  >
-                </button>
-
-                <button
-                  class="action-btn config"
-                  [disabled]="!cpe.isOnline"
-                  (click)="openConfigModal(cpe)"
-                  title="Configurar Wi-Fi"
-                  [attr.aria-label]="
-                    'Configurar Wi-Fi da CPE ' + cpe.serialNumber
-                  "
-                >
-                  <span class="material-symbols-rounded">settings</span>
-                </button>
-
-                <button
-                  class="action-btn diagnostics"
-                  [disabled]="!cpe.isOnline"
-                  (click)="goToDiagnostics(cpe.serialNumber)"
-                  title="Diagnóstico Wi-Fi dedicado"
-                  [attr.aria-label]="
-                    'Abrir diagnóstico da CPE ' + cpe.serialNumber
-                  "
-                >
-                  <span class="material-symbols-rounded">analytics</span>
-                </button>
-
-                <button
-                  class="action-btn ai-btn"
-                  [disabled]="!cpe.isOnline"
-                  (click)="runAiAnalysis(cpe)"
-                  title="Análise Preditiva de Saúde (IA)"
-                  [attr.aria-label]="
-                    'Análise preditiva de saúde da CPE ' + cpe.serialNumber
-                  "
-                >
-                  <span
-                    class="material-symbols-rounded"
-                    [class.rotating]="
-                      isAnalyzingAi &&
-                      selectedCpeForAi?.serialNumber === cpe.serialNumber
+                <!-- CPE NÃO quarentenada: botões normais de operação -->
+                <ng-container *ngIf="!cpe.quarantine?.active">
+                  <button
+                    class="action-btn"
+                    [disabled]="
+                      !cpe.isOnline || wakingUpCpes.has(cpe.serialNumber)
                     "
-                    >smart_toy</span
+                    (click)="wakeUpDevice(cpe.serialNumber)"
+                    title="Forçar Conexão (Connection Request)"
+                    [attr.aria-label]="
+                      'Forçar conexão com CPE ' + cpe.serialNumber
+                    "
                   >
-                </button>
+                    <span
+                      class="material-symbols-rounded"
+                      [class.rotating]="wakingUpCpes.has(cpe.serialNumber)"
+                      >{{
+                        wakingUpCpes.has(cpe.serialNumber)
+                          ? "progress_activity"
+                          : "bolt"
+                      }}</span
+                    >
+                  </button>
 
+                  <button
+                    class="action-btn reboot"
+                    [disabled]="
+                      !cpe.isOnline || rebootingCpes.has(cpe.serialNumber)
+                    "
+                    (click)="rebootDevice(cpe.serialNumber)"
+                    title="Reiniciar CPE"
+                    [attr.aria-label]="'Reiniciar CPE ' + cpe.serialNumber"
+                  >
+                    <span
+                      class="material-symbols-rounded"
+                      [class.rotating]="rebootingCpes.has(cpe.serialNumber)"
+                      >{{
+                        rebootingCpes.has(cpe.serialNumber)
+                          ? "progress_activity"
+                          : "power_settings_new"
+                      }}</span
+                    >
+                  </button>
+
+                  <button
+                    class="action-btn config"
+                    [disabled]="!cpe.isOnline"
+                    (click)="openConfigModal(cpe)"
+                    title="Configurar Wi-Fi"
+                    [attr.aria-label]="
+                      'Configurar Wi-Fi da CPE ' + cpe.serialNumber
+                    "
+                  >
+                    <span class="material-symbols-rounded">settings</span>
+                  </button>
+
+                  <button
+                    class="action-btn diagnostics"
+                    [disabled]="!cpe.isOnline"
+                    (click)="goToDiagnostics(cpe.serialNumber)"
+                    title="Diagnóstico Wi-Fi dedicado"
+                    [attr.aria-label]="
+                      'Abrir diagnóstico da CPE ' + cpe.serialNumber
+                    "
+                  >
+                    <span class="material-symbols-rounded">analytics</span>
+                  </button>
+
+                  <button
+                    class="action-btn ai-btn"
+                    [disabled]="!cpe.isOnline"
+                    (click)="runAiAnalysis(cpe)"
+                    title="Análise Preditiva de Saúde (IA)"
+                    [attr.aria-label]="
+                      'Análise preditiva de saúde da CPE ' + cpe.serialNumber
+                    "
+                  >
+                    <span
+                      class="material-symbols-rounded"
+                      [class.rotating]="
+                        isAnalyzingAi &&
+                        selectedCpeForAi?.serialNumber === cpe.serialNumber
+                      "
+                      >smart_toy</span
+                    >
+                  </button>
+                </ng-container>
+
+                <!-- CPE quarentenada: ícone info (tooltip com motivo completo) + botão Liberar.
+                     O delete (admin) permanece visível abaixo para gestão administrativa. -->
+                <ng-container *ngIf="cpe.quarantine?.active">
+                  <button
+                    class="action-btn quarantine-info-btn"
+                    [title]="cpe.quarantine?.details || ''"
+                    (click)="openQuarantineModal(cpe)"
+                    [attr.aria-label]="
+                      'Ver motivo da quarentena da CPE ' + cpe.serialNumber
+                    "
+                  >
+                    <span class="material-symbols-rounded">info</span>
+                  </button>
+                  <button
+                    class="action-btn release-btn"
+                    *ngIf="canManageQuarantine()"
+                    [disabled]="releasingCpe === cpe.serialNumber"
+                    (click)="confirmReleaseFromRow(cpe)"
+                    title="Liberar Quarentena — reativa todos os comandos outbound (probes WAN, telemetria, diagnóstico, otimização Wi-Fi)"
+                    [attr.aria-label]="
+                      'Liberar CPE ' + cpe.serialNumber + ' da quarentena'
+                    "
+                  >
+                    <span
+                      class="material-symbols-rounded"
+                      [class.rotating]="releasingCpe === cpe.serialNumber"
+                      >{{
+                        releasingCpe === cpe.serialNumber
+                          ? "progress_activity"
+                          : "lock_open"
+                      }}</span
+                    >
+                  </button>
+                </ng-container>
+
+                <!-- Delete (admin) — sempre visível, inclusive para CPE quarentenada,
+                     para permitir gestão de equipamento irrecuperável em boot loop persistente. -->
                 <button
                   class="action-btn danger"
                   *ngIf="authService.isAdmin()"
@@ -1299,6 +1340,93 @@
         >
           Confirmar Reinício
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Quarentena — aberto ao clicar em CPE quarentenada (linha ou ícone info).
+       Exibe motivo, detectado por, details completo do backend (motivo, ações bloqueadas,
+       liberação automática, ações recomendadas e pós-solução) e botão de liberação. -->
+  <div
+    class="modal-overlay"
+    *ngIf="isQuarantineModalOpen"
+    (click)="closeQuarantineModal()"
+  >
+    <div
+      class="modal-content quarantine-modal"
+      (click)="$event.stopPropagation()"
+      style="max-width: 560px"
+    >
+      <div class="modal-header">
+        <h2>
+          <span class="material-symbols-rounded">shield_lock</span>
+          CPE em Quarentena — {{ selectedQuarantinedCpe?.serialNumber }}
+        </h2>
+        <button class="close-btn" (click)="closeQuarantineModal()">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="quarantine-reason-row">
+          <span class="quarantine-reason-badge">
+            {{
+              selectedQuarantinedCpe?.quarantine?.reason === "boot_loop"
+                ? "Boot Loop"
+                : "Manual"
+            }}
+          </span>
+          <span class="quarantine-meta">
+            Detectado por
+            <strong>{{
+              selectedQuarantinedCpe?.quarantine?.detectedBy
+            }}</strong>
+            em
+            {{ selectedQuarantinedCpe?.quarantine?.since | date: "short" }}
+          </span>
+        </div>
+        <p
+          class="quarantine-bootloop-count"
+          *ngIf="selectedQuarantinedCpe?.quarantine?.reason === 'boot_loop'"
+        >
+          {{ selectedQuarantinedCpe?.quarantine?.bootLoopCount }} eventos BOOT
+          detectados em ciclo rápido.
+        </p>
+        <p class="quarantine-details">
+          {{ selectedQuarantinedCpe?.quarantine?.details }}
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="filter-btn" (click)="closeQuarantineModal()">
+          Fechar
+        </button>
+        <button
+          class="filter-btn active release-btn"
+          *ngIf="canManageQuarantine()"
+          [disabled]="releasingCpe === selectedQuarantinedCpe?.serialNumber"
+          (click)="
+            releaseQuarantine(
+              selectedQuarantinedCpe?.serialNumber || '',
+              selectedQuarantinedCpe || undefined
+            )
+          "
+          title="Reativa todos os comandos outbound: probes WAN, telemetria, diagnóstico, otimização Wi-Fi"
+        >
+          <span
+            class="material-symbols-rounded"
+            [class.rotating]="
+              releasingCpe === selectedQuarantinedCpe?.serialNumber
+            "
+            >{{
+              releasingCpe === selectedQuarantinedCpe?.serialNumber
+                ? "progress_activity"
+                : "lock_open"
+            }}</span
+          >
+          Liberar Quarentena
+        </button>
+        <p class="permission-notice" *ngIf="!canManageQuarantine()">
+          Apenas administradores e supervisores podem liberar a quarentena.
+        </p>
       </div>
     </div>
   </div>

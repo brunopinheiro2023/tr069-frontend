@@ -222,3 +222,31 @@ Ver `AGENTS.md` do backend (`/home/inova/projects/tr069-inova/AGENTS.md`) para d
 **Guard crítico `!== undefined`:** o evento `cpe_updated` é emitido por múltiplas origens com payloads parciais. O SPV handler envia `wifi2g` completo (com `channel`), mas o GPV handler envia só `wifi2g.bandwidth` (sem `channel`). Sem o guard, campos ausentes (`undefined`) no payload disparariam reloads falsos em cada Inform/GPV.
 
 **Validação E2E (CPE 54504C47DDECCAA0):** Ver `AGENTS.md` do backend, TODO-17.
+
+### UI de Quarentena — card sempre visível + bloqueio de acesso + liberação na linha (2026-07-18)
+
+**Problema:** O card "Em Quarentena" só aparecia quando havia CPEs quarentenadas (`*ngIf="globalQuarantinedCount > 0"`), não dando visibilidade de frota saudável. CPEs quarentenadas podiam ser acessadas normalmente no CPE Detalhes (via clique na linha ou URL direta), expondo tabs de coleta/config/diagnóstico que o backend já bloqueia via `taskQueueService`. A linha da tabela mostrava os 6 botões normais mesmo para CPEs quarentenadas, sem botão de liberação nem explicação do motivo.
+
+**Solução (defesa em profundidade — 3 camadas):**
+
+1. **Card sempre visível** — mostra 0 quando a frota está saudável, com classe `.inactive-card` (opacidade 0.55, pointer-events none). Clique só ativa filtro quando count>0.
+2. **Bloqueio na linha** — `goToDetails` intercepta CPE quarentenada e abre **Modal de Quarentena** em vez de navegar. Modal exibe motivo, `detectedBy`, `since`, `bootLoopCount` e `details` completo do backend (motivo, ações bloqueadas, liberação automática, ações recomendadas e pós-solução). Botão "Liberar Quarentena" visível só para admin/supervisor.
+3. **Bloqueio no CPE Detalhes** — acesso direto via URL `/dashboard/cpe/:serial` mostra banner de quarentena (padrão copiado do `.offline-banner`, cor warning) e esconde `summary-grid` + `tabs-nav` + `tab-content` via `*ngIf="!cpe.quarantine?.active"`. Botão liberar reusa `releaseCpe()` já existente.
+
+**Alterações (5 arquivos):**
+
+| Arquivo                      | Alteração                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dashboard.component.html`   | Card sem `*ngIf`, com `[class.inactive-card]` e `[style.pointer-events]`. `actions-cell`: 5 botões normais em `<ng-container *ngIf="!cpe.quarantine?.active">`, bloco quarentena com ícone `info` (tooltip=`details`) + botão Liberar. Delete (admin) fora do `*ngIf`. Novo modal de quarentena (padrão modal-overlay/modal-content). |
+| `dashboard.component.ts`     | `goToDetails` intercepta quarentenada → `openQuarantineModal`. Novos: `canManageQuarantine()`, `openQuarantineModal()`, `closeQuarantineModal()`, `confirmReleaseFromRow()`, `releaseQuarantine()` (público, reuso modal+linha). Estado: `isQuarantineModalOpen`, `selectedQuarantinedCpe`, `releasingCpe`.                           |
+| `dashboard.component.scss`   | `.inactive-card`, `.quarantine-info-btn`, `.action-btn.release-btn`, `.quarantine-modal`, `.quarantine-reason-row/badge/meta`, `.quarantine-bootloop-count`, `.quarantine-details` (pre-wrap), `.filter-btn.release-btn`, `.permission-notice`.                                                                                       |
+| `cpe-details.component.html` | Banner `.quarantine-banner` após `.offline-banner`. `summary-grid` + tabs envolvidos em `<ng-container *ngIf="!cpe.quarantine?.active">`.                                                                                                                                                                                             |
+| `cpe-details.component.scss` | `.quarantine-banner` (copia `.offline-banner` com cor warning), `.quarantine-details` (pre-wrap), `.quarantine-actions`, `.permission-notice`.                                                                                                                                                                                        |
+
+**Reuso:** `cpeService.releaseCpe()` já existia (DELETE `/api/cpe/:serial/quarantine`). WebSocket `cpe_quarantine_released` já tratado no dashboard. `canManageQuarantine()` copiado do cpe-details. Modal copia padrão do bulk-reboot. Banner copia padrão do offline-banner. `CpeQuarantine` já existia em `core/models/index.ts`.
+
+**RBAC:** backend exige admin/supervisor no DELETE `/quarantine`. Frontend espelha com `canManageQuarantine()` (`role === 'admin' \|\| 'supervisor'`). Técnico vê modal/banner informativo mas não o botão liberar — vê `.permission-notice`.
+
+**Delete admin mantido:** CPE quarentenada em boot loop persistente pode ser excluída por admin mesmo em quarentena — botão delete permanece visível para gestão administrativa de equipamento irrecuperável.
+
+**Build:** `ng build --configuration=development` verde, 0 erros, 45.8s.

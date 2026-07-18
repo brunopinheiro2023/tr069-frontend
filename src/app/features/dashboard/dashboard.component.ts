@@ -239,6 +239,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
   isBulkRebootConfirmOpen: boolean = false;
   bulkRebootConfirmCount: number = 0;
 
+  // Modal de Quarentena — exibe motivo + botão de liberação ao clicar em CPE quarentenada
+  isQuarantineModalOpen: boolean = false;
+  selectedQuarantinedCpe: DashboardCpe | null = null;
+  releasingCpe: string | null = null; // serialNumber em liberação (spinner no botão)
+
   // Estado de carregamento
   loading: boolean = true;
   isRefiltering: boolean = false; // true durante re-filtragem silenciosa (WS); não exibe skeleton
@@ -1776,7 +1781,98 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // Adicione esta função
   goToDetails(serialNumber: string): void {
+    // CPE quarentenada: NÃO navega para o detalhe — abre modal informativo com
+    // motivo, ações bloqueadas, liberação automática e botão de liberar quarentena.
+    // O detalhe da CPE quarentenada é bloqueado também na rota (defesa em profundidade).
+    const cpe = this.allCpes.find((c) => c.serialNumber === serialNumber);
+    if (cpe?.quarantine?.active) {
+      this.openQuarantineModal(cpe);
+      return;
+    }
     this.router.navigate(['/dashboard/cpe', serialNumber]);
+  }
+
+  // ── SISTEMA DE QUARENTENA (dashboard) ──────────────────────────────────
+  // Espelha o backend: apenas admin/supervisor podem liberar (DELETE /quarantine).
+  // O técnico (role 'technician') vê o modal informativo mas sem botão de liberar.
+
+  /**
+   * Verifica se o usuário atual tem permissão para liberar quarentena.
+   * Backend exige role 'admin' ou 'supervisor' no DELETE /api/cpe/:serial/quarantine.
+   */
+  canManageQuarantine(): boolean {
+    const role = this.authService.getRole();
+    return role === 'admin' || role === 'supervisor';
+  }
+
+  /**
+   * Abre o modal de quarentena com informações completas (motivo, details do backend,
+   * botão de liberação se autorizado). Reuso para clique na linha e clique no ícone info.
+   */
+  openQuarantineModal(cpe: DashboardCpe): void {
+    this.selectedQuarantinedCpe = cpe;
+    this.isQuarantineModalOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  closeQuarantineModal(): void {
+    this.isQuarantineModalOpen = false;
+    this.selectedQuarantinedCpe = null;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Confirmação rápida via confirm() ao liberar direto da linha da tabela.
+   * Reusa o método privado releaseQuarantine.
+   */
+  confirmReleaseFromRow(cpe: DashboardCpe): void {
+    if (
+      !confirm(
+        `Confirmar liberação da quarentena para ${cpe.serialNumber}?\n` +
+          'Todos os comandos outbound serão reativados (probes WAN, telemetria, diagnóstico, otimização Wi-Fi).',
+      )
+    )
+      return;
+    this.releaseQuarantine(cpe.serialNumber, cpe);
+  }
+
+  /**
+   * Libera a quarentena via API. Atualiza estado local, reordena a lista e
+   * fecha o modal se estiver aberto. Reuso entre modal e linha da tabela.
+   * Público para ser chamado do botão do modal (que já é a etapa de confirmação).
+   */
+  releaseQuarantine(serialNumber: string, cpeRef?: DashboardCpe): void {
+    this.releasingCpe = serialNumber;
+    this.cdr.markForCheck();
+    this.cpeService.releaseCpe(serialNumber).subscribe({
+      next: () => {
+        this.toastService.success(
+          `CPE ${serialNumber} liberta de quarentena. Comandos reativados.`,
+        );
+        // Atualiza estado local para refletir imediatamente na UI
+        const target =
+          cpeRef ?? this.allCpes.find((c) => c.serialNumber === serialNumber);
+        if (target?.quarantine) {
+          target.quarantine.active = false;
+          target.quarantine.reason = null;
+          target.quarantine.since = null;
+          target.quarantine.detectedBy = null;
+        }
+        // Fecha o modal se foi aberto a partir dele
+        if (this.isQuarantineModalOpen) this.closeQuarantineModal();
+        // Reaplica filtro para reordenar (CPE sai do grupo quarentenado)
+        this.triggerFilter(false);
+      },
+      error: () => {
+        this.toastService.error(
+          `Falha ao liberar quarentena da CPE ${serialNumber}.`,
+        );
+      },
+      complete: () => {
+        this.releasingCpe = null;
+        this.cdr.markForCheck();
+      },
+    });
   }
 
   exportSelectedToCsv(): void {

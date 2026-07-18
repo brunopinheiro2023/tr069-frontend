@@ -44,6 +44,15 @@
       border-color: color-mix(in srgb, var(--accent-warning) 40%, transparent);
     }
   }
+
+  // Card com count=0 — frota saudável, sem quarentenadas. Visual inativo.
+  &.inactive-card {
+    opacity: 0.55;
+    cursor: default;
+    &:hover {
+      border-color: transparent;
+    }
+  }
 }
 
 .card-icon {
@@ -2048,4 +2057,121 @@
     color: var(--text-muted);
     font-size: 12px;
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   SISTEMA DE QUARENTENA — botões na linha, ícone info e modal informativo
+   ════════════════════════════════════════════════════════════════════ */
+
+// Ícone info na linha da CPE quarentenada — tooltip nativo mostra o details do backend
+.action-btn.quarantine-info-btn:hover {
+  background-color: color-mix(in srgb, var(--accent-warning) 12%, transparent);
+  color: var(--accent-warning);
+}
+
+// Botão Liberar Quarentena na linha — cor success (reação positiva)
+.action-btn.release-btn {
+  &:hover {
+    background-color: color-mix(
+      in srgb,
+      var(--accent-success) 12%,
+      transparent
+    );
+    color: var(--accent-success);
+  }
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+// Modal de Quarentena — segue o padrão .modal-overlay/.modal-content existente
+.quarantine-modal {
+  .modal-header h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent-warning);
+    .material-symbols-rounded {
+      font-size: 24px;
+    }
+  }
+}
+
+.quarantine-reason-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.quarantine-reason-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent-warning) 15%, transparent);
+  color: var(--accent-warning);
+  border: 1px solid color-mix(in srgb, var(--accent-warning) 30%, transparent);
+}
+
+.quarantine-meta {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.quarantine-bootloop-count {
+  font-size: 0.85rem;
+  color: var(--accent-danger);
+  font-weight: 600;
+  margin: 0 0 12px 0;
+}
+
+// Texto completo do backend (motivo, ações bloqueadas, liberação automática,
+// ações recomendadas e pós-solução) — preserva quebras de linha do template
+.quarantine-details {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  max-height: 300px;
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--accent-warning) 4%, transparent);
+  border-radius: var(--radius-sm, 6px);
+  padding: 12px;
+  margin: 0;
+}
+
+// Botão Liberar no footer do modal — variant success do .filter-btn.active
+.filter-btn.release-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--accent-success);
+  color: #fff;
+  border-color: var(--accent-success);
+  &:hover:not(:disabled) {
+    background-color: var(--accent-success-hover);
+    border-color: var(--accent-success-hover);
+  }
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .material-symbols-rounded {
+    font-size: 18px;
+  }
+}
+
+// Aviso para técnicos sem permissão de liberação
+.permission-notice {
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 0.875rem;
+  margin: 0;
+  flex: 1;
+  text-align: right;
 }

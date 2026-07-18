@@ -39,6 +39,45 @@
       </div>
     </div>
 
+    <!-- Banner de Quarentena — defesa em profundidade para acesso direto via URL.
+         Bloqueia todas as tabs e operações. Exibe motivo, details completo do backend
+         (motivo, ações bloqueadas, liberação automática, ações recomendadas, pós-solução)
+         e botão de liberação (admin/supervisor). -->
+    <div class="quarantine-banner" *ngIf="cpe.quarantine?.active">
+      <span class="material-symbols-rounded">shield_lock</span>
+      <div class="quarantine-banner-body">
+        <strong>CPE em Quarentena — Acesso Restrito</strong>
+        <p class="quarantine-reason-line">
+          Motivo:
+          {{
+            cpe.quarantine?.reason === "boot_loop"
+              ? "Boot Loop detectado"
+              : "Quarentena manual"
+          }}. Detectado por <strong>{{ cpe.quarantine?.detectedBy }}</strong> em
+          {{ cpe.quarantine?.since | date: "short" }}.
+          <ng-container *ngIf="cpe.quarantine?.reason === 'boot_loop'">
+            {{ cpe.quarantine?.bootLoopCount }} eventos BOOT detectados em ciclo
+            rápido.
+          </ng-container>
+        </p>
+        <p class="quarantine-details">{{ cpe.quarantine?.details }}</p>
+        <div class="quarantine-actions">
+          <button
+            class="action-btn-secondary release-btn"
+            *ngIf="canManageQuarantine()"
+            (click)="releaseCpe()"
+            title="Reativa todos os comandos outbound: probes WAN, telemetria, diagnóstico, otimização Wi-Fi"
+          >
+            <span class="material-symbols-rounded">lock_open</span> Liberar
+            Quarentena
+          </button>
+          <p class="permission-notice" *ngIf="!canManageQuarantine()">
+            Apenas administradores e supervisores podem liberar a quarentena.
+          </p>
+        </div>
+      </div>
+    </div>
+
     <div class="details-hero">
       <div class="hero-info">
         <span
@@ -92,272 +131,277 @@
       </div>
     </div>
 
-    <div class="summary-grid">
-      <div class="summary-card">
-        <span>Status da CPE</span>
-        <strong>{{ cpe.isOnline ? "Online" : "Offline" }}</strong>
-        <small
-          >{{ cpe.wifi2g?.status || "2.4GHz" }} •
-          {{ cpe.wifi5g?.status || "5GHz" }}</small
+    <!-- Bloqueio de tabs e operações para CPE quarentenada — defesa em profundidade.
+         O banner acima já explica o motivo; nada abaixo deve ser acessível. -->
+    <ng-container *ngIf="!cpe.quarantine?.active">
+      <div class="summary-grid">
+        <div class="summary-card">
+          <span>Status da CPE</span>
+          <strong>{{ cpe.isOnline ? "Online" : "Offline" }}</strong>
+          <small
+            >{{ cpe.wifi2g?.status || "2.4GHz" }} •
+            {{ cpe.wifi5g?.status || "5GHz" }}</small
+          >
+        </div>
+        <div class="summary-card">
+          <span>Firmware</span>
+          <strong>{{ cpe.softwareVersion || "Desconhecido" }}</strong>
+          <small>{{
+            cpe.hardwareVersion
+              ? "HW " + cpe.hardwareVersion
+              : "Versão não disponível"
+          }}</small>
+        </div>
+        <div class="summary-card">
+          <span>Endereço WAN</span>
+          <strong>{{ cpe.wanIp || "Sem IP atribuído" }}</strong>
+          <small>{{
+            cpe.connectionRequestURL
+              ? "Connection Request pronto"
+              : "Connection Request não configurado"
+          }}</small>
+        </div>
+        <div class="summary-card">
+          <span>Último Informe</span>
+          <strong>{{ cpe.lastInform | date: "short" }}</strong>
+          <small>
+            {{ cpe.lastInform | dataAge }}
+          </small>
+        </div>
+      </div>
+
+      <div class="tabs-nav">
+        <button
+          class="tab-btn"
+          [class.active]="activeTab === 'info'"
+          (click)="setActiveTab('info')"
         >
+          <span class="material-symbols-rounded">info</span> Informações Gerais
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab === 'wifi'"
+          (click)="setActiveTab('wifi')"
+        >
+          <span class="material-symbols-rounded">wifi</span> Painel Wi-Fi
+          Avançado
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab === 'radio'"
+          (click)="setActiveTab('radio')"
+        >
+          <span class="material-symbols-rounded">settings_ethernet</span>
+          Configuração de Rádio
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab === 'devices'"
+          (click)="setActiveTab('devices')"
+        >
+          <span class="material-symbols-rounded">devices</span> Dispositivos
+          Conectados
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab === 'diagnostics'"
+          (click)="setActiveTab('diagnostics')"
+        >
+          <span class="material-symbols-rounded">analytics</span> Diagnóstico de
+          Rede
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab === 'periodic-diagnostics'"
+          (click)="setActiveTab('periodic-diagnostics')"
+        >
+          <span class="material-symbols-rounded">monitor_heart</span>
+          Diagnósticos Periódicos
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab === 'wifi-analysis'"
+          (click)="setActiveTab('wifi-analysis')"
+        >
+          <span class="material-symbols-rounded">wifi_find</span> Análise Wi-Fi
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab === 'ai'"
+          (click)="setActiveTab('ai')"
+        >
+          <span class="material-symbols-rounded">psychology</span> Análise IA
+        </button>
       </div>
-      <div class="summary-card">
-        <span>Firmware</span>
-        <strong>{{ cpe.softwareVersion || "Desconhecido" }}</strong>
-        <small>{{
-          cpe.hardwareVersion
-            ? "HW " + cpe.hardwareVersion
-            : "Versão não disponível"
-        }}</small>
+
+      <div class="tab-content">
+        @if (activeTab === "info") {
+          @defer (on immediate) {
+            <app-cpe-info-tab
+              [cpe]="cpe"
+              [serialNumber]="serialNumber"
+              [isCpeOffline]="!cpe.isOnline"
+            ></app-cpe-info-tab>
+          } @placeholder {
+            <app-skeleton shape="card" height="300px"></app-skeleton>
+          } @error {
+            <div class="tab-error">
+              <span class="material-symbols-rounded">error</span> Falha ao
+              carregar aba.
+              <button class="retry-btn" (click)="retryTab('info')">
+                Tentar novamente
+              </button>
+            </div>
+          }
+        }
+
+        @if (activeTab === "wifi") {
+          @defer (on immediate) {
+            <app-cpe-wifi-tab
+              [cpe]="cpe"
+              [serialNumber]="serialNumber"
+              [isCpeOffline]="!cpe.isOnline"
+              [isViewOnly]="isViewOnly"
+              [isCpeBusy]="isCpeBusy"
+            ></app-cpe-wifi-tab>
+          } @placeholder {
+            <app-skeleton shape="card" height="300px"></app-skeleton>
+          } @error {
+            <div class="tab-error">
+              <span class="material-symbols-rounded">error</span> Falha ao
+              carregar aba.
+              <button class="retry-btn" (click)="retryTab('wifi')">
+                Tentar novamente
+              </button>
+            </div>
+          }
+        }
+
+        @if (activeTab === "radio") {
+          @defer (on immediate) {
+            <app-cpe-radio-tab
+              [cpe]="cpe"
+              [serialNumber]="serialNumber"
+              [isCpeOffline]="!cpe.isOnline"
+              [isViewOnly]="isViewOnly"
+              [isCpeBusy]="isCpeBusy"
+            ></app-cpe-radio-tab>
+          } @placeholder {
+            <app-skeleton shape="card" height="300px"></app-skeleton>
+          } @error {
+            <div class="tab-error">
+              <span class="material-symbols-rounded">error</span> Falha ao
+              carregar aba.
+              <button class="retry-btn" (click)="retryTab('radio')">
+                Tentar novamente
+              </button>
+            </div>
+          }
+        }
+
+        @if (activeTab === "devices") {
+          @defer (on immediate) {
+            <app-cpe-devices-tab
+              [serialNumber]="serialNumber"
+              [isCpeOffline]="!cpe.isOnline"
+              [isViewOnly]="isViewOnly"
+            ></app-cpe-devices-tab>
+          } @placeholder {
+            <app-skeleton shape="rect" height="400px"></app-skeleton>
+          } @error {
+            <div class="tab-error">
+              <span class="material-symbols-rounded">error</span> Falha ao
+              carregar aba.
+              <button class="retry-btn" (click)="retryTab('devices')">
+                Tentar novamente
+              </button>
+            </div>
+          }
+        }
+
+        @if (activeTab === "diagnostics") {
+          @defer (on immediate) {
+            <app-cpe-diagnostics-tab-new
+              [cpe]="cpe"
+              [serialNumber]="serialNumber"
+              [isCpeOffline]="!cpe.isOnline"
+              [readOnly]="isViewOnly"
+            ></app-cpe-diagnostics-tab-new>
+          } @placeholder {
+            <app-skeleton shape="rect" height="400px"></app-skeleton>
+          } @error {
+            <div class="tab-error">
+              <span class="material-symbols-rounded">error</span> Falha ao
+              carregar aba.
+              <button class="retry-btn" (click)="retryTab('diagnostics')">
+                Tentar novamente
+              </button>
+            </div>
+          }
+        }
+
+        @if (activeTab === "periodic-diagnostics") {
+          @defer (on immediate) {
+            <app-cpe-periodic-diagnostics-tab
+              [serialNumber]="serialNumber"
+              [isCpeOffline]="!cpe.isOnline"
+            ></app-cpe-periodic-diagnostics-tab>
+          } @placeholder {
+            <app-skeleton shape="rect" height="300px"></app-skeleton>
+          } @error {
+            <div class="tab-error">
+              <span class="material-symbols-rounded">error</span> Falha ao
+              carregar aba.
+              <button
+                class="retry-btn"
+                (click)="retryTab('periodic-diagnostics')"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          }
+        }
+
+        @if (activeTab === "wifi-analysis") {
+          @defer (on immediate) {
+            <app-cpe-wifi-analysis-tab
+              [cpe]="cpe"
+              [serialNumber]="serialNumber"
+              [isCpeOffline]="!cpe.isOnline"
+              [isViewOnly]="isViewOnly"
+            ></app-cpe-wifi-analysis-tab>
+          } @placeholder {
+            <app-skeleton shape="rect" height="400px"></app-skeleton>
+          } @error {
+            <div class="tab-error">
+              <span class="material-symbols-rounded">error</span> Falha ao
+              carregar aba.
+              <button class="retry-btn" (click)="retryTab('wifi-analysis')">
+                Tentar novamente
+              </button>
+            </div>
+          }
+        }
+
+        @if (activeTab === "ai") {
+          @defer (on immediate) {
+            <app-cpe-ai-tab
+              [serialNumber]="serialNumber"
+              [isCpeOffline]="!cpe.isOnline"
+            ></app-cpe-ai-tab>
+          } @placeholder {
+            <app-skeleton shape="card" height="300px"></app-skeleton>
+          } @error {
+            <div class="tab-error">
+              <span class="material-symbols-rounded">error</span> Falha ao
+              carregar aba.
+              <button class="retry-btn" (click)="retryTab('ai')">
+                Tentar novamente
+              </button>
+            </div>
+          }
+        }
       </div>
-      <div class="summary-card">
-        <span>Endereço WAN</span>
-        <strong>{{ cpe.wanIp || "Sem IP atribuído" }}</strong>
-        <small>{{
-          cpe.connectionRequestURL
-            ? "Connection Request pronto"
-            : "Connection Request não configurado"
-        }}</small>
-      </div>
-      <div class="summary-card">
-        <span>Último Informe</span>
-        <strong>{{ cpe.lastInform | date: "short" }}</strong>
-        <small>
-          {{ cpe.lastInform | dataAge }}
-        </small>
-      </div>
-    </div>
-
-    <div class="tabs-nav">
-      <button
-        class="tab-btn"
-        [class.active]="activeTab === 'info'"
-        (click)="setActiveTab('info')"
-      >
-        <span class="material-symbols-rounded">info</span> Informações Gerais
-      </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab === 'wifi'"
-        (click)="setActiveTab('wifi')"
-      >
-        <span class="material-symbols-rounded">wifi</span> Painel Wi-Fi Avançado
-      </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab === 'radio'"
-        (click)="setActiveTab('radio')"
-      >
-        <span class="material-symbols-rounded">settings_ethernet</span>
-        Configuração de Rádio
-      </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab === 'devices'"
-        (click)="setActiveTab('devices')"
-      >
-        <span class="material-symbols-rounded">devices</span> Dispositivos
-        Conectados
-      </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab === 'diagnostics'"
-        (click)="setActiveTab('diagnostics')"
-      >
-        <span class="material-symbols-rounded">analytics</span> Diagnóstico de
-        Rede
-      </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab === 'periodic-diagnostics'"
-        (click)="setActiveTab('periodic-diagnostics')"
-      >
-        <span class="material-symbols-rounded">monitor_heart</span> Diagnósticos
-        Periódicos
-      </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab === 'wifi-analysis'"
-        (click)="setActiveTab('wifi-analysis')"
-      >
-        <span class="material-symbols-rounded">wifi_find</span> Análise Wi-Fi
-      </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab === 'ai'"
-        (click)="setActiveTab('ai')"
-      >
-        <span class="material-symbols-rounded">psychology</span> Análise IA
-      </button>
-    </div>
-
-    <div class="tab-content">
-      @if (activeTab === "info") {
-        @defer (on immediate) {
-          <app-cpe-info-tab
-            [cpe]="cpe"
-            [serialNumber]="serialNumber"
-            [isCpeOffline]="!cpe.isOnline"
-          ></app-cpe-info-tab>
-        } @placeholder {
-          <app-skeleton shape="card" height="300px"></app-skeleton>
-        } @error {
-          <div class="tab-error">
-            <span class="material-symbols-rounded">error</span> Falha ao
-            carregar aba.
-            <button class="retry-btn" (click)="retryTab('info')">
-              Tentar novamente
-            </button>
-          </div>
-        }
-      }
-
-      @if (activeTab === "wifi") {
-        @defer (on immediate) {
-          <app-cpe-wifi-tab
-            [cpe]="cpe"
-            [serialNumber]="serialNumber"
-            [isCpeOffline]="!cpe.isOnline"
-            [isViewOnly]="isViewOnly"
-            [isCpeBusy]="isCpeBusy"
-          ></app-cpe-wifi-tab>
-        } @placeholder {
-          <app-skeleton shape="card" height="300px"></app-skeleton>
-        } @error {
-          <div class="tab-error">
-            <span class="material-symbols-rounded">error</span> Falha ao
-            carregar aba.
-            <button class="retry-btn" (click)="retryTab('wifi')">
-              Tentar novamente
-            </button>
-          </div>
-        }
-      }
-
-      @if (activeTab === "radio") {
-        @defer (on immediate) {
-          <app-cpe-radio-tab
-            [cpe]="cpe"
-            [serialNumber]="serialNumber"
-            [isCpeOffline]="!cpe.isOnline"
-            [isViewOnly]="isViewOnly"
-            [isCpeBusy]="isCpeBusy"
-          ></app-cpe-radio-tab>
-        } @placeholder {
-          <app-skeleton shape="card" height="300px"></app-skeleton>
-        } @error {
-          <div class="tab-error">
-            <span class="material-symbols-rounded">error</span> Falha ao
-            carregar aba.
-            <button class="retry-btn" (click)="retryTab('radio')">
-              Tentar novamente
-            </button>
-          </div>
-        }
-      }
-
-      @if (activeTab === "devices") {
-        @defer (on immediate) {
-          <app-cpe-devices-tab
-            [serialNumber]="serialNumber"
-            [isCpeOffline]="!cpe.isOnline"
-            [isViewOnly]="isViewOnly"
-          ></app-cpe-devices-tab>
-        } @placeholder {
-          <app-skeleton shape="rect" height="400px"></app-skeleton>
-        } @error {
-          <div class="tab-error">
-            <span class="material-symbols-rounded">error</span> Falha ao
-            carregar aba.
-            <button class="retry-btn" (click)="retryTab('devices')">
-              Tentar novamente
-            </button>
-          </div>
-        }
-      }
-
-      @if (activeTab === "diagnostics") {
-        @defer (on immediate) {
-          <app-cpe-diagnostics-tab-new
-            [cpe]="cpe"
-            [serialNumber]="serialNumber"
-            [isCpeOffline]="!cpe.isOnline"
-            [readOnly]="isViewOnly"
-          ></app-cpe-diagnostics-tab-new>
-        } @placeholder {
-          <app-skeleton shape="rect" height="400px"></app-skeleton>
-        } @error {
-          <div class="tab-error">
-            <span class="material-symbols-rounded">error</span> Falha ao
-            carregar aba.
-            <button class="retry-btn" (click)="retryTab('diagnostics')">
-              Tentar novamente
-            </button>
-          </div>
-        }
-      }
-
-      @if (activeTab === "periodic-diagnostics") {
-        @defer (on immediate) {
-          <app-cpe-periodic-diagnostics-tab
-            [serialNumber]="serialNumber"
-            [isCpeOffline]="!cpe.isOnline"
-          ></app-cpe-periodic-diagnostics-tab>
-        } @placeholder {
-          <app-skeleton shape="rect" height="300px"></app-skeleton>
-        } @error {
-          <div class="tab-error">
-            <span class="material-symbols-rounded">error</span> Falha ao
-            carregar aba.
-            <button
-              class="retry-btn"
-              (click)="retryTab('periodic-diagnostics')"
-            >
-              Tentar novamente
-            </button>
-          </div>
-        }
-      }
-
-      @if (activeTab === "wifi-analysis") {
-        @defer (on immediate) {
-          <app-cpe-wifi-analysis-tab
-            [cpe]="cpe"
-            [serialNumber]="serialNumber"
-            [isCpeOffline]="!cpe.isOnline"
-            [isViewOnly]="isViewOnly"
-          ></app-cpe-wifi-analysis-tab>
-        } @placeholder {
-          <app-skeleton shape="rect" height="400px"></app-skeleton>
-        } @error {
-          <div class="tab-error">
-            <span class="material-symbols-rounded">error</span> Falha ao
-            carregar aba.
-            <button class="retry-btn" (click)="retryTab('wifi-analysis')">
-              Tentar novamente
-            </button>
-          </div>
-        }
-      }
-
-      @if (activeTab === "ai") {
-        @defer (on immediate) {
-          <app-cpe-ai-tab
-            [serialNumber]="serialNumber"
-            [isCpeOffline]="!cpe.isOnline"
-          ></app-cpe-ai-tab>
-        } @placeholder {
-          <app-skeleton shape="card" height="300px"></app-skeleton>
-        } @error {
-          <div class="tab-error">
-            <span class="material-symbols-rounded">error</span> Falha ao
-            carregar aba.
-            <button class="retry-btn" (click)="retryTab('ai')">
-              Tentar novamente
-            </button>
-          </div>
-        }
-      }
-    </div>
+    </ng-container>
   </ng-container>
 </div>

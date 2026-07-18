@@ -389,3 +389,70 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   BANNER DE QUARENTENA — defesa em profundidade para acesso direto via URL.
+   Padrão copiado do .offline-banner, com identidade visual warning (âmbar).
+   ════════════════════════════════════════════════════════════════════ */
+.quarantine-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: color-mix(in srgb, var(--accent-warning) 12%, var(--bg-surface));
+  border: 1px solid color-mix(in srgb, var(--accent-warning) 35%, transparent);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+
+  > .material-symbols-rounded {
+    color: var(--accent-warning);
+    font-size: 28px;
+    flex-shrink: 0;
+  }
+
+  .quarantine-banner-body {
+    flex: 1;
+
+    strong {
+      display: block;
+      color: var(--accent-warning);
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .quarantine-reason-line {
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      line-height: 1.5;
+      margin: 0 0 8px 0;
+    }
+
+    // Texto completo do backend (motivo, ações bloqueadas, liberação automática,
+    // ações recomendadas e pós-solução) — preserva quebras de linha
+    .quarantine-details {
+      white-space: pre-wrap;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      font-size: 0.83rem;
+      background: color-mix(in srgb, var(--accent-warning) 5%, transparent);
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin: 0 0 12px 0;
+    }
+
+    .quarantine-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .permission-notice {
+      color: var(--text-secondary);
+      font-style: italic;
+      font-size: 0.85rem;
+      margin: 0;
+    }
+  }
+}
