@@ -293,6 +293,45 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // Filtro de destino no gráfico — 'all' = agregado, ou targetId específico
   selectedTargetId: string = 'all';
 
+  // Gráfico de latência (linha) — uma linha por destino, só IPPing/TraceRoute têm latência
+  diagLatencyChartLabels: string[] = [];
+  diagLatencyChartDatasets: ChartConfiguration<'line'>['data']['datasets'] = [];
+  // Paleta de cores para múltiplas linhas (um por destino)
+  private readonly LATENCY_COLORS = [
+    { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.10)' }, // azul
+    { border: '#10b981', bg: 'rgba(16, 185, 129, 0.10)' }, // verde
+    { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.10)' }, // âmbar
+    { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.10)' }, // vermelho
+    { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.10)' }, // roxo
+    { border: '#ec4899', bg: 'rgba(236, 72, 153, 0.10)' }, // rosa
+    { border: '#14b8a6', bg: 'rgba(20, 184, 166, 0.10)' }, // teal
+    { border: '#f97316', bg: 'rgba(249, 115, 22, 0.10)' }, // laranja
+  ];
+  diagLatencyChartOptions: ChartOptions<'line'> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    plugins: {
+      legend: { display: true, position: 'top' as const },
+      tooltip: {
+        enabled: true,
+        mode: 'index' as const,
+        intersect: false,
+        callbacks: {
+          label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}ms`,
+        },
+      },
+    },
+    scales: {
+      x: { title: { display: true, text: 'Data' } },
+      y: {
+        beginAtZero: true,
+        title: { display: true, text: 'Latência (ms)' },
+        position: 'left' as const,
+      },
+    },
+  };
+
   // Gráfico de barras empilhadas: sucesso/erro por dia
   diagChartLabels: string[] = [];
   diagChartDatasets: ChartConfiguration<'bar'>['data']['datasets'] = [
@@ -1470,6 +1509,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   /**
    * Atualiza o gráfico de diagnósticos com base no destino selecionado.
    * 'all' = série agregada, ou targetId específico = série daquele destino.
+   * Também atualiza o gráfico de latência (se houver dados para o destino).
    */
   private updateDiagChart(data: DiagnosticOverview): void {
     let series: {
@@ -1495,6 +1535,70 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.diagChartDatasets[0].data = series.map((d) => d.success);
     this.diagChartDatasets[1].data = series.map((d) => d.error);
     this.diagChartDatasets = [...this.diagChartDatasets];
+
+    // Gráfico de latência — uma linha por destino
+    // 'all' = todas as linhas (uma por destino com latência)
+    // destino específico = apenas a linha daquele destino
+    let latencyByTarget: {
+      targetId: string;
+      label: string;
+      series: { day: string; avgLatency: number; count: number }[];
+    }[] = [];
+
+    if (this.selectedTargetId === 'all') {
+      // Modo "Todos": uma linha por destino que tenha latência
+      latencyByTarget = (data.perTargetDailySeries || [])
+        .filter((t) => t.latencyDailySeries && t.latencyDailySeries.length > 0)
+        .map((t) => ({
+          targetId: t.targetId,
+          label: t.label || t.host,
+          series: t.latencyDailySeries!,
+        }));
+    } else {
+      // Destino específico: apenas uma linha
+      const target = data.perTargetDailySeries?.find(
+        (t) => t.targetId === this.selectedTargetId,
+      );
+      if (target?.latencyDailySeries && target.latencyDailySeries.length > 0) {
+        latencyByTarget = [
+          {
+            targetId: target.targetId,
+            label: target.label || target.host,
+            series: target.latencyDailySeries,
+          },
+        ];
+      }
+    }
+
+    // Coleta todos os dias únicos (merge de todos os destinos) para o eixo X
+    const allDays = new Set<string>();
+    latencyByTarget.forEach((t) => t.series.forEach((d) => allDays.add(d.day)));
+    const sortedDays = [...allDays].sort();
+    this.diagLatencyChartLabels = sortedDays.map((day) => {
+      const parts = day.split('-');
+      return `${parts[2]}/${parts[1]}`;
+    });
+
+    // Constrói um dataset por destino — cada um alinha com sortedDays
+    // (null onde não há dado para aquele dia)
+    this.diagLatencyChartDatasets = latencyByTarget.map((t, idx) => {
+      const color = this.LATENCY_COLORS[idx % this.LATENCY_COLORS.length];
+      const dataMap = new Map(t.series.map((d) => [d.day, d.avgLatency]));
+      return {
+        data: sortedDays.map((day) => dataMap.get(day) ?? null),
+        label: t.label,
+        borderColor: color.border,
+        backgroundColor: color.bg,
+        borderWidth: 2,
+        fill: false,
+        tension: 0.3,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        yAxisID: 'y',
+        type: 'line' as const,
+        spanGaps: true,
+      };
+    });
   }
 
   /** Troca o destino selecionado e re-renderiza o gráfico sem refazer a request. */

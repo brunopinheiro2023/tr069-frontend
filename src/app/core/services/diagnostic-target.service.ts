@@ -11,6 +11,7 @@ import {
   DiagnosticTargetAnalysis,
   DiagnosticOverview,
   DiagnosticAlert,
+  NetworkHealth,
 } from '../models';
 
 @Injectable({ providedIn: 'root' })
@@ -124,5 +125,18 @@ export class DiagnosticTargetService {
         data: DiagnosticAlert;
       }>(`${this.BASE_URL}/alerts/${alertId}/acknowledge`, {})
       .pipe(map((res) => res.data));
+  }
+
+  /** Visão consolidada de saúde de rede (capabilities, taxa real, top problem CPEs). */
+  getNetworkHealth(
+    days: number = 7,
+  ): Observable<{ data: NetworkHealth | null; message?: string }> {
+    return this.http
+      .get<{
+        success: boolean;
+        data: NetworkHealth | null;
+        message?: string;
+      }>(`${environment.apiUrl}/api/network-health?days=${days}`)
+      .pipe(map((res) => ({ data: res.data, message: res.message })));
   }
 }

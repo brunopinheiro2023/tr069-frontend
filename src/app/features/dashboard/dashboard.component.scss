@@ -1802,6 +1802,32 @@
   position: relative;
 }
 
+// ── Gráfico de latência (linha) ──────────────────────────────────────────
+.diagnostics-latency-chart-container {
+  height: 240px;
+  margin-bottom: 20px;
+  position: relative;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-surface) 50%, transparent);
+  border: 1px solid var(--border-subtle);
+
+  .latency-chart-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+    color: var(--text-secondary);
+
+    .material-symbols-rounded {
+      font-size: 18px;
+      color: #3b82f6;
+    }
+  }
+}
+
 .diagnostics-analysis-text {
   display: flex;
   align-items: flex-start;
@@ -2056,6 +2082,58 @@
   .cpe-time {
     color: var(--text-muted);
     font-size: 12px;
+  }
+}
+
+// ── Seção: CPEs com limitação de firmware ─────────────────────────────────
+.diagnostics-firmware-limitation {
+  margin-bottom: 8px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent-warning) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-warning) 20%, transparent);
+
+  .firmware-limitation-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    color: var(--accent-warning);
+
+    .material-symbols-rounded {
+      font-size: 20px;
+    }
+  }
+
+  .firmware-limitation-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0 0 12px 0;
+    line-height: 1.5;
+  }
+
+  .firmware-limitation-distribution {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .fw-limit-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--bg-surface) 60%, transparent);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+
+    .material-symbols-rounded {
+      font-size: 16px;
+      color: var(--accent-warning);
+    }
   }
 }
 

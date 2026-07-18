@@ -994,7 +994,7 @@
 
         <!-- Conteúdo: só exibe quando há dados -->
         <ng-container *ngIf="diagnosticOverview">
-          <!-- Cards de resumo (4 métricas) -->
+          <!-- Cards de resumo (6 métricas) -->
           <div class="diagnostics-summary-grid">
             <div
               class="diag-metric"
@@ -1011,6 +1011,22 @@
               <span class="metric-label"
                 >Taxa de Sucesso ({{ diagnosticOverview.days }}d)</span
               >
+            </div>
+            <div
+              class="diag-metric"
+              *ngIf="diagnosticOverview.realSuccessRateGlobal != null"
+              [class.success]="diagnosticOverview.realSuccessRateGlobal >= 95"
+              [class.warning]="
+                diagnosticOverview.realSuccessRateGlobal >= 80 &&
+                diagnosticOverview.realSuccessRateGlobal < 95
+              "
+              [class.danger]="diagnosticOverview.realSuccessRateGlobal < 80"
+              title="Taxa de sucesso excluindo CPEs com limitação de firmware"
+            >
+              <span class="metric-value"
+                >{{ diagnosticOverview.realSuccessRateGlobal }}%</span
+              >
+              <span class="metric-label">Taxa Real (sem FW Limit)</span>
             </div>
             <div class="diag-metric">
               <span class="metric-value">{{
@@ -1035,6 +1051,20 @@
                 diagnosticOverview.affectedCpesCount
               }}</span>
               <span class="metric-label">CPEs com Falhas</span>
+            </div>
+            <div
+              class="diag-metric"
+              *ngIf="
+                diagnosticOverview.totalUnsupportedCpes &&
+                diagnosticOverview.totalUnsupportedCpes > 0
+              "
+              [class.warning]="true"
+              title="CPEs que não suportam alguns diagnósticos por limitação de firmware — não são falhas de rede"
+            >
+              <span class="metric-value">{{
+                diagnosticOverview.totalUnsupportedCpes
+              }}</span>
+              <span class="metric-label">CPEs FW Limit.</span>
             </div>
           </div>
 
@@ -1086,6 +1116,25 @@
             </canvas>
           </div>
 
+          <!-- Gráfico de latência (linha) — só exibe se houver dados de latência -->
+          <div
+            class="diagnostics-latency-chart-container"
+            *ngIf="diagLatencyChartLabels.length > 0"
+          >
+            <h3 class="latency-chart-title">
+              <span class="material-symbols-rounded">speed</span>
+              Tendência de Latência (ms)
+            </h3>
+            <canvas
+              baseChart
+              [datasets]="diagLatencyChartDatasets"
+              [labels]="diagLatencyChartLabels"
+              [options]="diagLatencyChartOptions"
+              type="line"
+            >
+            </canvas>
+          </div>
+
           <!-- Análise textual interpretativa -->
           <div class="diagnostics-analysis-text">
             <span class="material-symbols-rounded analysis-icon"
@@ -1102,9 +1151,24 @@
             <div
               class="target-card"
               *ngFor="let t of diagnosticOverview.perTarget"
-              [class.success]="t.successRate >= 95"
-              [class.warning]="t.successRate >= 80 && t.successRate < 95"
-              [class.danger]="t.successRate < 80"
+              [class.success]="
+                (t.realSuccessRate != null
+                  ? t.realSuccessRate
+                  : t.successRate) >= 95
+              "
+              [class.warning]="
+                (t.realSuccessRate != null
+                  ? t.realSuccessRate
+                  : t.successRate) >= 80 &&
+                (t.realSuccessRate != null
+                  ? t.realSuccessRate
+                  : t.successRate) < 95
+              "
+              [class.danger]="
+                (t.realSuccessRate != null
+                  ? t.realSuccessRate
+                  : t.successRate) < 80
+              "
               (click)="selectDiagTarget(t.targetId)"
             >
               <div class="target-card-header">
@@ -1126,12 +1190,55 @@
                 <div class="target-stat">
                   <span
                     class="stat-value"
-                    [class.success]="t.successRate >= 95"
-                    [class.warning]="t.successRate >= 80 && t.successRate < 95"
-                    [class.danger]="t.successRate < 80"
+                    [class.success]="
+                      (t.realSuccessRate != null
+                        ? t.realSuccessRate
+                        : t.successRate) >= 95
+                    "
+                    [class.warning]="
+                      (t.realSuccessRate != null
+                        ? t.realSuccessRate
+                        : t.successRate) >= 80 &&
+                      (t.realSuccessRate != null
+                        ? t.realSuccessRate
+                        : t.successRate) < 95
+                    "
+                    [class.danger]="
+                      (t.realSuccessRate != null
+                        ? t.realSuccessRate
+                        : t.successRate) < 80
+                    "
                     >{{ t.successRate }}%</span
                   >
                   <span class="stat-label">Sucesso</span>
+                </div>
+                <div
+                  class="target-stat"
+                  *ngIf="
+                    t.realSuccessRate != null &&
+                    t.realSuccessRate !== t.successRate
+                  "
+                >
+                  <span
+                    class="stat-value"
+                    [class.success]="t.realSuccessRate >= 95"
+                    [class.warning]="
+                      t.realSuccessRate >= 80 && t.realSuccessRate < 95
+                    "
+                    [class.danger]="t.realSuccessRate < 80"
+                    title="Taxa real excluindo firmware limitation"
+                    >{{ t.realSuccessRate }}%</span
+                  >
+                  <span class="stat-label">Taxa Real</span>
+                </div>
+                <div
+                  class="target-stat"
+                  *ngIf="t.unsupportedCpeCount && t.unsupportedCpeCount > 0"
+                >
+                  <span class="stat-value" [class.warning]="true">{{
+                    t.unsupportedCpeCount
+                  }}</span>
+                  <span class="stat-label">FW Limit</span>
                 </div>
                 <div class="target-stat">
                   <span class="stat-value">{{
@@ -1190,6 +1297,101 @@
                     ? (cpe.lastErrorAt | date: "dd/MM HH:mm")
                     : "—"
                 }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Seção: CPEs com limitação de firmware (não suportam alguns diagnósticos) -->
+          <div
+            class="diagnostics-firmware-limitation"
+            *ngIf="
+              diagnosticOverview.totalUnsupportedCpes &&
+              diagnosticOverview.totalUnsupportedCpes > 0
+            "
+          >
+            <h3 class="filter-title firmware-limitation-title">
+              <span class="material-symbols-rounded">memory</span>
+              CPEs com Limitação de Firmware ({{
+                diagnosticOverview.totalUnsupportedCpes
+              }})
+            </h3>
+            <p class="firmware-limitation-hint">
+              Estas CPEs não suportam alguns tipos de diagnóstico por limitação
+              de firmware — não são falhas de rede. O sistema re-testa
+              automaticamente a cada 30 dias (firmware update pode resolver).
+            </p>
+            <!-- Distribuição por tipo de diagnóstico -->
+            <div
+              class="firmware-limitation-distribution"
+              *ngIf="diagnosticOverview.errorClassificationGlobal"
+            >
+              <div
+                class="fw-limit-chip"
+                *ngIf="
+                  diagnosticOverview.errorClassificationGlobal
+                    .firmware_limitation > 0
+                "
+              >
+                <span class="material-symbols-rounded">block</span>
+                Firmware Limitation:
+                {{
+                  diagnosticOverview.errorClassificationGlobal
+                    .firmware_limitation
+                }}
+              </div>
+              <div
+                class="fw-limit-chip"
+                *ngIf="
+                  diagnosticOverview.errorClassificationGlobal
+                    .firmware_rejection > 0
+                "
+              >
+                <span class="material-symbols-rounded">cancel</span>
+                Firmware Rejection:
+                {{
+                  diagnosticOverview.errorClassificationGlobal
+                    .firmware_rejection
+                }}
+              </div>
+              <div
+                class="fw-limit-chip"
+                *ngIf="
+                  diagnosticOverview.errorClassificationGlobal.cpe_unreachable >
+                  0
+                "
+              >
+                <span class="material-symbols-rounded"
+                  >signal_disconnected</span
+                >
+                CPE Unreachable:
+                {{
+                  diagnosticOverview.errorClassificationGlobal.cpe_unreachable
+                }}
+              </div>
+              <div
+                class="fw-limit-chip"
+                *ngIf="
+                  diagnosticOverview.errorClassificationGlobal.cpe_error > 0
+                "
+              >
+                <span class="material-symbols-rounded">error</span>
+                CPE Error:
+                {{ diagnosticOverview.errorClassificationGlobal.cpe_error }}
+              </div>
+              <div
+                class="fw-limit-chip"
+                *ngIf="
+                  diagnosticOverview.errorClassificationGlobal.ping_all_failed >
+                  0
+                "
+              >
+                <span class="material-symbols-rounded"
+                  >signal_disconnected</span
+                >
+                Ping Falhou (ICMP):
+                {{
+                  diagnosticOverview.errorClassificationGlobal.ping_all_failed
+                }}
               </div>
             </div>
           </div>

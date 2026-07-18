@@ -1380,6 +1380,18 @@ export interface DiagnosticTargetAnalysis {
   errorCount: number;
   pendingCount: number;
   successRate: number;
+  /** Taxa de sucesso REAL (excluindo firmware limitation do denominador). */
+  realSuccessRate?: number | null;
+  /** CPEs com firmware limitation para este destino. */
+  unsupportedCpeCount?: number;
+  /** Classificação de erros por causa raiz. */
+  errorClassification?: {
+    firmware_limitation: number;
+    cpe_unreachable: number;
+    firmware_rejection: number;
+    cpe_error: number;
+    ping_all_failed: number;
+  };
   latencyStats: {
     min: number;
     avg: number;
@@ -1391,6 +1403,8 @@ export interface DiagnosticTargetAnalysis {
     iqr: number | null;
     count: number;
   } | null;
+  /** Série diária de latência média (apenas IPPing/TraceRoute — outros = []). */
+  latencyDailySeries?: { day: string; avgLatency: number; count: number }[];
   topFailingCpes: {
     serialNumber: string;
     failures: number;
@@ -1405,8 +1419,20 @@ export interface DiagnosticOverview {
   days: number;
   totalExecutions: number;
   successRateGlobal: number;
+  /** Taxa de sucesso REAL (excluindo firmware limitation do denominador). */
+  realSuccessRateGlobal?: number;
   latencyAvgGlobal: number | null;
   affectedCpesCount: number;
+  /** Total de CPEs com firmware limitation (não é problema de rede). */
+  totalUnsupportedCpes?: number;
+  /** Classificação global de erros por causa raiz. */
+  errorClassificationGlobal?: {
+    firmware_limitation: number;
+    cpe_unreachable: number;
+    firmware_rejection: number;
+    cpe_error: number;
+    ping_all_failed: number;
+  };
   totalTargets: number;
   perTarget: {
     targetId: string;
@@ -1414,6 +1440,18 @@ export interface DiagnosticOverview {
     label: string | null;
     type: string;
     successRate: number;
+    /** Taxa de sucesso REAL (excluindo firmware limitation). */
+    realSuccessRate?: number | null;
+    /** CPEs com firmware limitation para este destino. */
+    unsupportedCpeCount?: number;
+    /** Classificação de erros por causa raiz. */
+    errorClassification?: {
+      firmware_limitation: number;
+      cpe_unreachable: number;
+      firmware_rejection: number;
+      cpe_error: number;
+      ping_all_failed: number;
+    };
     latencyAvg: number | null;
     totalExecutions: number;
     successCount: number;
@@ -1429,12 +1467,20 @@ export interface DiagnosticOverview {
       error: number;
       total: number;
     }[];
+    /** Série diária de latência (apenas IPPing/TraceRoute — outros = []). */
+    latencyDailySeries?: { day: string; avgLatency: number; count: number }[];
   }[];
   dailySeriesAggregated: {
     day: string;
     success: number;
     error: number;
     total: number;
+  }[];
+  /** Série diária de latência agregada (merge de todos os destinos com latência). */
+  latencyDailySeriesAggregated?: {
+    day: string;
+    avgLatency: number;
+    count: number;
   }[];
   topFailingCpes: {
     serialNumber: string;
@@ -1444,6 +1490,52 @@ export interface DiagnosticOverview {
   }[];
   analysisText: string;
   generatedAt: string;
+}
+
+// =============================================================================
+// NETWORK HEALTH — Visão consolidada de saúde de rede
+// (GET /api/network-health)
+// =============================================================================
+
+export interface NetworkHealth {
+  summary: {
+    totalCpes: number;
+    cpesWithDiagnosticSupport: number;
+    cpesWithFirmwareLimitation: number;
+    totalDiagnostics: number;
+    realSuccessRate: number;
+    activeAlerts: number;
+  };
+  capabilityDistribution: {
+    supported: number;
+    unsupported: number;
+    unknown: number;
+  };
+  diagnosticsByType: Record<
+    string,
+    {
+      total: number;
+      success: number;
+      error: number;
+      realSuccessRate: number;
+      excludedFirmwareLimitation: number;
+    }
+  >;
+  topProblemCpes: {
+    serialNumber: string;
+    failures: number;
+    lastError: string | null;
+    lastErrorAt: string | null;
+    healthScore: number | null;
+  }[];
+  activeAlerts: {
+    targetId: string;
+    host: string;
+    type: string;
+    severity: string;
+    triggeredAt: string;
+  }[];
+  dailySeries: { day: string; success: number; error: number; total: number }[];
 }
 
 // ============================================================================
