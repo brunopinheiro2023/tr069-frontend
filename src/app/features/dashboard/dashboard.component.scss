@@ -1947,6 +1947,20 @@
       flex-shrink: 0;
     }
 
+    .target-info-icon {
+      font-size: 16px;
+      color: var(--text-muted);
+      cursor: help;
+      margin-left: auto;
+      opacity: 0.5;
+      transition: opacity var(--transition-speed) ease;
+
+      &:hover {
+        opacity: 1;
+        color: var(--accent-primary);
+      }
+    }
+
     strong {
       display: block;
       font-size: 14px;
@@ -1993,6 +2007,29 @@
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
+    }
+
+    .stat-label-with-icon {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+
+      .stat-info-icon {
+        font-size: 13px;
+        color: var(--text-muted);
+        cursor: help;
+        opacity: 0.6;
+        transition: opacity var(--transition-speed) ease;
+
+        &:hover {
+          opacity: 1;
+          color: var(--accent-primary);
+        }
+      }
     }
   }
 }

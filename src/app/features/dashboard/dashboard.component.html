@@ -1185,6 +1185,15 @@
                     >{{ t.host }} · {{ t.type }}</span
                   >
                 </div>
+                <span
+                  class="material-symbols-rounded target-info-icon"
+                  title="Destino: {{ t.host }} | Tipo: {{
+                    t.type
+                  }} | Execuções: {{
+                    t.totalExecutions
+                  }} | Clique para filtrar o gráfico por este destino"
+                  >info</span
+                >
               </div>
               <div class="target-card-stats">
                 <div class="target-stat">
@@ -1210,7 +1219,14 @@
                     "
                     >{{ t.successRate }}%</span
                   >
-                  <span class="stat-label">Sucesso</span>
+                  <span class="stat-label-with-icon">
+                    Sucesso
+                    <span
+                      class="material-symbols-rounded stat-info-icon"
+                      title="Taxa de sucesso bruta = diagnósticos com SuccessCount > 0 ÷ total de execuções. Inclui CPEs com limitação de firmware no cálculo."
+                      >info</span
+                    >
+                  </span>
                 </div>
                 <div
                   class="target-stat"
@@ -1226,10 +1242,16 @@
                       t.realSuccessRate >= 80 && t.realSuccessRate < 95
                     "
                     [class.danger]="t.realSuccessRate < 80"
-                    title="Taxa real excluindo firmware limitation"
                     >{{ t.realSuccessRate }}%</span
                   >
-                  <span class="stat-label">Taxa Real</span>
+                  <span class="stat-label-with-icon">
+                    Taxa Real
+                    <span
+                      class="material-symbols-rounded stat-info-icon"
+                      title="Taxa real excluindo CPEs com limitação de firmware (não suportam o tipo de diagnóstico). Reflete apenas a saúde da rede."
+                      >info</span
+                    >
+                  </span>
                 </div>
                 <div
                   class="target-stat"
@@ -1238,7 +1260,14 @@
                   <span class="stat-value" [class.warning]="true">{{
                     t.unsupportedCpeCount
                   }}</span>
-                  <span class="stat-label">FW Limit</span>
+                  <span class="stat-label-with-icon">
+                    FW Limit
+                    <span
+                      class="material-symbols-rounded stat-info-icon"
+                      title="CPEs que não suportam este tipo de diagnóstico por limitação de firmware. Não são falhas de rede — excluídas da taxa real."
+                      >info</span
+                    >
+                  </span>
                 </div>
                 <div class="target-stat">
                   <span class="stat-value">{{
@@ -1246,17 +1275,38 @@
                       ? (t.latencyAvg | number: "1.0-0") + "ms"
                       : "—"
                   }}</span>
-                  <span class="stat-label">Latência</span>
+                  <span class="stat-label-with-icon">
+                    Latência
+                    <span
+                      class="material-symbols-rounded stat-info-icon"
+                      title="Latência média após filtro IQR (remove outliers). Exige ≥5 amostras com sucesso — destinos novos ou com poucas execuções mostram '—'."
+                      >info</span
+                    >
+                  </span>
                 </div>
                 <div class="target-stat">
                   <span class="stat-value">{{ t.successCount }}</span>
-                  <span class="stat-label">OK</span>
+                  <span class="stat-label-with-icon">
+                    OK
+                    <span
+                      class="material-symbols-rounded stat-info-icon"
+                      title="Total de execuções com sucesso (SuccessCount > 0) no período selecionado."
+                      >info</span
+                    >
+                  </span>
                 </div>
                 <div class="target-stat">
                   <span class="stat-value" [class.danger]="t.errorCount > 0">{{
                     t.errorCount
                   }}</span>
-                  <span class="stat-label">Falhas</span>
+                  <span class="stat-label-with-icon">
+                    Falhas
+                    <span
+                      class="material-symbols-rounded stat-info-icon"
+                      title="Execuções com erro (Error_Timeout, Error_Fault, etc.) + ping_all_failed (Complete com SuccessCount=0). Inclui firmware limitation."
+                      >info</span
+                    >
+                  </span>
                 </div>
               </div>
             </div>
